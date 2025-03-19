@@ -134,20 +134,21 @@ namespace asco {
             if (!p)
                 throw std::runtime_error("[ASCO] Failed to create worker");
             pool.push_back(p);
-            runtimes[pool[i]->get_id()] = this;
+            auto &workeri = pool[i];
+            runtimes[workeri->get_id()] = this;
 
 #ifdef __linux__
             auto &cpu = cpus[i % cpus.size()];
-            while (!pool[i]->pid);
+            while (!workeri->pid);
             if (sched_setaffinity(
-                pool[i]->pid,
+                workeri->pid,
                 sizeof(decltype(cpu)),
                 &cpu
             ) == -1) {
                 throw std::runtime_error("[ASCO] Failed to set affinity");
             }
             
-            pool[i]->is_calculator = is_calculator;
+            workeri->is_calculator = is_calculator;
 #endif
         }
     }
