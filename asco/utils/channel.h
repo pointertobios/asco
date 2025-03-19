@@ -144,33 +144,23 @@ public:
         state = rhs.state;
         moved = true;
     }
-    
-    // Return std::nullopt if channel closed
-    std::optional<T> recv() {
+
+    bool stopped() {
+        return frame->receiver_index.has_value() && frame->sender_index.has_value()
+                && frame->receiver_index.value() == frame->sender_index.value() && state->stopped;
+    }
+
+    // You must test if the channel stopped before try_recv()
+    std::optional<T> try_recv() {
         if (moved)
             throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
+        if (stopped())
+            throw std::runtime_error("[ASCO] Channel error: Cannot trying receive on a stopped channel.");
+
         mutex.lock();
-    
-        if (state->stopped) {
-            mutex.unlock();
-            return std::nullopt;
-        }
 
-        if (frame->receiver_index.value() == frame->sender_index.value()) {
-            if (state.use_count() < 2) {
-                delete frame;
-                if (shared)
-                    mutex.unlock();
-                return std::nullopt; // state use count less than 2, the sender closed the channel.
-            }
-            state->waiting = true;
-            std::unique_lock lk(state->mutex);
-            state->cv.wait(lk, [this]{return state->ok;});
-            lk.unlock();
-            state->ok = false;
-        }
-
-        if (state.use_count() < 2) {
+        if (frame->sender_index.has_value()
+                && frame->receiver_index.value() == frame->sender_index.value()) {
             mutex.unlock();
             return std::nullopt;
         }
@@ -183,7 +173,43 @@ public:
             auto *p = frame;
             frame = frame->next;
             delete p;
-            frame->receiver_index.value() = 0;
+            frame->receiver_index = 0;
+        }
+
+        auto &&res = std::move(frame->data[frame->receiver_index.value()++]);
+        mutex.unlock();
+        return res;
+    }
+
+    // Return std::nullopt if channel closed
+    std::optional<T> recv() {
+        if (moved)
+            throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
+
+        if (stopped())
+            return std::nullopt;
+
+        mutex.lock();
+
+        if (frame->sender_index.has_value()
+                && frame->receiver_index.value() == frame->sender_index.value()) {
+            state->waiting = true;
+            std::unique_lock lk(state->mutex);
+            state->cv.wait(lk, [this]{return state->ok;});
+            state->waiting = false;
+            lk.unlock();
+            state->ok = false;
+        }
+
+        if (frame->receiver_index.value() == frame_size) {
+            if (frame->sender_index.has_value())
+                throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but sender_index is not std::nullopt.");
+            if (frame->next == nullptr)
+                throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but next frame is nullptr.");
+            auto *p = frame;
+            frame = frame->next;
+            delete p;
+            frame->receiver_index = 0;
         }
 
         auto &&res = std::move(frame->data[frame->receiver_index.value()++]);
