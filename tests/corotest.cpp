@@ -4,10 +4,12 @@
 #include <iostream>
 #include <vector>
 
+using asco::future_nocoro;
+
 int main()
 {
     asco::runtime rt;
-    auto f = rt.spawn<int>([]{
+    future_nocoro<int> f = rt.spawn<int>([]{
         std::this_thread::sleep_for(std::chrono::seconds(1));
         return 3;
     });
@@ -15,14 +17,14 @@ int main()
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         return asco::future_void{};
     });
-    auto f2 = rt.spawn_blocking<std::vector<int>>([]{
+    future_nocoro<std::vector<int>> f2 = rt.spawn_blocking<std::vector<int>>([]{
         std::vector<int> v;
         for (int i = 0; i < 100; ++i)
             v.push_back(i);
         return v;
     });
     std::cout << f->await() << std::endl;
-    for (auto i : f2->await()) {
+    for (int i : f2->await()) {
         std::cout << i;
     }
     std::cout << std::endl;
