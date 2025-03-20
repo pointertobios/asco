@@ -80,13 +80,13 @@ public:
         if (exited)
             throw std::runtime_error("[ASCO] Channel error: Cannot send on a closed channel.");
         mutex.lock();
-        if (frame->sender_index.value() == frame_size) {
+        if (*frame->sender_index == frame_size) {
             frame->sender_index = std::nullopt;
             frame->next = new channel_frame<T>(frame_size);
             frame = frame->next;
         }
 
-        frame->data[frame->sender_index.value()++] = value;
+        frame->data[(*frame->sender_index)++] = value;
         if (state->waiting) {
             state->ok = true;
             state->cv.notify_one();
@@ -146,8 +146,8 @@ public:
     }
 
     bool stopped() {
-        return frame->receiver_index.has_value() && frame->sender_index.has_value()
-                && frame->receiver_index.value() == frame->sender_index.value() && state->stopped;
+        return frame->receiver_index && frame->sender_index
+                && *frame->receiver_index == *frame->sender_index && state->stopped;
     }
 
     // You must test if the channel stopped before try_recv()
@@ -159,14 +159,14 @@ public:
 
         mutex.lock();
 
-        if (frame->sender_index.has_value()
-                && frame->receiver_index.value() == frame->sender_index.value()) {
+        if (frame->sender_index
+                && *frame->receiver_index == *frame->sender_index) {
             mutex.unlock();
             return std::nullopt;
         }
 
-        if (frame->receiver_index.value() == frame_size) {
-            if (frame->sender_index.has_value())
+        if (*frame->receiver_index == frame_size) {
+            if (frame->sender_index)
                 throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but sender_index is not std::nullopt.");
             if (frame->next == nullptr)
                 throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but next frame is nullptr.");
@@ -176,7 +176,7 @@ public:
             frame->receiver_index = 0;
         }
 
-        auto &&res = std::move(frame->data[frame->receiver_index.value()++]);
+        auto &&res = std::move(frame->data[(*frame->receiver_index)++]);
         mutex.unlock();
         return res;
     }
@@ -191,8 +191,8 @@ public:
 
         mutex.lock();
 
-        if (frame->sender_index.has_value()
-                && frame->receiver_index.value() == frame->sender_index.value()) {
+        if (frame->sender_index
+                && *frame->receiver_index == *frame->sender_index) {
             state->waiting = true;
             std::unique_lock lk(state->mutex);
             state->cv.wait(lk, [this]{return state->ok;});
@@ -201,8 +201,8 @@ public:
             state->ok = false;
         }
 
-        if (frame->receiver_index.value() == frame_size) {
-            if (frame->sender_index.has_value())
+        if (*frame->receiver_index == frame_size) {
+            if (frame->sender_index)
                 throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but sender_index is not std::nullopt.");
             if (frame->next == nullptr)
                 throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but next frame is nullptr.");
@@ -212,7 +212,7 @@ public:
             frame->receiver_index = 0;
         }
 
-        auto &&res = std::move(frame->data[frame->receiver_index.value()++]);
+        auto &&res = std::move(frame->data[(*frame->receiver_index)++]);
         mutex.unlock();
         return res;
     }
