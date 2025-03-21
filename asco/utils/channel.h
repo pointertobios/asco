@@ -149,7 +149,6 @@ public:
         return state->stopped;
     }
 
-    // You must test if the channel stopped before try_recv()
     std::optional<T> try_recv() {
         if (moved)
             throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
