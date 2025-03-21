@@ -1,6 +1,7 @@
 #include <asco/runtime.h>
 
 #include <string>
+#include <cassert>
 #include <cerrno>
 #include <cstring>
 #include <fstream>
@@ -14,17 +15,19 @@
 #endif
 
 #include <asco/utils/while_decl.h>
+#include <asco/sched.h>
 
 namespace asco {
     std::map<std::thread::id, worker *> worker::workers;
-    std::map<std::thread::id, runtime *> runtime::runtimes;
+    thread_local worker *worker::current_worker{nullptr};
+    runtime *runtime::current_runtime{nullptr};
 
     worker::worker(int id, const worker_fn &f, task_receiver rx) noexcept
         : id(id)
         , is_calculator(false)
         , task_rx(rx)
-        , thread([f, id, this]() {
-            f(id, this);
+        , thread([f, this]() {
+            f(this);
         }) {
         workers[thread.get_id()] = this;
     }
@@ -38,18 +41,16 @@ namespace asco {
             thread.join();
     }
 
-    worker::native_handle_type worker::native_handle() {
-        return thread.native_handle();
-    }
-
-    std::thread::id worker::get_id() const {
+    std::thread::id worker::get_thread_id() const {
         return thread.get_id();
     }
 
     worker *worker::get_worker() {
         if (workers.find(std::this_thread::get_id()) == workers.end())
             throw std::runtime_error("[ASCO] Currently not in any asco::worker thread");
-        return workers[std::this_thread::get_id()];
+        if (!current_worker)
+            current_worker = workers[std::this_thread::get_id()];
+        return current_worker;
     }
 
     /* ---- runtime ---- */
@@ -69,50 +70,65 @@ namespace asco {
 
     runtime::runtime(int nthread_)
             : nthread(nthread_ ? nthread_ : std::thread::hardware_concurrency()) {
-        auto worker_lambda = [this](size_t id, worker *self) {
+        if (current_runtime)
+            throw std::runtime_error("[ASCO] Caonnot create multiple runtimes in a process");
+        current_runtime = this;
 
-            pthread_setname_np(pthread_self(), std::format("asco::worker{}", id).c_str());
+        auto worker_lambda = [](worker *self_) {
+            worker &self = *self_;
+
+            pthread_setname_np(pthread_self(), std::format("asco::worker{}", self.id).c_str());
 #ifdef __linux__
-            self->pid = syscall(SYS_gettid);
+            self.pid = syscall(SYS_gettid);
 #endif
-            while (true) if (auto task = self->task_rx->recv(); task.has_value()) {
-                try {
-                    auto f = task.value();
-                    f();
-                } catch (const std::exception &e) {
-                    std::cerr << e.what() << std::endl;
+
+            while (true) {
+                if (self.task_rx->stopped())
+                    break;
+                while (true) if (auto task = self.task_rx->try_recv(); task) {
+                    self.sc.push_task(std::move(*task));
+                } else break;
+                if (auto handle = self.sc.sched(); handle) {
+                    handle->resume();
+                } else {
+                    if (auto task = self.task_rx->recv(); task) {
+                        self.sc.push_task(std::move(*task));
+                    } else {
+                        break;
+                    }
                 }
-            } else break;
+            }
         };
 
         pool.reserve(nthread);
 #ifdef __linux__
         auto cpus = get_cpus();
-        FILE *f;
 #endif
 
-        auto [io_tx, io_rx_] = channel<task_sending_instance>(128);
+        auto [io_tx, io_rx_] = channel<sched::task>(128);
         io_task_tx = std::move(io_tx);
         task_receiver io_rx = make_shared_receiver(std::move(io_rx_));
 
-        auto [calcu_tx, calcu_rx_] = channel<task_sending_instance>(128);
+        auto [calcu_tx, calcu_rx_] = channel<sched::task>(128);
         calcu_task_tx = std::move(calcu_tx);
         task_receiver calcu_rx = make_shared_receiver(std::move(calcu_rx_));
 
         for (int i = 0; i < nthread; i++) {
             bool is_calculator = false;
-#ifdef __linux__
+
             // The hyper thread cores are usually the high frequency cores
             // Use them as calculator workers
+#ifdef __linux__
             std::string path = std::format("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list", i % cpus.size());
             std::ifstream f(path);
             if (!f.is_open())
-                throw "[CoIO] Failed to detect CPU hyperthreading";
+                throw std::runtime_error("[CoIO] Failed to detect CPU hyperthreading");
             std::string buf;
             std::vector<int> siblings;
             while (std::getline(f, buf, '-')) {
                 siblings.push_back(std::atoi(buf.c_str()));
             }
+            f.close();
             if (siblings.size() > 1) {
                 is_calculator = true;
             }
@@ -135,7 +151,6 @@ namespace asco {
                 throw std::runtime_error("[ASCO] Failed to create worker");
             pool.push_back(p);
             auto &workeri = pool[i];
-            runtimes[workeri->get_id()] = this;
 
 #ifdef __linux__
             auto &cpu = cpus[i % cpus.size()];
@@ -154,14 +169,49 @@ namespace asco {
     }
 
     runtime::~runtime() {
-        io_task_tx.value().stop();
-        calcu_task_tx.value().stop();
+        io_task_tx->stop();
+        calcu_task_tx->stop();
         for (auto thread : pool) {
             thread->join();
         }
     }
 
+    size_t runtime::spawn(task_instance task_) {
+        auto task = to_task(task_);
+        auto res = task.id;
+        if (io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_count) {
+            io_worker_count++;
+            io_task_tx->send(task);
+        } else {
+            calcu_worker_count++;
+            calcu_task_tx->send(task);
+        }
+        return res;
+    }
+
+    size_t runtime::spawn_blocking(task_instance task_) {
+        auto task = to_task(task_);
+        auto res = task.id;
+        if (io_worker_count * calcu_worker_load < calcu_worker_count * io_worker_count) {
+            io_worker_count++;
+            io_task_tx->send(task);
+        } else {
+            calcu_worker_count++;
+            calcu_task_tx->send(task);
+        }
+        return res;
+    }
+
+    void runtime::awake(size_t id) {
+        throw std::runtime_error("not implemented");
+    }
+
+    sched::task runtime::to_task(task_instance task) {
+        auto id = task_counter++;
+        return sched::task{id, task};
+    }
+
     runtime *runtime::get_runtime() {
-        return runtimes[std::this_thread::get_id()];
+        return current_runtime;
     }
 };
