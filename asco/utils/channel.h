@@ -145,19 +145,28 @@ public:
         moved = true;
     }
 
-    bool stopped() {
-        return frame->receiver_index && frame->sender_index
-                && *frame->receiver_index == *frame->sender_index && state->stopped;
+    bool is_stopped() const {
+        return state->stopped;
     }
 
     // You must test if the channel stopped before try_recv()
     std::optional<T> try_recv() {
         if (moved)
             throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
-        if (stopped())
-            throw std::runtime_error("[ASCO] Channel error: Cannot trying receive on a stopped channel.");
-
+        
+        if (state->stopped)
+            return std::nullopt;
+        
         mutex.lock();
+
+        if (state->stopped) {
+            if (frame) {
+                delete frame;
+                frame = nullptr;
+            }
+            mutex.unlock();
+            return std::nullopt;
+        }
 
         if (frame->sender_index
                 && *frame->receiver_index == *frame->sender_index) {
@@ -181,24 +190,39 @@ public:
         return res;
     }
 
-    // Return std::nullopt if channel closed
     std::optional<T> recv() {
         if (moved)
             throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
-
-        if (stopped())
+        
+        if (state->stopped)
             return std::nullopt;
-
+        
         mutex.lock();
+
+        if (state->stopped) {
+            if (frame) {
+                delete frame;
+                frame = nullptr;
+            }
+            mutex.unlock();
+            return std::nullopt;
+        }
 
         if (frame->sender_index
                 && *frame->receiver_index == *frame->sender_index) {
             state->waiting = true;
             std::unique_lock lk(state->mutex);
             state->cv.wait(lk, [this]{return state->ok;});
-            state->waiting = false;
             lk.unlock();
             state->ok = false;
+        }
+        if (state->stopped) {
+            if (frame) {
+                delete frame;
+                frame = nullptr;
+            }
+            mutex.unlock();
+            return std::nullopt;
         }
 
         if (*frame->receiver_index == frame_size) {

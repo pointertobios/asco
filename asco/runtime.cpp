@@ -74,7 +74,7 @@ namespace asco {
             throw std::runtime_error("[ASCO] Caonnot create multiple runtimes in a process");
         current_runtime = this;
 
-        auto worker_lambda = [](worker *self_) {
+        auto worker_lambda = [this](worker *self_) {
             worker &self = *self_;
 
             pthread_setname_np(pthread_self(), std::format("asco::worker{}", self.id).c_str());
@@ -83,13 +83,19 @@ namespace asco {
 #endif
 
             while (true) {
-                if (self.task_rx->stopped())
+                if (self.task_rx->is_stopped())
                     break;
                 while (true) if (auto task = self.task_rx->try_recv(); task) {
                     self.sc.push_task(std::move(*task));
                 } else break;
                 if (auto handle = self.sc.sched(); handle) {
                     handle->resume();
+                    if (handle->done()) {
+                        if (self.is_calculator)
+                            calcu_worker_load--;
+                        else
+                            io_worker_load--;
+                    }
                 } else {
                     if (auto task = self.task_rx->recv(); task) {
                         self.sc.push_task(std::move(*task));
@@ -179,7 +185,8 @@ namespace asco {
     size_t runtime::spawn(task_instance task_) {
         auto task = to_task(task_);
         auto res = task.id;
-        if (io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_count) {
+        if (io_worker_count
+                && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_count) {
             io_worker_count++;
             io_task_tx->send(task);
         } else {
@@ -192,7 +199,8 @@ namespace asco {
     size_t runtime::spawn_blocking(task_instance task_) {
         auto task = to_task(task_);
         auto res = task.id;
-        if (io_worker_count * calcu_worker_load < calcu_worker_count * io_worker_count) {
+        if (io_worker_count
+                && io_worker_count * calcu_worker_load < calcu_worker_count * io_worker_count) {
             io_worker_count++;
             io_task_tx->send(task);
         } else {

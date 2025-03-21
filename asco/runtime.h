@@ -1,6 +1,7 @@
 #ifndef ASCO_RUNTIME_H
 #define ASCO_RUNTIME_H
 
+#include <atomic>
 #include <coroutine>
 #include <functional>
 #include <map>
@@ -85,10 +86,10 @@ private:
     std::vector<worker *> pool;
 
     std::optional<task_sender> io_task_tx{std::nullopt};
-    int io_worker_count{0};
+    std::atomic<int> io_worker_count{0};
     int io_worker_load{0};
     std::optional<task_sender> calcu_task_tx{std::nullopt};
-    int calcu_worker_count{0};
+    std::atomic<int> calcu_worker_count{0};
     int calcu_worker_load{0};
 
     sched::task to_task(task_instance task);
