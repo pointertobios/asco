@@ -65,8 +65,9 @@ public:
     template<typename T>
     requires is_move_secure_v<T>
     future_nocoro<T> spawn(future_nocoro<T> future) {
-        if (io_worker_load * calcu_worker_count <= calcu_worker_load * io_worker_count
-                || calcu_worker_count == 0) {
+        if (io_worker_count
+                && (io_worker_load * calcu_worker_count <= calcu_worker_load * io_worker_count
+                || calcu_worker_count == 0)) {
             io_task_tx.value().send(std::move(future->get_workerf()));
         } else {
             calcu_task_tx.value().send(std::move(future->get_workerf()));
@@ -87,8 +88,10 @@ public:
     template<typename T>
     requires is_move_secure_v<T>
     future_nocoro<T> spawn_blocking(future_nocoro<T> future) {
-        if (calcu_worker_load * io_worker_count < io_worker_load * calcu_worker_count
-                && calcu_worker_count > 0) {
+        if (!io_worker_count
+                || (calcu_worker_count
+                && calcu_worker_load * io_worker_count < io_worker_load * calcu_worker_count
+                && calcu_worker_count > 0)) {
             calcu_task_tx.value().send(std::move(future->get_workerf()));
         } else {
             io_task_tx.value().send(std::move(future->get_workerf()));

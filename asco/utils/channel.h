@@ -156,13 +156,18 @@ public:
             if (state->stopped) {
                 delete frame;
                 mutex.unlock();
-                return std::nullopt; // state use count less than 2, the sender closed the channel.
+                return std::nullopt;
             }
             state->waiting = true;
             std::unique_lock lk(state->mutex);
             state->cv.wait(lk, [this]{return state->ok;});
             lk.unlock();
             state->ok = false;
+        }
+        if (state->stopped) {
+            delete frame;
+            mutex.unlock();
+            return std::nullopt;
         }
 
         if (*frame->receiver_index == frame_size) {
