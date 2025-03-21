@@ -146,19 +146,22 @@ public:
     }
 
     bool is_stopped() const {
-        return state->stopped;
+        if (moved)
+            throw std::runtime_error("[ASCO] Channel error: Moved channel.");
+        return state->stopped
+                && frame->sender_index && *frame->sender_index == *frame->receiver_index;
     }
 
     std::optional<T> try_recv() {
         if (moved)
             throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
         
-        if (state->stopped)
+        if (is_stopped())
             return std::nullopt;
         
         mutex.lock();
 
-        if (state->stopped) {
+        if (is_stopped()) {
             if (frame) {
                 delete frame;
                 frame = nullptr;
@@ -193,12 +196,12 @@ public:
         if (moved)
             throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
         
-        if (state->stopped)
+        if (is_stopped())
             return std::nullopt;
         
         mutex.lock();
 
-        if (state->stopped) {
+        if (is_stopped()) {
             if (frame) {
                 delete frame;
                 frame = nullptr;
@@ -215,7 +218,7 @@ public:
             lk.unlock();
             state->ok = false;
         }
-        if (state->stopped) {
+        if (is_stopped()) {
             if (frame) {
                 delete frame;
                 frame = nullptr;
