@@ -37,7 +37,7 @@ struct future {
         future<T> get_return_object() {
             cout << "promise_type::get_return_object" << endl;
             auto h = corohandle::from_promise(*this);
-            auto worker_id = RT::get_runtime()->spawn(h);
+            auto worker_id = R::get_runtime()->spawn(h);
             return future<T>(h, worker_id);
         }
         std::suspend_always initial_suspend() noexcept {
@@ -54,7 +54,7 @@ struct future {
                 cout << "final_awaiter::await_suspend" << endl;
                 auto& promise = h.promise();
                 if (promise.continuation_worker_id != static_cast<size_t>(-1)) {
-                    RT::get_runtime()->awake(promise.continuation_worker_id);
+                    R::get_runtime()->awake(promise.continuation_worker_id);
                 }
             }
             void await_resume() noexcept {

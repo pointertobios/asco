@@ -99,7 +99,7 @@ public:
 
 private:
     static runtime *current_runtime;
-    task_id task_counter;
+    task_id task_counter{1};
 };
 
 // Define macro `SET_RUNTIME` with set_runtime(rt)

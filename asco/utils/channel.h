@@ -148,6 +148,8 @@ public:
     bool is_stopped() const {
         if (moved)
             throw std::runtime_error("[ASCO] Channel error: Moved channel.");
+        if (!frame)
+            return true;
         return state->stopped
                 && frame->sender_index && *frame->sender_index == *frame->receiver_index;
     }

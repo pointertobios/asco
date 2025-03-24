@@ -83,18 +83,21 @@ namespace asco {
 #endif
 
             while (true) {
-                if (self.task_rx->is_stopped())
+                if (self.task_rx->is_stopped() && self.sc.currently_finished_all())
                     break;
+
                 while (true) if (auto task = self.task_rx->try_recv(); task) {
                     self.sc.push_task(std::move(*task));
                 } else break;
-                if (auto handle = self.sc.sched(); handle) {
-                    handle->resume();
-                    if (handle->done()) {
+
+                if (auto task = self.sc.sched(); task) {
+                    task->resume();
+                    if (task->done()) {
                         if (self.is_calculator)
                             calcu_worker_load--;
                         else
                             io_worker_load--;
+                        self.sc.exit(*task);
                     }
                 } else {
                     if (auto task = self.task_rx->recv(); task) {
@@ -183,6 +186,7 @@ namespace asco {
     }
 
     size_t runtime::spawn(task_instance task_) {
+        std::cout << "runtime::spawn" << std::endl;
         auto task = to_task(task_);
         auto res = task.id;
         if (io_worker_count
@@ -220,6 +224,8 @@ namespace asco {
     }
 
     runtime *runtime::get_runtime() {
+        if (!current_runtime)
+            throw std::runtime_error("The async function must be called with asco::runtime initialized");
         return current_runtime;
     }
 };
