@@ -54,10 +54,12 @@ struct future {
         }
 
         std::suspend_always final_suspend() noexcept {
+            std::cout << std::format("final_suspend task {}\n", task_id);
             if (caller_task == 0)
                 return {};
             auto rt = RT::get_runtime();
             auto id = rt->task_id_from_corohandle(caller_task);
+            rt->suspend(task_id);
             rt->awake(id);
             return {};
         }

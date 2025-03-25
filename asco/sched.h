@@ -35,23 +35,35 @@ template<typename T>
 concept is_scheduler = requires(T t) {
     { t.push_task(task{}) } -> std::same_as<void>;
     { t.sched() } -> std::same_as<std::optional<task>>;
-    { t.exit(std::declval<task &>()) } -> std::same_as<void>;
     { t.currently_finished_all() } -> std::same_as<bool>;
+    { t.awake(task::task_id{}) } -> std::same_as<void>;
+    { t.suspend(task::task_id{}) } -> std::same_as<void>;
+    { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
 };
 
 // I call it std_scheduler because it uses STL.
 class std_scheduler {
 public:
+    struct task_control {
+        task t;
+        enum class __control_state {
+            running,
+            suspending,
+        } state;
+    };
+
     std_scheduler();
     void push_task(task t);
     std::optional<task> sched();
-    void exit(task &t);
     bool currently_finished_all();
 
-    std::optional<task> get_task(task::task_id id);
+    void awake(task::task_id id);
+    void suspend(task::task_id id);
+
+    bool task_exists(task::task_id id);
 
 private:
-    std::vector<task> tasks;
+    std::vector<task_control> tasks;
 };
 
 };

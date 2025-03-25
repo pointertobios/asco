@@ -52,7 +52,7 @@ namespace asco {
         }
         while (true) {
             for (auto [_, pworker] : workers) {
-                if (pworker->sc.get_task(id)) {
+                if (pworker->sc.task_exists(id)) {
                     workers_by_task_id[id] = pworker;
                     return pworker;
                 }
@@ -118,7 +118,6 @@ namespace asco {
                             it->second.send(0);
                         }
                         coro_to_task_id.erase(task->handle.address());
-                        self.sc.exit(*task);
                     }
                 } else {
                     if (auto task = self.task_rx->recv(); task) {
@@ -236,11 +235,11 @@ namespace asco {
     }
 
     void runtime::awake(task_id id) {
-        throw std::runtime_error(std::format("runtime::awake({}): runtime::awake not implemented yet", id));
+        worker::get_worker_from_task_id(id)->sc.awake(id);
     }
 
     void runtime::suspend(task_id id) {
-        throw std::runtime_error(std::format("runtime::suspend({}): runtime::suspend not implemented yet", id));
+        worker::get_worker_from_task_id(id)->sc.suspend(id);
     }
 
     sync_awaiter runtime::register_sync_awaiter(task_id id) {
