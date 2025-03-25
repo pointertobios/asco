@@ -2,3 +2,4 @@
 /build
 callgrind.out.*
 core.*
+book
