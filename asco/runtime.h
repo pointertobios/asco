@@ -2,6 +2,7 @@
 #define ASCO_RUNTIME_H
 
 #include <atomic>
+#include <condition_variable>
 #include <coroutine>
 #include <functional>
 #include <mutex>
@@ -40,12 +41,20 @@ public:
 
     void join();
     std::thread::id get_thread_id() const;
+    void conditional_suspend();
+    void awake();
 
     int id;
     int pid{0};
     bool is_calculator;
     task_receiver task_rx;
     scheduler sc;
+
+    // worker thread states and cv
+    std::atomic_bool suspending{false};
+    bool awake_signal{false};
+    std::condition_variable cv;
+    std::mutex cv_mutex;
 
     std::unordered_map<task_id, asco_inner::sender<__u8>> sync_awaiters_tx;
 
@@ -56,9 +65,9 @@ private:
 
 public:
     static worker *get_worker_from_task_id(task_id id);
+    static std::unordered_map<task_id, worker *> workers_by_task_id;
 
 private:
-    static std::unordered_map<task_id, worker *> workers_by_task_id;
     static std::unordered_map<std::thread::id, worker *> workers;
     static worker *get_worker();
     thread_local static worker *current_worker;
@@ -110,7 +119,8 @@ private:
     task_id task_counter{1};
     std::unordered_map<void *, task_id> coro_to_task_id;
 
-    sched::task to_task(task_instance task);
+    sched::task to_task(task_instance task, bool is_blocking);
+    void awake_all();
 
 public:
     static runtime *get_runtime();

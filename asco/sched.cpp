@@ -16,12 +16,7 @@ namespace asco::sched {
         }
         using std_scheduler::task_control::__control_state::running;
         using std_scheduler::task_control::__control_state::suspending;
-        std::erase_if(tasks, [](auto &t) {
-            bool b = t.t.done();
-            if (b)
-                t.t.handle.destroy();
-            return b;
-        });
+        std::lock_guard lk{tasks_mutex};
         for (auto it = tasks.begin(); it != tasks.end(); it++) {
             if (it->state == running) {
                 auto task = std::move(*it);
@@ -38,9 +33,9 @@ namespace asco::sched {
     }
 
     void std_scheduler::awake(task::task_id id) {
+        std::lock_guard lk{tasks_mutex};
         for (auto &t : tasks) {
             if (t.t.id == id) {
-                std::cout << std::format("std_scheduler::awake({}) awaked\n", id);
                 t.state = std_scheduler::task_control::__control_state::running;
                 break;
             }
@@ -48,9 +43,20 @@ namespace asco::sched {
     }
 
     void std_scheduler::suspend(task::task_id id) {
+        std::lock_guard lk{tasks_mutex};
         for (auto &t : tasks) {
             if (t.t.id == id) {
                 t.state = std_scheduler::task_control::__control_state::suspending;
+                break;
+            }
+        }
+    }
+
+    void std_scheduler::destroy(task::task_id id) {
+        std::lock_guard lk{tasks_mutex};
+        for (auto it = tasks.begin(); it != tasks.end(); ++it) {
+            if (it->t.id == id) {
+                tasks.erase(it);
                 break;
             }
         }

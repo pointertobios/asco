@@ -45,6 +45,27 @@ namespace asco {
         return thread.get_id();
     }
 
+    void worker::conditional_suspend() {
+        if (task_rx->is_stopped())
+            return;
+
+        if (!awake_signal) {
+            std::unique_lock lk(cv_mutex);
+            suspending = true;
+            cv.wait(lk, [this] { return awake_signal; });
+            suspending = false;
+            lk.unlock();
+        }
+        awake_signal = false;
+    }
+
+    void worker::awake() {
+        awake_signal = true;
+        if (suspending) {
+            cv.notify_one();
+        }
+    }
+
     // always promis the id is an exist id.
     worker *worker::get_worker_from_task_id(task_id id) {
         if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
@@ -106,7 +127,6 @@ namespace asco {
                 } else break;
 
                 if (auto task = self.sc.sched(); task) {
-                    std::cout << std::format("Worker{} running task{}.\n", self.id, task->id);
                     task->resume();
                     if (task->done()) {
                         if (self.is_calculator)
@@ -118,14 +138,12 @@ namespace asco {
                             it->second.send(0);
                         }
                         coro_to_task_id.erase(task->handle.address());
-                    }
-                } else {
-                    if (auto task = self.task_rx->recv(); task) {
-                        self.sc.push_task(std::move(*task));
-                    } else {
-                        break;
+                        worker::workers_by_task_id.erase(task->id);
+                        self.sc.destroy(task->id);
                     }
                 }
+
+                self.conditional_suspend();
             }
         };
 
@@ -200,14 +218,20 @@ namespace asco {
     runtime::~runtime() {
         io_task_tx->stop();
         calcu_task_tx->stop();
+        awake_all();
         for (auto thread : pool) {
             thread->join();
         }
     }
 
+    void runtime::awake_all() {
+        for (auto worker : pool) {
+            worker->awake();
+        }
+    }
+
     runtime::task_id runtime::spawn(task_instance task_) {
-        std::cout << "runtime::spawn" << std::endl;
-        auto task = to_task(task_);
+        auto task = to_task(task_, false);
         auto res = task.id;
         if (io_worker_count
                 && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_count) {
@@ -217,11 +241,12 @@ namespace asco {
             calcu_worker_count++;
             calcu_task_tx->send(task);
         }
+        awake_all();
         return res;
     }
 
     runtime::task_id runtime::spawn_blocking(task_instance task_) {
-        auto task = to_task(task_);
+        auto task = to_task(task_, true);
         auto res = task.id;
         if (io_worker_count
                 && io_worker_count * calcu_worker_load < calcu_worker_count * io_worker_count) {
@@ -231,11 +256,14 @@ namespace asco {
             calcu_worker_count++;
             calcu_task_tx->send(task);
         }
+        awake_all();
         return res;
     }
 
     void runtime::awake(task_id id) {
-        worker::get_worker_from_task_id(id)->sc.awake(id);
+        auto *worker = worker::get_worker_from_task_id(id);
+        worker->sc.awake(id);
+        worker->awake();
     }
 
     void runtime::suspend(task_id id) {
@@ -254,11 +282,10 @@ namespace asco {
         return coro_to_task_id[handle.address()];
     }
 
-    sched::task runtime::to_task(task_instance task) {
+    sched::task runtime::to_task(task_instance task, bool is_blocking) {
         auto id = task_counter++;
         coro_to_task_id[task.address()] = id;
-        std::cout << std::format("registering task {} with coro {}\n", id, task.address());
-        return sched::task{id, task};
+        return sched::task{id, task, is_blocking};
     }
 
     runtime *runtime::get_runtime() {

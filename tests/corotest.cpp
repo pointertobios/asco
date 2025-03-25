@@ -9,7 +9,7 @@ future<int> foo() {
     co_return 3;
 }
 
-future_void async_main() {
+asco_main future_void async_main() {
     std::cout << "async_main" << std::endl;
     try {
         std::cout << co_await foo() << std::endl;
@@ -17,11 +17,4 @@ future_void async_main() {
         std::cout << e.what() << std::endl;
     }
     co_return {};
-}
-
-int main()
-{
-    asco::runtime rt;
-    async_main().await();
-    return 0;
 }

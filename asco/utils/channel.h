@@ -76,6 +76,7 @@ public:
     void operator=(sender &&rhs) {
         if (!none)
             stop();
+        none = false;
         frame = rhs.frame;
         frame_size = rhs.frame_size;
         state = rhs.state;

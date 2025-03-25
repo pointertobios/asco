@@ -54,7 +54,6 @@ struct future {
         }
 
         std::suspend_always final_suspend() noexcept {
-            std::cout << std::format("final_suspend task {}\n", task_id);
             if (caller_task == 0)
                 return {};
             auto rt = RT::get_runtime();
@@ -101,6 +100,16 @@ private:
 struct __future_void {};
 
 using future_void = future<__future_void>;
+
+#define asco_main                   \
+    asco::future_void async_main(); \
+    int main()                      \
+    {                               \
+        asco::runtime rt;           \
+        async_main().await();       \
+        return 0;                   \
+    }
+
 
 };
 

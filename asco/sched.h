@@ -5,6 +5,7 @@
 #include <concepts>
 #include <coroutine>
 #include <optional>
+#include <mutex>
 #include <vector>
 
 namespace asco::sched {
@@ -14,6 +15,8 @@ struct task {
 
     task_id id;
     std::coroutine_handle<> handle;
+
+    bool is_blocking;
 
     __always_inline bool operator==(task &rhs) const {
         return id == rhs.id;
@@ -38,6 +41,7 @@ concept is_scheduler = requires(T t) {
     { t.currently_finished_all() } -> std::same_as<bool>;
     { t.awake(task::task_id{}) } -> std::same_as<void>;
     { t.suspend(task::task_id{}) } -> std::same_as<void>;
+    { t.destroy(task::task_id{}) } -> std::same_as<void>;
     { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
 };
 
@@ -59,11 +63,16 @@ public:
 
     void awake(task::task_id id);
     void suspend(task::task_id id);
+    void destroy(task::task_id id);
 
     bool task_exists(task::task_id id);
 
 private:
     std::vector<task_control> tasks;
+    // During `sched()` `awake()` and `suspend()` calling,
+    // `tasks` may be modified, the iterator will be invalidated during the iteration.
+    // Lock it to prevent this.
+    std::mutex tasks_mutex;
 };
 
 };
