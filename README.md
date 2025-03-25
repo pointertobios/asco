@@ -40,5 +40,5 @@ target_link_libraries(<your-target> PRIVATE asco-shared)
 
 ### Documentations
 
-- [简体中文]
-- [English]
+- [简体中文](https://pointertobios.github.io/asco/zhcn/)
+- [English](https://pointertobios.github.io/asco/enus/)

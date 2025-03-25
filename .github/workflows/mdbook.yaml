@@ -43,12 +43,14 @@ jobs:
       - name: Build with mdBook
         run: |
           cd docs/zh-cn
-          mdbook build
+          mdbook build --dest-dir ../book/zhcn
+          cd ../en-us
+          mdbook build --dest-dir ../book/enus
           cd ../..
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./docs/zh-cn/book
+          path: ./docs/book
 
   # Deployment job
   deploy:
