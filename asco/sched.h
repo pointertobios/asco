@@ -24,7 +24,10 @@ struct task {
     }
 
     __always_inline bool done() const {
-        return handle.done();
+        bool b = handle.done();
+        if (b)
+            handle.destroy();
+        return b;
     }
 };
 
@@ -44,6 +47,8 @@ public:
     std::optional<task> sched();
     void exit(task &t);
     bool currently_finished_all();
+
+    std::optional<task> get_task(task::task_id id);
 
 private:
     std::vector<task> tasks;

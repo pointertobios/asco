@@ -4,15 +4,15 @@
 #include <atomic>
 #include <coroutine>
 #include <functional>
-#include <map>
 #include <mutex>
 #include <optional>
 #include <thread>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
-#include <asco/future_nocoro.h>
 #include <asco/sched.h>
+#include <asco/sync_awaiter.h>
 #include <asco/utils/channel.h>
 #include <asco/utils/utils.h>
 
@@ -30,6 +30,7 @@ using task_receiver = shared_receiver<sched::task>;
 class worker {
 public:
     using scheduler = sched::std_scheduler;
+    using task_id = sched::task::task_id;
 
     explicit worker(int id, const worker_fn &f, task_receiver rx) noexcept;
     worker(const worker &) = delete;
@@ -46,13 +47,19 @@ public:
     task_receiver task_rx;
     scheduler sc;
 
+    std::unordered_map<task_id, asco_inner::sender<__u8>> sync_awaiters_tx;
+
 private:
     std::jthread thread;
 
     bool moved{false};
 
+public:
+    static worker *get_worker_from_task_id(task_id id);
+
 private:
-    static std::map<std::thread::id, worker *> workers;
+    static std::unordered_map<task_id, worker *> workers_by_task_id;
+    static std::unordered_map<std::thread::id, worker *> workers;
     static worker *get_worker();
     thread_local static worker *current_worker;
 };
@@ -60,10 +67,14 @@ private:
 template<typename T>
 concept is_runtime = requires(T t) {
     typename T::scheduler;
+    typename T::task_id;
     { T::get_runtime() } -> std::same_as<T *>;
-    { t.spawn(task_instance{}) } -> std::same_as<size_t>;
-    { t.spawn_blocking(task_instance{}) } -> std::same_as<size_t>;
-    { t.awake(size_t{}) } -> std::same_as<void>;
+    { t.spawn(task_instance{}) } -> std::same_as<typename T::task_id>;
+    { t.spawn_blocking(task_instance{}) } -> std::same_as<typename T::task_id>;
+    { t.awake(typename T::task_id{}) } -> std::same_as<void>;
+    { t.suspend(typename T::task_id{}) } -> std::same_as<void>;
+    { t.register_sync_awaiter(typename T::task_id{}) } -> std::same_as<sync_awaiter>;
+    { t.task_id_from_corohandle(std::declval<std::coroutine_handle<>>()) } -> std::same_as<typename T::task_id>;
 } && sched::is_scheduler<typename T::scheduler>;
 
 class runtime {
@@ -77,9 +88,13 @@ public:
     explicit runtime(const runtime&&) = delete;
     ~runtime();
 
-    size_t spawn(task_instance task);
-    size_t spawn_blocking(task_instance task);
-    void awake(size_t id);
+    task_id spawn(task_instance task);
+    task_id spawn_blocking(task_instance task);
+    void awake(task_id id);
+    void suspend(task_id id);
+
+    sync_awaiter register_sync_awaiter(task_id id);
+    task_id task_id_from_corohandle(std::coroutine_handle<> handle);
 
 private:
     int nthread;
@@ -92,6 +107,9 @@ private:
     std::atomic<int> calcu_worker_count{0};
     int calcu_worker_load{0};
 
+    task_id task_counter{1};
+    std::unordered_map<void *, task_id> coro_to_task_id;
+
     sched::task to_task(task_instance task);
 
 public:
@@ -99,7 +117,6 @@ public:
 
 private:
     static runtime *current_runtime;
-    task_id task_counter{1};
 };
 
 // Define macro `SET_RUNTIME` with set_runtime(rt)

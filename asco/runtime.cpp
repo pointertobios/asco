@@ -14,11 +14,11 @@
     #include <sys/syscall.h>
 #endif
 
-#include <asco/utils/while_decl.h>
 #include <asco/sched.h>
 
 namespace asco {
-    std::map<std::thread::id, worker *> worker::workers;
+    std::unordered_map<worker::task_id, worker *> worker::workers_by_task_id;
+    std::unordered_map<std::thread::id, worker *> worker::workers;
     thread_local worker *worker::current_worker{nullptr};
     runtime *runtime::current_runtime{nullptr};
 
@@ -43,6 +43,21 @@ namespace asco {
 
     std::thread::id worker::get_thread_id() const {
         return thread.get_id();
+    }
+
+    // always promis the id is an exist id.
+    worker *worker::get_worker_from_task_id(task_id id) {
+        if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
+            return it->second;
+        }
+        while (true) {
+            for (auto [_, pworker] : workers) {
+                if (pworker->sc.get_task(id)) {
+                    workers_by_task_id[id] = pworker;
+                    return pworker;
+                }
+            }
+        }
     }
 
     worker *worker::get_worker() {
@@ -91,12 +106,18 @@ namespace asco {
                 } else break;
 
                 if (auto task = self.sc.sched(); task) {
+                    std::cout << std::format("Worker{} running task{}.\n", self.id, task->id);
                     task->resume();
                     if (task->done()) {
                         if (self.is_calculator)
                             calcu_worker_load--;
                         else
                             io_worker_load--;
+                        if (auto it = self.sync_awaiters_tx.find(task->id);
+                                it != self.sync_awaiters_tx.end()) {
+                            it->second.send(0);
+                        }
+                        coro_to_task_id.erase(task->handle.address());
                         self.sc.exit(*task);
                     }
                 } else {
@@ -185,7 +206,7 @@ namespace asco {
         }
     }
 
-    size_t runtime::spawn(task_instance task_) {
+    runtime::task_id runtime::spawn(task_instance task_) {
         std::cout << "runtime::spawn" << std::endl;
         auto task = to_task(task_);
         auto res = task.id;
@@ -200,7 +221,7 @@ namespace asco {
         return res;
     }
 
-    size_t runtime::spawn_blocking(task_instance task_) {
+    runtime::task_id runtime::spawn_blocking(task_instance task_) {
         auto task = to_task(task_);
         auto res = task.id;
         if (io_worker_count
@@ -214,12 +235,30 @@ namespace asco {
         return res;
     }
 
-    void runtime::awake(size_t id) {
-        throw std::runtime_error("not implemented");
+    void runtime::awake(task_id id) {
+        throw std::runtime_error(std::format("runtime::awake({}): runtime::awake not implemented yet", id));
+    }
+
+    void runtime::suspend(task_id id) {
+        throw std::runtime_error(std::format("runtime::suspend({}): runtime::suspend not implemented yet", id));
+    }
+
+    sync_awaiter runtime::register_sync_awaiter(task_id id) {
+        auto [tx, rx] = channel<__u8>(1);
+        worker::get_worker_from_task_id(id)->sync_awaiters_tx[id] = std::move(tx);
+        return sync_awaiter{make_shared_receiver(std::move(rx))};
+    }
+
+    runtime::task_id runtime::task_id_from_corohandle(std::coroutine_handle<> handle) {
+        if (coro_to_task_id.find(handle.address()) == coro_to_task_id.end())
+            throw std::runtime_error(std::format("[ASCO] runtime::task_id runtime::task_id_from_corohandle() Inner error: coro_to_task_id[{}] unexists", handle.address()));
+        return coro_to_task_id[handle.address()];
     }
 
     sched::task runtime::to_task(task_instance task) {
         auto id = task_counter++;
+        coro_to_task_id[task.address()] = id;
+        std::cout << std::format("registering task {} with coro {}\n", id, task.address());
         return sched::task{id, task};
     }
 
@@ -228,4 +267,6 @@ namespace asco {
             throw std::runtime_error("The async function must be called with asco::runtime initialized");
         return current_runtime;
     }
+
+
 };

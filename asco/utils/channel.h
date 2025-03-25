@@ -52,13 +52,17 @@ private:
     bool exited{false};
     std::mutex mutex;
 
+    bool none{false};
+
 public:
     bool shared{false};
 
 public:
+    sender(): none{true} {}
+
     sender(channel_frame<T> *initial_frame, const int frame_size, channel_state &state)
         : frame(initial_frame), frame_size(frame_size), state(state) {}
-    
+
     sender(sender &&rhs)
         : frame(rhs.frame), frame_size(rhs.frame_size), state(rhs.state) {
         rhs.exited = true;
@@ -70,6 +74,8 @@ public:
     }
 
     void operator=(sender &&rhs) {
+        if (!none)
+            stop();
         frame = rhs.frame;
         frame_size = rhs.frame_size;
         state = rhs.state;
@@ -77,7 +83,7 @@ public:
     }
 
     void send(T &&value) {
-        if (exited)
+        if (exited || none)
             throw std::runtime_error("[ASCO] Channel error: Cannot send on a closed channel.");
         mutex.lock();
         if (*frame->sender_index == frame_size) {
@@ -99,6 +105,9 @@ public:
     }
 
     void stop() {
+        if (none)
+            return;
+
         auto *pstate = state.get();
         state.reset();
         {
@@ -161,7 +170,8 @@ public:
         if (is_stopped())
             return std::nullopt;
         
-        mutex.lock();
+        if (!mutex.try_lock())
+            return std::nullopt;
 
         if (is_stopped()) {
             if (frame) {

@@ -28,4 +28,12 @@ namespace asco::sched {
         return tasks.empty();
     }
 
+    std::optional<task> std_scheduler::get_task(task::task_id id) {
+        for (auto &t: tasks) {
+            if (t.id == id)
+                return t;
+        }
+        return std::nullopt;
+    }
+
 };
