@@ -17,8 +17,28 @@ C++20 coroutine based async framework.
   - [ ] Async file read/write
   - [ ] Async TCP/UDP stream
 
-## Usage
+## Getting Started
 
-- basic
+### Import into your project
 
-See `tests/corotest.cpp`
+1. Clone one of this repository's version tag branch.
+2. Import with cmake:
+
+- static link:
+
+```cmake
+add_subdirectory(<path-to-this-repo>)
+target_link_libraries(<your-target> PRIVATE asco)
+```
+
+- dynamic link:
+
+```cmake
+add_subdirectory(<path-to-this-repo>)
+target_link_libraries(<your-target> PRIVATE asco-shared)
+```
+
+### Documentations
+
+- [简体中文]
+- [English]
