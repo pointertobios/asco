@@ -9,12 +9,12 @@ future<int> foo() {
     co_return 3;
 }
 
-asco_main future_void async_main() {
+asco_main future<int> async_main() {
     std::cout << "async_main" << std::endl;
     try {
         std::cout << co_await foo() << std::endl;
     } catch (const std::exception& e) {
         std::cout << e.what() << std::endl;
     }
-    co_return {};
+    co_return 0;
 }

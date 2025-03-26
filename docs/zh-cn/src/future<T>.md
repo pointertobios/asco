@@ -7,6 +7,36 @@
 
 该类型默认创建的是**非阻塞**任务，默认调度器会为其分配时间片，交替执行任务。
 
+## 异步主函数
+
+使用宏 `asco_main` 标注名为 `async_main` 、没有形参、返回值为 `asco::future<int>` 的函数，则该函数成为异步主函数：
+
+```c++
+asco_main future<int> async_main() {
+    ...
+    co_return 0;
+}
+```
+
+使用 `runtime::sys::args()` 获取命令行参数， `runtime::sys::env()` 获取环境变量[^1]:
+
+```c++
+using asco::runtime::sys;
+asco_main future<int> async_main() {
+    for (auto& arg : sys::args()) {
+        std::cout << arg << std::endl;
+    }
+    for (auto& [key, value] : sys::env()) {
+        std::cout << key << " = " << value << std::endl;
+    }
+    co_return 0;
+}
+```
+
+`asco_main` 使用默认配置[^1]创建异步 *asco 运行时*并对 `async_main` 函数的返回值调用 `.await()` 。
+
+也可以自己编写 `main()` 函数对运行时进行特殊配置[^1]，但是无法使用 `runtime` 获取命令行参数和环境变量，必须自行从 `main()` 函数的参数读取。
+
 ## 详细描述
 
 * 将任意一个返回`future<T>`的函数，称为 **asco 异步函数**。
@@ -18,7 +48,7 @@
 
 `co_await` 表达式返回结果时，当前任务恢复，等待调度器调度。
 
-**asco 异步函数**中使用 `co_return` 时，将返回值***移动***[^1]给调用方，当前任务挂起并等待
+**asco 异步函数**中使用 `co_return` 时，将返回值***移动***[^2]给调用方，当前任务挂起并等待
 *asco 异步运行时*稍后清理任务。
 
 ## 实现细节
@@ -55,7 +85,7 @@ constexpr bool is_move_secure_v =
 set_runtime(<你的自定义异步运行时>);
 ```
 
-*你的自定义异步运行时*必须符合 `asco::is_runtime<R>` 概念[^2]。
+*你的自定义异步运行时*必须符合 `asco::is_runtime<R>` 概念[^1]。
 
-[^1]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。
-[^2]: 见[asco 异步运行时](asco异步运行时.md)
+[^1]: 见[asco 异步运行时](asco异步运行时.md)
+[^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。

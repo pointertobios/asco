@@ -2,31 +2,68 @@
 
 * LLM translated it from Chinese.
 
-`asco::future<T>` is an awaiter for C++20 coroutines and is not related to `std::future<T>` in any way.
+`asco::future<T>` is an awaiter for C++20 coroutines and has no relation to `std::future<T>`.
 
-`asco::future<T>` (hereinafter referred to as `future<T>`) serves as the return value of asynchronous functions,
+`asco::future<T>` (hereinafter referred to as `future<T>`) serves as the return value for asynchronous functions,
 indicating that the function will return a value of type `T` at some future time.
-Callers can use `co_await` within asynchronous functions or call `future<T>::await()` in synchronous functions
-to wait for the asynchronous function to return and obtain the result.
+Callers can use `co_await` in asynchronous functions
+or call `future<T>::await()` in synchronous functions to wait for and retrieve the return value.
 
-This type creates **non-blocking** tasks by default.
+By default, this type creates **non-blocking** tasks.
 The default scheduler will allocate time slices to alternate task execution.
+
+## Asynchronous Main Function
+
+Using the macro `asco_main` to annotate a function named `async_main` with no parameters
+and a return type of `asco::future<int>`, whitch makes it an asynchronous main function:
+
+```c++
+asco_main future<int> async_main() {
+    ...
+    co_return 0;
+}
+```
+
+Use `runtime::sys::args()` to retrieve command-line arguments
+and `runtime::sys::env()` to access environment variables[^1]:
+
+```c++
+using asco::runtime::sys;
+asco_main future<int> async_main() {
+    for (auto& arg : sys::args()) {
+        std::cout << arg << std::endl;
+    }
+    for (auto& [key, value] : sys::env()) {
+        std::cout << key << " = " << value << std::endl;
+    }
+    co_return 0;
+}
+```
+
+The `asco_main` macro creates an asynchronous *asco runtime*
+with default configurations[^1] and calls `.await()` on the return value of `async_main`.
+
+You can also manually write a `main()` function with custom runtime configurations[^1],
+but you cannot use `runtime` to retrieve command-line arguments or environment variables.
+They must be manually read from the parameters of the `main()` function.
 
 ## Detailed Description
 
 * Any function returning `future<T>` is called an **asco asynchronous function**.
 
-When an **asco asynchronous function** is called,
-it immediately sends the function as a task to the *asco asynchronous runtime* and returns a `future<T>` object.
-The asynchronous task will not start executing immediately, but will wait for scheduler dispatching.
+When an **asco asynchronous function** is called, it immediately sends the function as a task
+to the *asco asynchronous runtime* and returns a `future<T>` object.
+The asynchronous task will not execute immediately but will wait for scheduler dispatching.
 
-When using `co_await` in an **asco asynchronous function**,
-the current task is suspended until the `co_await` expression returns a result.
+When `co_await` is used in an **asco asynchronous function**, the current task is suspended,
+waiting for the `co_await` expression to return a result.
 While suspended, the scheduler will not dispatch this task.
 
-When the `co_await` expression returns a result, the current task resumes and waits for scheduler dispatching.
+When the `co_await` expression returns a result,
+the current task resumes and waits for scheduler dispatching.
 
-When using `co_return` in an **asco asynchronous function**, the return value is ***moved***[^1] to the caller.
+When `co_return` is used in an **asco asynchronous function**,
+the return value is ***moved***[^2] to the caller.
 The current task is suspended and waits for the *asco asynchronous runtime* to clean up the task later.
 
 ## Implementation Details
@@ -56,15 +93,15 @@ constexpr bool is_move_secure_v =
 The template parameter `T` must either implement both **move constructor** and **move assignment operator**,
 or be a **numeric type**, **pointer**, or `void`.
 
-The template parameter `R` defaults to `asco::runtime`. A custom *asco asynchronous runtime* can be set
-by writing the following code before including `<asco/future.h>`:
+The template parameter `R` defaults to `asco::runtime`. To configure a custom *asco asynchronous runtime*,
+add the following code before including `<asco/future.h>`:
 
 ```c++
 #define SET_RUNTIME
-set_runtime(<your custom asynchronous runtime>);
+set_runtime(<your_custom_runtime>);
 ```
 
-*Your custom asynchronous runtime* must satisfy the `asco::is_runtime<R>` concept[^2].
+*Your custom asynchronous runtime* must conform to the `asco::is_runtime<R>` concept[^1].
 
-[^1]: Refers to `std::move()`. The template parameter `T` must implement both **move constructor** and **move assignment operator**.
-[^2]: See [asco asynchronous runtime](asco异步运行时.md)
+[^1]: See [Asco Asynchronous Runtime](asco_async_runtime.md)
+[^2]: Refers to `std::move()`. Template parameter `T` must implement **move constructor** and **move assignment operator**.

@@ -77,6 +77,7 @@ template<typename T>
 concept is_runtime = requires(T t) {
     typename T::scheduler;
     typename T::task_id;
+    typename T::sys;
     { T::get_runtime() } -> std::same_as<T *>;
     { t.spawn(task_instance{}) } -> std::same_as<typename T::task_id>;
     { t.spawn_blocking(task_instance{}) } -> std::same_as<typename T::task_id>;
@@ -87,6 +88,24 @@ concept is_runtime = requires(T t) {
 } && sched::is_scheduler<typename T::scheduler>;
 
 class runtime {
+public:
+    struct sys {
+        static void set_args(int argc, const char **argv);
+        __always_inline
+        static std::vector<std::string> &args() {
+            return __args;
+        }
+
+        static void set_env(char **env);
+        __always_inline
+        static std::unordered_map<std::string, std::string> &env() {
+            return __env;
+        }
+    private:
+        static std::vector<std::string> __args;
+        static std::unordered_map<std::string, std::string> __env;
+    };
+
 public:
     using scheduler = worker::scheduler;
 

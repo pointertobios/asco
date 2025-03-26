@@ -91,6 +91,25 @@ namespace asco {
 
     /* ---- runtime ---- */
 
+    std::vector<std::string> runtime::sys::__args;
+    std::unordered_map<std::string, std::string> runtime::sys::__env;
+
+    void runtime::sys::set_args(int argc, const char **argv) {
+        __args.clear();
+        for (int i = 0; i < argc; i++)
+            __args.push_back(argv[i]);
+    }
+
+    void runtime::sys::set_env(char **env) {
+        for (;*env; env++) {
+            std::string env_str = *env;
+            auto pos = env_str.find('=');
+            auto name = env_str.substr(0, pos);
+            auto value = env_str.substr(pos + 1);
+            __env[name] = value;
+        }
+    }
+
 #ifdef __linux__
     static std::vector<cpu_set_t> get_cpus() {
         std::vector<cpu_set_t> cpus;

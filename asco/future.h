@@ -101,15 +101,14 @@ struct __future_void {};
 
 using future_void = future<__future_void>;
 
-#define asco_main                   \
-    asco::future_void async_main(); \
-    int main()                      \
-    {                               \
-        asco::runtime rt;           \
-        async_main().await();       \
-        return 0;                   \
+#define asco_main                                               \
+    asco::future<int> async_main();                             \
+    int main(int argc, const char **argv, const char **env) {   \
+        asco::runtime rt;                                       \
+        asco::runtime::sys::set_args(argc, argv);               \
+        asco::runtime::sys::set_env(const_cast<char **>(env));  \
+        return async_main().await();                            \
     }
-
 
 };
 
