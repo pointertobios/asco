@@ -22,9 +22,7 @@ struct task {
         return id == rhs.id;
     }
 
-    __always_inline void resume() const {
-        handle.resume();
-    }
+    __always_inline void resume() const { handle.resume(); }
 
     __always_inline bool done() const {
         bool b = handle.done();

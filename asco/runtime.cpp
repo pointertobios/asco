@@ -105,7 +105,9 @@ namespace asco {
 #endif
 
     runtime::runtime(int nthread_)
-            : nthread(nthread_ ? nthread_ : std::thread::hardware_concurrency()) {
+            : nthread(
+                (nthread_ > 0 && nthread_ <= std::thread::hardware_concurrency())
+                    ? nthread_ : std::thread::hardware_concurrency()) {
         if (current_runtime)
             throw std::runtime_error("[ASCO] Caonnot create multiple runtimes in a process");
         current_runtime = this;
