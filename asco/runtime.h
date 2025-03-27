@@ -50,6 +50,8 @@ public:
     task_receiver task_rx;
     scheduler sc;
 
+    std::atomic_bool running_task;
+
     // worker thread states and cv
     std::atomic_bool suspending{false};
     bool awake_signal{false};
@@ -69,8 +71,9 @@ public:
 
 private:
     static std::unordered_map<std::thread::id, worker *> workers;
-    static worker *get_worker();
     thread_local static worker *current_worker;
+
+    static worker *get_worker();
 };
 
 template<typename T>
@@ -142,7 +145,11 @@ private:
     void awake_all();
 
 public:
-    static runtime *get_runtime();
+    __always_inline static runtime *get_runtime() {
+        if (!current_runtime)
+            throw std::runtime_error("The async function must be called with asco::runtime initialized");
+        return current_runtime;
+    }
 
 private:
     static runtime *current_runtime;

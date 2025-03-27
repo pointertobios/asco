@@ -8,6 +8,8 @@
 
 #include <asco/utils/utils.h>
 
+using namespace asco;
+
 namespace asco_inner {
 
 template<typename T>

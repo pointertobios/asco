@@ -54,6 +54,8 @@ public:
         } state;
     };
 
+    constexpr static const auto TIME_SLICE_CYCLE = std::chrono::milliseconds(1);
+
     std_scheduler();
     void push_task(task t);
     std::optional<task> sched();

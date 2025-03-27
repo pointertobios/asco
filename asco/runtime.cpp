@@ -1,12 +1,14 @@
 #include <asco/runtime.h>
 
-#include <string>
 #include <cassert>
 #include <cerrno>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <pthread.h>
+#include <ranges>
+#include <string>
+#include <string_view>
 
 #ifdef __linux__
     #include <sched.h>
@@ -102,10 +104,12 @@ namespace asco {
 
     void runtime::sys::set_env(char **env) {
         for (;*env; env++) {
-            std::string env_str = *env;
-            auto pos = env_str.find('=');
-            auto name = env_str.substr(0, pos);
-            auto value = env_str.substr(pos + 1);
+            std::string_view env_str = *env;
+            auto p = (env_str | std::views::split('=')
+                    | std::views::transform([](auto subrange) {
+                return std::string(std::string_view(subrange.begin(), subrange.end()));
+            }));
+            auto [name, value] = std::tuple(*p.begin(), *(p.begin()++));
             __env[name] = value;
         }
     }
@@ -148,7 +152,9 @@ namespace asco {
                 } else break;
 
                 if (auto task = self.sc.sched(); task) {
+                    self.running_task = true;
                     task->resume();
+                    self.running_task = false;
                     if (task->done()) {
                         if (self.is_calculator)
                             calcu_worker_load--;
@@ -308,12 +314,4 @@ namespace asco {
         coro_to_task_id[task.address()] = id;
         return sched::task{id, task, is_blocking};
     }
-
-    runtime *runtime::get_runtime() {
-        if (!current_runtime)
-            throw std::runtime_error("The async function must be called with asco::runtime initialized");
-        return current_runtime;
-    }
-
-
 };
