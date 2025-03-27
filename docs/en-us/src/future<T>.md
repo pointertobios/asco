@@ -10,7 +10,8 @@ Callers can use `co_await` in asynchronous functions
 or call `future<T>::await()` in synchronous functions to wait for and retrieve the return value.
 
 By default, this type creates **non-blocking** tasks.
-The default scheduler will allocate time slices to alternate task execution.
+The default scheduler can steal **non-blocking** tasks between worker threads, while
+the **blocking** tasks cannot be stolen.
 
 ## Asynchronous Main Function
 

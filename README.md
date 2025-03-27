@@ -6,7 +6,7 @@ C++20 coroutine based async framework.
 
 - [x] Async runtime
   - [x] Basic runnable environment
-    - [ ] time slice
+    - [x] Queue scheduler
     - [ ] CFS scheduler
   - [x] Linux full support
   - [ ] Windows full support
