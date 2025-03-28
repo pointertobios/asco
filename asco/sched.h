@@ -1,11 +1,13 @@
 #ifndef ASCO_SCHED_H
 #define ASCO_SCHED_H
 
+#include <atomic>
 #include <chrono>
 #include <concepts>
+#include <mutex>
 #include <coroutine>
 #include <optional>
-#include <mutex>
+#include <set>
 #include <vector>
 
 namespace asco::sched {
@@ -26,8 +28,6 @@ struct task {
 
     __always_inline bool done() const {
         bool b = handle.done();
-        if (b)
-            handle.destroy();
         return b;
     }
 };
@@ -54,8 +54,6 @@ public:
         } state;
     };
 
-    constexpr static const auto TIME_SLICE_CYCLE = std::chrono::milliseconds(1);
-
     std_scheduler();
     void push_task(task t);
     std::optional<task> sched();
@@ -68,7 +66,7 @@ public:
     bool task_exists(task::task_id id);
 
 private:
-    std::vector<task_control> tasks;
+    std::vector<task_control *> tasks;
     // During `sched()` `awake()` and `suspend()` calling,
     // `tasks` may be modified, the iterator will be invalidated during the iteration.
     // Lock it to prevent this.

@@ -54,9 +54,8 @@ private:
     bool exited{false};
     std::mutex mutex;
 
-    bool none{false};
-
 public:
+    bool none{false};
     bool shared{false};
 
 public:
@@ -78,11 +77,11 @@ public:
     void operator=(sender &&rhs) {
         if (!none)
             stop();
-        none = false;
         frame = rhs.frame;
         frame_size = rhs.frame_size;
         state = rhs.state;
         rhs.exited = true;
+        none = false;
     }
 
     void send(T &&value) {
@@ -134,9 +133,12 @@ private:
     std::mutex mutex;
 
 public:
+    bool none;
     bool shared{false};
 
 public:
+    receiver(): none{true} {}
+
     receiver(channel_frame<T> *initial_frame, const int frame_size, channel_state &state)
         : frame(initial_frame), frame_size(frame_size), state(state) {}
     
@@ -154,7 +156,8 @@ public:
         frame = rhs.frame;
         frame_size = rhs.frame_size;
         state = rhs.state;
-        moved = true;
+        rhs.moved = true;
+        none = false;
     }
 
     bool is_stopped() const {

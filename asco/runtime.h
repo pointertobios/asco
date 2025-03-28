@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <coroutine>
 #include <functional>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -33,7 +34,11 @@ public:
     using scheduler = sched::std_scheduler;
     using task_id = sched::task::task_id;
 
-    explicit worker(int id, const worker_fn &f, task_receiver rx) noexcept;
+    explicit worker(
+        int id, const worker_fn &f,
+        task_receiver rx,
+        sender<__u8> worker_await_tx,
+        receiver<__u8> worker_await_rx);
     worker(const worker &) = delete;
     worker(worker &) = delete;
     worker(worker &&) = delete;
@@ -52,11 +57,8 @@ public:
 
     std::atomic_bool running_task;
 
-    // worker thread states and cv
-    std::atomic_bool suspending{false};
-    bool awake_signal{false};
-    std::condition_variable cv;
-    std::mutex cv_mutex;
+    sender<__u8> worker_await_tx;
+    receiver<__u8> worker_await_rx;
 
     std::unordered_map<task_id, asco_inner::sender<__u8>> sync_awaiters_tx;
 
@@ -67,7 +69,8 @@ private:
 
 public:
     static worker *get_worker_from_task_id(task_id id);
-    static std::unordered_map<task_id, worker *> workers_by_task_id;
+    static std::map<task_id, worker *> workers_by_task_id;
+    static std::mutex workers_by_task_id_mutex;
 
 private:
     static std::unordered_map<std::thread::id, worker *> workers;
@@ -139,7 +142,8 @@ private:
     int calcu_worker_load{0};
 
     task_id task_counter{1};
-    std::unordered_map<void *, task_id> coro_to_task_id;
+    std::map<void *, task_id> coro_to_task_id;
+    std::mutex coro_to_task_id_mutex;
 
     sched::task to_task(task_instance task, bool is_blocking);
     void awake_all();

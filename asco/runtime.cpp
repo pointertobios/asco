@@ -19,15 +19,22 @@
 #include <asco/sched.h>
 
 namespace asco {
-    std::unordered_map<worker::task_id, worker *> worker::workers_by_task_id;
+    std::map<worker::task_id, worker *> worker::workers_by_task_id;
+    std::mutex worker::workers_by_task_id_mutex;
     std::unordered_map<std::thread::id, worker *> worker::workers;
     thread_local worker *worker::current_worker{nullptr};
     runtime *runtime::current_runtime{nullptr};
 
-    worker::worker(int id, const worker_fn &f, task_receiver rx) noexcept
+    worker::worker(
+        int id, const worker_fn &f,
+        task_receiver rx,
+        sender<__u8> worker_await_tx,
+        receiver<__u8> worker_await_rx)
         : id(id)
         , is_calculator(false)
         , task_rx(rx)
+        , worker_await_tx(worker_await_tx)
+        , worker_await_rx(worker_await_rx)
         , thread([f, this]() {
             f(this);
         }) {
@@ -51,21 +58,11 @@ namespace asco {
         if (task_rx->is_stopped())
             return;
 
-        if (!awake_signal) {
-            std::unique_lock lk(cv_mutex);
-            suspending = true;
-            cv.wait(lk, [this] { return awake_signal; });
-            suspending = false;
-            lk.unlock();
-        }
-        awake_signal = false;
+        worker_await_rx.recv();
     }
 
     void worker::awake() {
-        awake_signal = true;
-        if (suspending) {
-            cv.notify_one();
-        }
+        worker_await_tx.send(0);
     }
 
     // always promis the id is an exist id.
@@ -164,8 +161,12 @@ namespace asco {
                                 it != self.sync_awaiters_tx.end()) {
                             it->second.send(0);
                         }
-                        coro_to_task_id.erase(task->handle.address());
-                        worker::workers_by_task_id.erase(task->id);
+                        {
+                            std::lock_guard lk(coro_to_task_id_mutex);
+                            std::lock_guard lk_(worker::workers_by_task_id_mutex);
+                            coro_to_task_id.erase(task->handle.address());
+                            worker::workers_by_task_id.erase(task->id);
+                        }
                         self.sc.destroy(task->id);
                     }
                 }
@@ -220,7 +221,8 @@ namespace asco {
             } else {
                 rx = io_rx;
             }
-            auto *p = new worker(i, worker_lambda, rx);
+            auto [wa_tx, wa_rx] = channel<__u8>(1024);
+            auto *p = new worker(i, worker_lambda, rx, std::move(wa_tx), std::move(wa_rx));
             if (!p)
                 throw std::runtime_error("[ASCO] Failed to create worker");
             pool.push_back(p);
@@ -304,6 +306,7 @@ namespace asco {
     }
 
     runtime::task_id runtime::task_id_from_corohandle(std::coroutine_handle<> handle) {
+        std::lock_guard lk(coro_to_task_id_mutex);
         if (coro_to_task_id.find(handle.address()) == coro_to_task_id.end())
             throw std::runtime_error(std::format("[ASCO] runtime::task_id runtime::task_id_from_corohandle() Inner error: coro_to_task_id[{}] unexists", handle.address()));
         return coro_to_task_id[handle.address()];
@@ -311,7 +314,10 @@ namespace asco {
 
     sched::task runtime::to_task(task_instance task, bool is_blocking) {
         auto id = task_counter++;
-        coro_to_task_id[task.address()] = id;
+        {
+            std::lock_guard lk(coro_to_task_id_mutex);
+            coro_to_task_id.insert(std::make_pair(task.address(), id));
+        }
         return sched::task{id, task, is_blocking};
     }
 };
