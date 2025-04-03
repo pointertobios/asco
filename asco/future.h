@@ -36,6 +36,7 @@ struct future {
         size_t task_id;
 
         std::coroutine_handle<> caller_task;
+        bool caller_set{false};
 
         std::exception_ptr e;
 
@@ -43,27 +44,32 @@ struct future {
             auto coro = corohandle::from_promise(*this);
             auto task_id = RT::get_runtime()->spawn(coro);
             this->task_id = task_id;
+            // std::cout << std::format("Task {} get_return_object().\n", task_id);
             return future<T>(coro, task_id);
         }
 
         std::suspend_always initial_suspend() { return {}; }
 
         void return_value(T val) {
+            // std::cout << std::format("Task {} return_value(): returned {}.\n", task_id, val);
             retval = std::move(val);
             returned = true;
         }
 
         std::suspend_always final_suspend() noexcept {
-            if (caller_task == 0)
-                return {};
+            // std::cout << std::format("Task {} final_suspend().\n", task_id);
             auto rt = RT::get_runtime();
-            auto id = rt->task_id_from_corohandle(caller_task);
             rt->suspend(task_id);
+            while (!caller_set);
+            if (!caller_task)
+                return {};
+            auto id = rt->task_id_from_corohandle(caller_task);
             rt->awake(id);
             return {};
         }
 
         void unhandled_exception() {
+            // std::cout << std::format("Task {} unhandled_exception().\n", task_id);
             e = std::current_exception();
         }
     };
@@ -71,7 +77,9 @@ struct future {
     bool await_ready() { return false; }
 
     bool await_suspend(std::coroutine_handle<> handle) {
+        // std::cout << std::format("Task {} await_suspend().\n", task_id);
         task.promise().caller_task = handle;
+        task.promise().caller_set = true;
         auto rt = RT::get_runtime();
         auto id = rt->task_id_from_corohandle(handle);
         rt->suspend(id);
@@ -79,10 +87,12 @@ struct future {
     }
 
     T await_resume() {
+        // std::cout << std::format("Task {} await_resume().\n", task_id);
         return task.promise().retval;
     }
 
     T await() {
+        task.promise().caller_set = true;
         if (task.promise().returned)
             return std::move(task.promise().retval);
         RT::get_runtime()->register_sync_awaiter(task_id).await();
@@ -90,7 +100,9 @@ struct future {
     }
 
     future(corohandle task, size_t task_id)
-        : task(task), task_id(task_id) {}
+        : task(task), task_id(task_id) {
+        RT::get_runtime()->awake(task_id);
+    }
 
 private:
     corohandle task;

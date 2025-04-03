@@ -27,14 +27,10 @@ namespace asco {
 
     worker::worker(
         int id, const worker_fn &f,
-        task_receiver rx,
-        sender<__u8> worker_await_tx,
-        receiver<__u8> worker_await_rx)
+        task_receiver rx)
         : id(id)
         , is_calculator(false)
         , task_rx(rx)
-        , worker_await_tx(worker_await_tx)
-        , worker_await_rx(worker_await_rx)
         , thread([f, this]() {
             f(this);
         }) {
@@ -58,11 +54,25 @@ namespace asco {
         if (task_rx->is_stopped())
             return;
 
-        worker_await_rx.recv();
+        if (worker_awaiting)
+            return;
+
+        worker_awaiting = true;
+        std::unique_lock lk(worker_await_mutex);
+        worker_await_cv.wait(lk, [this] () { return worker_await_flag; });
+        lk.unlock();
+        worker_awaiting = false;
+        worker_await_flag = false;
     }
 
     void worker::awake() {
-        worker_await_tx.send(0);
+        if (!worker_awaiting) {
+            worker_await_flag = true;
+            return;
+        }
+        std::lock_guard lk(worker_await_mutex);
+        worker_await_flag = true;
+        worker_await_cv.notify_one();
     }
 
     // always promis the id is an exist id.
@@ -149,9 +159,13 @@ namespace asco {
                 } else break;
 
                 if (auto task = self.sc.sched(); task) {
+                    // std::cout << std::format("Worker {} got task {}\n", self.id, task->id);
                     self.running_task = true;
-                    task->resume();
+                    try { task->resume(); } catch (std::exception &e) {
+                        std::cout << std::format("Worker {} got exception {}\n", self.id, e.what());
+                    }
                     self.running_task = false;
+                    // std::cout << std::format("Worker {} suspend task {}\n", self.id, task->id);
                     if (task->done()) {
                         if (self.is_calculator)
                             calcu_worker_load--;
@@ -169,9 +183,9 @@ namespace asco {
                         }
                         self.sc.destroy(task->id);
                     }
+                } else {
+                    self.conditional_suspend();
                 }
-
-                self.conditional_suspend();
             }
         };
 
@@ -221,8 +235,7 @@ namespace asco {
             } else {
                 rx = io_rx;
             }
-            auto [wa_tx, wa_rx] = channel<__u8>(1024);
-            auto *p = new worker(i, worker_lambda, rx, std::move(wa_tx), std::move(wa_rx));
+            auto *p = new worker(i, worker_lambda, rx);
             if (!p)
                 throw std::runtime_error("[ASCO] Failed to create worker");
             pool.push_back(p);

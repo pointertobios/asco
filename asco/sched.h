@@ -24,10 +24,16 @@ struct task {
         return id == rhs.id;
     }
 
-    __always_inline void resume() const { handle.resume(); }
+    __always_inline void resume() const {
+        if (handle.done())
+            throw std::runtime_error("[ASCO] Inner error: task is done but not destroyed.");
+        handle.resume();
+    }
 
     __always_inline bool done() const {
         bool b = handle.done();
+        if (b)
+            handle.destroy();
         return b;
     }
 };

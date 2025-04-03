@@ -6,7 +6,7 @@ using asco::future, asco::future_void;
 
 future<int> foo(int i) {
     std::cout << "foo" << std::endl;
-    co_return 3 * i;
+    co_return i + 2;
 }
 
 asco_main future<int> async_main() {

@@ -34,11 +34,7 @@ public:
     using scheduler = sched::std_scheduler;
     using task_id = sched::task::task_id;
 
-    explicit worker(
-        int id, const worker_fn &f,
-        task_receiver rx,
-        sender<__u8> worker_await_tx,
-        receiver<__u8> worker_await_rx);
+    explicit worker(int id, const worker_fn &f, task_receiver rx);
     worker(const worker &) = delete;
     worker(worker &) = delete;
     worker(worker &&) = delete;
@@ -57,8 +53,10 @@ public:
 
     std::atomic_bool running_task;
 
-    sender<__u8> worker_await_tx;
-    receiver<__u8> worker_await_rx;
+    std::mutex worker_await_mutex;
+    std::condition_variable worker_await_cv;
+    bool worker_await_flag{false};
+    bool worker_awaiting{false};
 
     std::unordered_map<task_id, asco_inner::sender<__u8>> sync_awaiters_tx;
 

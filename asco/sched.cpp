@@ -7,7 +7,7 @@ namespace asco::sched {
     std_scheduler::std_scheduler() {}
 
     void std_scheduler::push_task(task t) {
-        tasks.push_back(new task_control{t, std_scheduler::task_control::__control_state::running});
+        tasks.push_back(new task_control{t, std_scheduler::task_control::__control_state::suspending});
     }
 
     std::optional<task> std_scheduler::sched() {
