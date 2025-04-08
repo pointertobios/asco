@@ -1,22 +1,19 @@
 # future\<T\>
 
-* LLM translated it from Chinese.
-
 `asco::future<T>` is an awaiter for C++20 coroutines and has no relation to `std::future<T>`.
 
-`asco::future<T>` (hereinafter referred to as `future<T>`) serves as the return value for asynchronous functions,
+`asco::future<T>` (hereafter referred to as `future<T>`) serves as the return value
+for asynchronous functions,
 indicating that the function will return a value of type `T` at some future time.
-Callers can use `co_await` in asynchronous functions
-or call `future<T>::await()` in synchronous functions to wait for and retrieve the return value.
+Callers can use `co_await` in asynchronous functions or call `future<T>::await()`
+in synchronous functions to wait for and retrieve the return value.
 
-By default, this type creates **non-blocking** tasks.
-The default scheduler can steal **non-blocking** tasks between worker threads, while
-the **blocking** tasks cannot be stolen.
+---
 
 ## Asynchronous Main Function
 
-Using the macro `asco_main` to annotate a function named `async_main` with no parameters
-and a return type of `asco::future<int>`, whitch makes it an asynchronous main function:
+A function named `async_main` with no parameters and returning `asco::future<int>`,
+when annotated with the macro `asco_main`, becomes an asynchronous main function:
 
 ```c++
 asco_main future<int> async_main() {
@@ -25,8 +22,8 @@ asco_main future<int> async_main() {
 }
 ```
 
-Use `runtime::sys::args()` to retrieve command-line arguments
-and `runtime::sys::env()` to access environment variables[^1]:
+Use `runtime::sys::args()` to retrieve command-line arguments and `runtime::sys::env()`
+to access environment variables[^1]:
 
 ```c++
 using asco::runtime::sys;
@@ -41,68 +38,63 @@ asco_main future<int> async_main() {
 }
 ```
 
-The `asco_main` macro creates an asynchronous *asco runtime*
-with default configurations[^1] and calls `.await()` on the return value of `async_main`.
+The `asco_main` macro creates an *asco runtime* with default configurations[^1] and
+calls `.await()` on the return value of `async_main`.
 
-You can also manually write a `main()` function with custom runtime configurations[^1],
-but you cannot use `runtime` to retrieve command-line arguments or environment variables.
-They must be manually read from the parameters of the `main()` function.
+You may also manually write a `main()` function with custom runtime configurations[^1],
+but in this case, you cannot use `runtime` to access command-line arguments or
+environment variables and must read them directly from `main()`'s parameters.
 
-## Detailed Description
+---
 
-* Any function returning `future<T>` is called an **asco asynchronous function**.
+## Detailed Behavior
 
-When an **asco asynchronous function** is called, it immediately sends the function as a task
-to the *asco asynchronous runtime* and returns a `future<T>` object.
-The asynchronous task will not execute immediately but will wait for scheduler dispatching.
+- Any function returning `future<T>` is termed an **asco asynchronous function**.
 
-When `co_await` is used in an **asco asynchronous function**, the current task is suspended,
-waiting for the `co_await` expression to return a result.
-While suspended, the scheduler will not dispatch this task.
+When an **asco asynchronous function** is called, it is immediately sent as a task
+to the *asco async runtime* and returns a `future<T>` object.
+The asynchronous task does not execute immediately but waits for scheduler dispatching.
 
-When the `co_await` expression returns a result,
-the current task resumes and waits for scheduler dispatching.
+When `co_await` is used in an **asco asynchronous function**,
+the current task is suspended until the `co_await` expression yields a result.
+**While suspended, the scheduler does not schedule this task.**
+
+When the `co_await` expression resolves, the current task resumes and waits for scheduler dispatching.
 
 When `co_return` is used in an **asco asynchronous function**,
 the return value is ***moved***[^2] to the caller.
-The current task is suspended and waits for the *asco asynchronous runtime* to clean up the task later.
+The current task is suspended and awaits cleanup by the *asco async runtime*.
 
-## Implementation Details
+---
 
-The complete declaration of `future<T>` is as follows:
+## Variants of future\<T\>
 
-```c++
-template<typename T, typename R = RT>
-requires is_move_secure_v<T> && is_runtime<R>
-struct future {
-    static_assert(!std::is_void_v<T>, "Use asco::future_void instead.");
+### future_inline\<T\>
 
-    ...
-};
-```
+`future_inline<T>` behaves similarly to `std::future`,
+but when created, it is **not** sent to the *asco async runtime*.
+Instead, the coroutine is suspended immediately.
+When this object is **co_awaited**,
+the coroutine is resumed **inline** in the current context and executed to completion.
 
-The constraint `is_move_secure_v<T>` for template parameter `T` is defined as:
+This awaiter is suitable for functions that are inherently short but must execute asynchronous code.
 
-```c++
-template<typename T>
-constexpr bool is_move_secure_v = 
-    (std::is_move_constructible_v<T> && std::is_move_assignable_v<T>)
-        || std::is_integral_v<T> || std::is_floating_point_v<T>
-        || std::is_pointer_v<T> || std::is_void_v<T>;
-```
+---
 
-The template parameter `T` must either implement both **move constructor** and **move assignment operator**,
-or be a **numeric type**, **pointer**, or `void`.
+### future_blocking\<T\>
 
-The template parameter `R` defaults to `asco::runtime`. To configure a custom *asco asynchronous runtime*,
-add the following code before including `<asco/future.h>`:
+`future_blocking<T>` behaves similarly to `std::future` but creates a **blocking task**.
+Blocking tasks cannot be stolen and are prioritized for dispatch to **calculating worker** threads[^3].
 
-```c++
-#define SET_RUNTIME
-set_runtime(<your_custom_runtime>);
-```
+This awaiter is designed for CPU-intensive tasks.
 
-*Your custom asynchronous runtime* must conform to the `asco::is_runtime<R>` concept[^1].
+> On Intel Hybrid Architecture CPUs, with Hyper-Threading enabled,
+> **calculating worker** threads run on P-cores, while E-cores are reserved for **io worker** threads.
+> In the future, for ARM bit.LITTLE Android devices,
+> **calculating worker** threads will run on big cores.
 
-[^1]: See [Asco Asynchronous Runtime](asco_async_runtime.md)
-[^2]: Refers to `std::move()`. Template parameter `T` must implement **move constructor** and **move assignment operator**.
+---
+
+[^1]: See [asco Async Runtime](asco_async_runtime.md)
+[^2]: Refers to `std::move()`. The template parameter `T` must implement a **move constructor** and **move assignment operator**.
+[^3]: See [asco Worker Threads](asco_worker.md)

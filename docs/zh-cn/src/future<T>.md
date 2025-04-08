@@ -5,7 +5,7 @@
 `asco::future<T>` （后简称 `future<T>` ）作为异步函数的返回值，表示该函数将在未来某个时刻返回一个`T`类型的值。
 调用方可以在异步函数中使用 `co_await` ，或在同步函数中调用 `future<T>::await()` 等待异步函数返回并获取返回值。
 
-该类型默认创建的是**非阻塞**任务，调度器可以在工作线程之间窃取**非阻塞**任务；相反，**阻塞**任务则不能被窃取。
+---
 
 ## 异步主函数
 
@@ -37,7 +37,9 @@ asco_main future<int> async_main() {
 
 也可以自己编写 `main()` 函数对运行时进行特殊配置[^1]，但是无法使用 `runtime` 获取命令行参数和环境变量，必须自行从 `main()` 函数的参数读取。
 
-## 详细描述
+---
+
+## 核心机制
 
 * 将任意一个返回`future<T>`的函数，称为 **asco 异步函数**。
 
@@ -51,41 +53,28 @@ asco_main future<int> async_main() {
 **asco 异步函数**中使用 `co_return` 时，将返回值***移动***[^2]给调用方，当前任务挂起并等待
 *asco 异步运行时*稍后清理任务。
 
-## 实现细节
+---
 
-`future<T>`的完整声明如下：
+## future\<T\> 的变体
 
-```c++
-template<typename T, typename R = RT>
-requires is_move_secure_v<T> && is_runtime<R>
-struct future {
-    static_assert(!std::is_void_v<T>, "Use asco::future_void instead.");
+### future_inline\<T\>
 
-    ...
-};
-```
+`future_inline\<T\>` 的功能与 `std::future` 相同，但是它被创建时不会被发送给 *asco 异步运行时*，而是直接将协程挂起。
+当此对象被 **co_await** 时，协程在当前上下文中被当场恢复，执行完毕后返回。
 
-对模板参数 `T` 的约束 `is_move_secure_v<T>` 定义如下：
+此等待器适用于本身十分短小但不得不执行异步代码的函数。
 
-```c++
-template<typename T>
-constexpr bool is_move_secure_v = 
-    (std::is_move_constructible_v<T> && std::is_move_assignable_v<T>)
-        || std::is_integral_v<T> || std::is_floating_point_v<T>
-        || std::is_pointer_v<T> || std::is_void_v<T>;
-```
+### future_blocking\<T\>
 
-模板参数 `T` 要么同时实现了**移动构造函数**和**移动赋值函数**，要么是**数字**、**指针**或`void`。
+`future_blocking\<T\>` 的功能与 `std::future` 相同，但是它创建阻塞任务，
+阻塞任务不可以被窃取且优先发送至 *calculating worker* 工作线程[^3]。
 
-模板参数 `R` 默认为 `asco::runtime` ，可以在引入 `<asco/future.h>` 前编写如下代码设置自定义的
-*asco 异步运行时*：
+此等待器适用于 CPU 密集型任务。
 
-```c++
-#define SET_RUNTIME
-set_runtime(<你的自定义异步运行时>);
-```
-
-*你的自定义异步运行时*必须符合 `asco::is_runtime<R>` 概念[^1]。
+> 在开启了超线程的 Intel 混合架构处理器（“大小核架构”）的 CPU 上， **calculating worker** 工作线程将运行在高性能核心（“大核”）上，
+> 高能效核心（“小核”）均为 **io worker** 工作线程。
+> 在未来，对于ARM big.LITTLE异构架构处理器（“大小核架构”）的安卓设备， **calculating worker** 工作线程将运行在大核上。
 
 [^1]: 见[asco 异步运行时](asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。
+[^3]: 见[asco 工作线程](asco工作线程.md)

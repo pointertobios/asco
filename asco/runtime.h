@@ -45,6 +45,8 @@ public:
     std::thread::id get_thread_id() const;
     void conditional_suspend();
     void awake();
+    
+    static worker *get_worker();
 
     int id;
     int pid{0};
@@ -71,12 +73,12 @@ public:
 private:
     static std::unordered_map<std::thread::id, worker *> workers;
     thread_local static worker *current_worker;
-
-    static worker *get_worker();
 };
 
 template<typename T>
 concept is_runtime = requires(T t) {
+    typename T::__worker;
+    { T::__worker::get_worker() } -> std::same_as<typename T::__worker *>;
     typename T::scheduler;
     typename T::task_id;
     typename T::sys;
@@ -109,6 +111,7 @@ public:
     };
 
 public:
+    using __worker = worker;
     using scheduler = worker::scheduler;
 
     using task_id = sched::task::task_id;
