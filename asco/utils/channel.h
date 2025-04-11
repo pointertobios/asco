@@ -4,9 +4,9 @@
 #include <condition_variable>
 #include <mutex>
 #include <optional>
+#include <semaphore>
 #include <tuple>
 
-#include <asco/utils/mutex.h>
 #include <asco/utils/utils.h>
 
 using namespace asco;
@@ -36,10 +36,7 @@ struct channel_frame {
 };
 
 struct __channel_state {
-    std::mutex mutex;
-    std::condition_variable cv;
-    bool waiting;
-    bool ok{false};
+    std::binary_semaphore sem{0};
     bool stopped{false};
 };
 
@@ -52,7 +49,7 @@ private:
     channel_frame<T> *frame;
     int frame_size;
     channel_state state;
-    bool exited{false};
+    mutable bool exited{false};
     std::mutex mutex;
 
 public:
@@ -70,15 +67,9 @@ public:
         rhs.exited = true;
     }
 
-    sender(const sender &rhs)
-        : frame(rhs.frame), frame_size(rhs.frame_size), state(rhs.state) {
-        *const_cast<bool *>(&rhs.exited) = true;
-    }
+    sender(const sender &rhs) = delete;
 
-    sender(sender &rhs)
-        : frame(rhs.frame), frame_size(rhs.frame_size), state(rhs.state) {
-        rhs.exited = true;
-    }
+    sender(sender &rhs) = delete;
 
     ~sender() {
         if (!none)
@@ -107,10 +98,7 @@ public:
         }
 
         frame->data[(*frame->sender_index)++] = value;
-        if (state->waiting) {
-            state->ok = true;
-            state->cv.notify_one();
-        }
+        state->sem.release();
         mutex.unlock();
     }
 
@@ -125,10 +113,8 @@ public:
         auto *pstate = state.get();
         state.reset();
         {
-            std::lock_guard lk(pstate->mutex);
-            pstate->ok = true;
+            pstate->sem.release();
             pstate->stopped = true;
-            pstate->cv.notify_all();
         }
         exited = true;
         none = true;
@@ -142,7 +128,7 @@ private:
     channel_frame<T> *frame;
     int frame_size;
     channel_state state;
-    bool moved{false};
+    mutable bool moved{false};
     std::mutex mutex;
 
 public:
@@ -159,15 +145,9 @@ public:
         rhs.moved = true;
     }
 
-    receiver(const receiver &rhs)
-        : frame(rhs.frame), frame_size(rhs.frame_size), state(rhs.state) {
-        *const_cast<bool *>(&rhs.moved) = true;
-    }
+    receiver(const receiver &rhs) = delete;
 
-    receiver(receiver &rhs)
-        : frame(rhs.frame), frame_size(rhs.frame_size), state(rhs.state) {
-        rhs.moved = true;
-    }
+    receiver(receiver &rhs) = delete;
 
     void operator=(receiver &&rhs) {
         frame = rhs.frame;
@@ -247,11 +227,7 @@ public:
 
         if (frame->sender_index
                 && *frame->receiver_index == *frame->sender_index) {
-            state->waiting = true;
-            std::unique_lock lk(state->mutex);
-            state->cv.wait(lk, [this]{return state->ok;});
-            lk.unlock();
-            state->ok = false;
+            state->sem.acquire();
         }
         if (is_stopped()) {
             if (frame) {
@@ -299,7 +275,7 @@ using shared_sender = std::shared_ptr<sender<T>>;
 template<typename T>
 requires is_move_secure_v<T>
 shared_sender<T> make_shared_sender(sender<T> &&tx) {
-    return std::make_shared<sender<T>>(tx);
+    return std::make_shared<sender<T>>(std::move(tx));
 }
 
 template<typename T>
@@ -309,7 +285,7 @@ using shared_receiver = std::shared_ptr<receiver<T>>;
 template<typename T>
 requires is_move_secure_v<T>
 shared_receiver<T> make_shared_receiver(receiver<T> &&rx) {
-    return std::make_shared<receiver<T>>(rx);
+    return std::make_shared<receiver<T>>(std::move(rx));
 }
 
 };

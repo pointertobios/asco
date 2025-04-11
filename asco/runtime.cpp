@@ -91,11 +91,9 @@ namespace asco {
     void runtime::sys::set_env(char **env) {
         for (;*env; env++) {
             std::string_view env_str = *env;
-            auto p = (env_str | std::views::split('=')
-                    | std::views::transform([](auto subrange) {
-                return std::string(std::string_view(subrange.begin(), subrange.end()));
-            }));
-            auto [name, value] = std::tuple(*p.begin(), *(p.begin()++));
+            auto i = env_str.find_first_of('=');
+            std::string name(env_str.substr(0, i));
+            std::string value(env_str.substr(i + 1));
             __env[name] = value;
         }
     }
@@ -168,6 +166,8 @@ namespace asco {
                         else
                             io_worker_load--;
                     }
+                } else if (self.sc.has_buffered_awakes()) {
+                    self.sc.try_reawake_buffered();
                 } else {
                     self.conditional_suspend();
                 }

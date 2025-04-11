@@ -43,6 +43,7 @@ struct future_base {
         std::exception_ptr e;
 
         future_base<T, Inline, Blocking> get_return_object() {
+            // std::cout << std::format("future_base::promise_type::get_return_object()\n");
             auto coro = corohandle::from_promise(*this);
             if constexpr (!Inline) {
                 if constexpr (Blocking) {
@@ -59,11 +60,13 @@ struct future_base {
         std::suspend_always initial_suspend() { return {}; }
 
         void return_value(T val) {
+            // std::cout << std::format("future_base::promise_type::return_value({})\n", val);
             retval = std::move(val);
             returned = true;
         }
 
         auto final_suspend() noexcept {
+            // std::cout << std::format("future_base::promise_type::final_suspend()\n");
             if constexpr (!Inline) {
                 std::lock_guard lk{suspend_mutex};
                 auto rt = RT::get_runtime();
@@ -77,6 +80,7 @@ struct future_base {
         }
 
         void unhandled_exception() {
+            // std::cout << std::format("future_base::promise_type::unhandled_exception()\n");
             e = std::current_exception();
         }
     };
@@ -84,14 +88,15 @@ struct future_base {
     bool await_ready() { return false; }
 
     bool await_suspend(std::coroutine_handle<> handle) {
+        // std::cout << std::format("future_base::await_suspend({})\n", handle.address());
         if constexpr (!Inline) {
             std::lock_guard lk{task.promise().suspend_mutex};
+            task.promise().caller_task = handle;
             if (!task.promise().returned) {
                 auto rt = RT::get_runtime();
                 auto id = rt->task_id_from_corohandle(handle);
                 rt->suspend(id);
             }
-            task.promise().caller_task = handle;
         } else {
             task.resume();
         }
@@ -99,6 +104,7 @@ struct future_base {
     }
 
     T await_resume() {
+        // std::cout << std::format("future_base::await_resume()\n");
         return task.promise().retval;
     }
 

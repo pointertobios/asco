@@ -2,7 +2,7 @@
 
 #include <asco/future.h>
 
-future_inline<uint64_t> foo(uint64_t i) {
+future<uint64_t> foo(uint64_t i) {
     std::cout << "foo" << std::endl;
     co_return i;
 }

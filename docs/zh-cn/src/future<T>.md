@@ -59,14 +59,14 @@ asco_main future<int> async_main() {
 
 ### future_inline\<T\>
 
-`future_inline\<T\>` 的功能与 `std::future` 相同，但是它被创建时不会被发送给 *asco 异步运行时*，而是直接将协程挂起。
+`future_inline<T>` 的功能与 `std::future` 相同，但是它被创建时不会被发送给 *asco 异步运行时*，而是直接将协程挂起。
 当此对象被 **co_await** 时，协程在当前上下文中被当场恢复，执行完毕后返回。
 
 此等待器适用于本身十分短小但不得不执行异步代码的函数。
 
 ### future_blocking\<T\>
 
-`future_blocking\<T\>` 的功能与 `std::future` 相同，但是它创建阻塞任务，
+`future_blocking<T>` 的功能与 `std::future` 相同，但是它创建阻塞任务，
 阻塞任务不可以被窃取且优先发送至 *calculating worker* 工作线程[^3]。
 
 此等待器适用于 CPU 密集型任务。

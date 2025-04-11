@@ -8,6 +8,7 @@
 #include <coroutine>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 namespace asco::sched {
@@ -19,6 +20,7 @@ struct task {
     std::coroutine_handle<> handle;
 
     bool is_blocking;
+    bool mutable destroyed{false};
 
     __always_inline bool operator==(task &rhs) const {
         return id == rhs.id;
@@ -32,8 +34,10 @@ struct task {
 
     __always_inline bool done() const {
         bool b = handle.done();
-        if (b)
+        if (b) {
             handle.destroy();
+            destroyed = true;
+        }
         return b;
     }
 };
@@ -42,7 +46,11 @@ template<typename T>
 concept is_scheduler = requires(T t) {
     { t.push_task(task{}) } -> std::same_as<void>;
     { t.sched() } -> std::same_as<std::optional<task>>;
+    { t.try_reawake_buffered() } -> std::same_as<void>;
+    { t.find_stealable_and_steal() } -> std::same_as<std::optional<task>>;
+    { t.steal(task::task_id{}) } -> std::same_as<std::optional<task>>;
     { t.currently_finished_all() } -> std::same_as<bool>;
+    { t.has_buffered_awakes() } -> std::same_as<bool>;
     { t.awake(task::task_id{}) } -> std::same_as<void>;
     { t.suspend(task::task_id{}) } -> std::same_as<void>;
     { t.destroy(task::task_id{}) } -> std::same_as<void>;
@@ -57,13 +65,17 @@ public:
         enum class __control_state {
             running,
             suspending,
-        } state;
+        } state{__control_state::suspending};
     };
 
     std_scheduler();
     void push_task(task t);
     std::optional<task> sched();
+    void try_reawake_buffered();
+    std::optional<task> find_stealable_and_steal();
+    std::optional<task> steal(task::task_id id);
     bool currently_finished_all();
+    bool has_buffered_awakes();
 
     void awake(task::task_id id);
     void suspend(task::task_id id);
@@ -72,11 +84,11 @@ public:
     bool task_exists(task::task_id id);
 
 private:
-    std::vector<task_control *> tasks;
-    // During `sched()` `awake()` and `suspend()` calling,
-    // `tasks` may be modified, the iterator will be invalidated during the iteration.
-    // Lock it to prevent this.
-    std::mutex tasks_mutex;
+    std::vector<task_control *> active_tasks;
+    std::mutex active_tasks_mutex;
+    std::unordered_map<task::task_id, task_control *> suspended_tasks;
+
+    std::set<task::task_id> not_in_suspended_but_awake_tasks;
 };
 
 };
