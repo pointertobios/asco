@@ -1,3 +1,6 @@
+# Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 add_executable(test_corotest corotest.cpp)
 target_link_libraries(test_corotest PRIVATE asco)
 

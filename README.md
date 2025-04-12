@@ -1,5 +1,7 @@
 # ASCO
 
+[![GPLv3 License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 C++20 coroutine based async framework.
 
 ## Compilers
@@ -48,3 +50,11 @@ target_link_libraries(<your-target> PRIVATE asco-shared)
 
 - [简体中文](https://pointertobios.github.io/asco/zhcn/)
 - [English](https://pointertobios.github.io/asco/enus/)
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0** (GPLv3).
+
+Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
+
+For full legal terms, see the [LICENSE](./LICENSE.md) file.

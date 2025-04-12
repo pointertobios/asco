@@ -3,3 +3,4 @@
 callgrind.out.*
 core.*
 book
+perf.data
