@@ -37,7 +37,7 @@ struct future_base {
     struct promise_type {
         T retval;
         std::atomic_bool returned{false};
-        size_t task_id;
+        volatile size_t task_id;
 
         std::mutex suspend_mutex;
 
@@ -50,11 +50,9 @@ struct future_base {
             auto coro = corohandle::from_promise(*this);
             if constexpr (!Inline) {
                 if constexpr (Blocking) {
-                    auto task_id = RT::get_runtime()->spawn_blocking(coro);
-                    this->task_id = task_id;
+                    this->task_id = RT::get_runtime()->spawn_blocking(coro);
                 } else {
-                    auto task_id = RT::get_runtime()->spawn(coro);
-                    this->task_id = task_id;
+                    this->task_id = RT::get_runtime()->spawn(coro);
                 }
             }
             return future_base<T, Inline, Blocking>(coro, task_id);
@@ -71,6 +69,7 @@ struct future_base {
         auto final_suspend() noexcept {
             // std::cout << std::format("future_base::promise_type::final_suspend()\n");
             if constexpr (!Inline) {
+                while (!task_id);
                 std::lock_guard lk{suspend_mutex};
                 auto rt = RT::get_runtime();
                 if (caller_task) {
@@ -99,6 +98,8 @@ struct future_base {
                 auto rt = RT::get_runtime();
                 auto id = rt->task_id_from_corohandle(handle);
                 rt->suspend(id);
+            } else {
+                task.promise().caller_task = 0;
             }
         } else {
             task.resume();
@@ -107,31 +108,29 @@ struct future_base {
     }
 
     T await_resume() {
-        // std::cout << std::format("future_base::await_resume()\n");
+        // std::cout << std::format("future_base::await_resume() -> {}\n", task.promise().retval);
+        task.promise().caller_task = 0;
         return task.promise().retval;
     }
 
     T await() {
         try {
             R::__worker::get_worker();
-            throw std::runtime_error("[ASCO] Cannot use synchronized await In the runtime");
-        } catch (...) {}
-        if constexpr (!Inline) {
-            if (task.promise().returned)
+        } catch (...) {
+            if constexpr (!Inline) {
+                if (task.promise().returned)
+                    return std::move(task.promise().retval);
+                RT::get_runtime()->register_sync_awaiter(task_id).await();
                 return std::move(task.promise().retval);
-            RT::get_runtime()->register_sync_awaiter(task_id).await();
-            return std::move(task.promise().retval);
-        } else {
-            static_assert(false, "[ASCO] Inline future<T> cannot be awaited in synchronized context.");
+            } else {
+                static_assert(false, "[ASCO] Inline future<T> cannot be awaited in synchronized context.");
+            }
         }
+        throw std::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime");
     }
 
     future_base(corohandle task, size_t task_id)
-        : task(task), task_id(task_id) {
-        if constexpr (!Inline) {
-            RT::get_runtime()->awake(task_id);
-        }
-    }
+        : task(task), task_id(task_id) {}
 
 private:
     corohandle task;

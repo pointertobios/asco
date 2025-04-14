@@ -66,6 +66,8 @@ namespace asco {
 
     // always promis the id is an exist id.
     worker *worker::get_worker_from_task_id(task_id id) {
+        if (!id)
+            throw std::runtime_error("[ASCO] Inner error: unexpectedly got a 0 as task id");
         while (true) if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
             while (!it->second);
             return it->second;
@@ -119,7 +121,7 @@ namespace asco {
                 (nthread_ > 0 && nthread_ <= std::thread::hardware_concurrency())
                     ? nthread_ : std::thread::hardware_concurrency()) {
         if (current_runtime)
-            throw std::runtime_error("[ASCO] Caonnot create multiple runtimes in a process");
+            throw std::runtime_error("[ASCO] Cannot create multiple runtimes in a process");
         current_runtime = this;
 
         auto worker_lambda = [this](worker *self_) {
@@ -199,7 +201,7 @@ namespace asco {
             std::string path = std::format("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list", i % cpus.size());
             std::ifstream f(path);
             if (!f.is_open())
-                throw std::runtime_error("[CoIO] Failed to detect CPU hyperthreading");
+                throw std::runtime_error("[ASCO] Failed to detect CPU hyperthreading");
             std::string buf;
             std::vector<int> siblings;
             while (std::getline(f, buf, '-')) {
@@ -239,9 +241,9 @@ namespace asco {
             ) == -1) {
                 throw std::runtime_error("[ASCO] Failed to set affinity");
             }
-            
-            workeri->is_calculator = is_calculator;
 #endif
+
+            workeri->is_calculator = is_calculator;
         }
     }
 
@@ -252,6 +254,7 @@ namespace asco {
         for (auto thread : pool) {
             thread->join();
         }
+        current_runtime = nullptr;
     }
 
     void runtime::awake_all() {

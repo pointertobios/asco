@@ -11,14 +11,9 @@ namespace asco::sched {
 
     void std_scheduler::push_task(task t) {
         std::lock_guard lk{active_tasks_mutex};
-        if (not_in_suspended_but_awake_tasks.find(t.id) == not_in_suspended_but_awake_tasks.end())
-            suspended_tasks[t.id] = new task_control{t};
-        else {
-            not_in_suspended_but_awake_tasks.erase(t.id);
-            auto p = new task_control{t};
-            p->state = task_control::__control_state::running;
-            active_tasks.push_back(p);
-        }
+        auto p = new task_control{t};
+        p->state = task_control::__control_state::running;
+        active_tasks.push_back(p);
     }
 
     std::optional<task> std_scheduler::sched() {

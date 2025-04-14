@@ -68,7 +68,7 @@ public:
         enum class __control_state {
             running,
             suspending,
-        } state{__control_state::suspending};
+        } state{__control_state::running};
     };
 
     std_scheduler();

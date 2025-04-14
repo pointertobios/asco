@@ -52,10 +52,13 @@ public:
     static worker *get_worker();
 
     int id;
-    int pid{0};
     bool is_calculator;
     task_receiver task_rx;
     scheduler sc;
+
+#ifdef __linux__
+    int pid{0};
+#endif
 
     std::atomic_bool running_task;
 
