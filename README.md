@@ -18,6 +18,7 @@ C++20 coroutine based async framework.
   - [ ] MacOS full support
 - [ ] Basic tools for parallel programming
   - [ ] Timer
+  - [ ] Semaphore
   - [ ] Condition variable
   - [ ] Locks
   - [ ] Pipe

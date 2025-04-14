@@ -1,4 +1,4 @@
-# future\<T\>
+# future\<T\> 协程函数下的异步编程
 
 `asco::future<T>`是C++20 coroutine的一个等待器（ awaiter ），它与`std::future<T>`没有任何联系。
 
@@ -12,6 +12,7 @@
 使用宏 `asco_main` 标注名为 `async_main` 、没有形参、返回值为 `asco::future<int>` 的函数，则该函数成为异步主函数：
 
 ```c++
+#include <asco/future.h>
 asco_main future<int> async_main() {
     ...
     co_return 0;
@@ -74,6 +75,29 @@ asco_main future<int> async_main() {
 > 在开启了超线程的 Intel 混合架构处理器（“大小核架构”）的 CPU 上， **calculating worker** 工作线程将运行在高性能核心（“大核”）上，
 > 高能效核心（“小核”）均为 **io worker** 工作线程。
 > 在未来，对于ARM big.LITTLE异构架构处理器（“大小核架构”）的安卓设备， **calculating worker** 工作线程将运行在大核上。
+
+## 协程本地变量
+
+**协程本地变量**沿调用链传播。使用基于编译期计算哈希值的类型检查和变量名查找，查找变量名时沿调用链一路向上搜索。
+
+### 使用宏 `decl_local(name, ...)` 声明及初始化协程本地变量
+
+```c++
+int decl_local(i);
+i += 5;
+std::string decl_local(str, new std::string("Hello ASCO"));
+```
+
+推荐使用 `new` 运算符而不是 `new []` 运算符构造变量。
+
+### 使用宏 `coro_local(name)` 获取协程本地变量
+
+```c++
+std::string coro_local(str);
+for (char c : str) {
+    std::cout << c << ' ';
+}
+```
 
 [^1]: 见[asco 异步运行时](asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。

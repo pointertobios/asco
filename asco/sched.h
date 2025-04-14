@@ -14,6 +14,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <asco/coro_local.h>
+
 namespace asco::sched {
 
 struct task {
@@ -24,6 +26,8 @@ struct task {
 
     bool is_blocking;
     bool mutable destroyed{false};
+
+    __coro_local_frame *coro_local_frame{new __coro_local_frame};
 
     __always_inline bool operator==(task &rhs) const {
         return id == rhs.id;
@@ -58,6 +62,7 @@ concept is_scheduler = requires(T t) {
     { t.suspend(task::task_id{}) } -> std::same_as<void>;
     { t.destroy(task::task_id{}) } -> std::same_as<void>;
     { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
+    { t.get_task(task::task_id{}) } -> std::same_as<task &>;
 };
 
 // I call it std_scheduler because it uses STL.
@@ -85,6 +90,7 @@ public:
     void destroy(task::task_id id);
 
     bool task_exists(task::task_id id);
+    task &get_task(task::task_id id);
 
 private:
     std::vector<task_control *> active_tasks;

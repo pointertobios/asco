@@ -100,6 +100,7 @@ namespace asco::sched {
             return;
 
         iter->second->t.done();
+        delete iter->second->t.coro_local_frame;
         delete iter->second;
         suspended_tasks.erase(iter);
     }
@@ -111,6 +112,19 @@ namespace asco::sched {
                     [id] (task_control *t) { return t->t.id == id; })
                 != active_tasks.end() ||
             suspended_tasks.find(id) != suspended_tasks.end();
+    }
+
+    task &std_scheduler::get_task(task::task_id id) {
+        auto it = std::find_if(
+                    active_tasks.begin(), active_tasks.end(),
+                    [id] (task_control *t) { return t->t.id == id; });
+        if (it != active_tasks.end()) {
+            return (*it)->t;
+        } else if (auto it = suspended_tasks.find(id); it != suspended_tasks.end()) {
+            return it->second->t;
+        } else {
+            throw std::runtime_error("[ASCO] Task not found (maybe because you call it in synchronous texture)");
+        }
     }
 
 };

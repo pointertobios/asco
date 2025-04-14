@@ -145,14 +145,14 @@ namespace asco {
 
                 if (auto task = self.sc.sched(); task) {
                     // std::cout << std::format("Worker {} got task {}\n", self.id, task->id);
-                    self.running_task = true;
+                    self.running_task = task->id;
                     try {
                         if (!task->done())
                             task->resume();
                     } catch (std::exception &e) {
                         std::cerr << std::format("[ASCO] Inner error at task {}: {}\n", task->id, e.what());
                     }
-                    self.running_task = false;
+                    self.running_task = std::nullopt;
                     // std::cout << std::format("Worker {} suspend task {}\n", self.id, task->id);
                     if (task->done()) {
                         self.sc.destroy(task->id);
@@ -263,8 +263,8 @@ namespace asco {
         }
     }
 
-    runtime::task_id runtime::spawn(task_instance task_) {
-        auto task = to_task(task_, false);
+    runtime::task_id runtime::spawn(task_instance task_, __coro_local_frame *pframe) {
+        auto task = to_task(task_, false, pframe);
         auto res = task.id;
         if (io_worker_count
                 && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_load) {
@@ -278,8 +278,8 @@ namespace asco {
         return res;
     }
 
-    runtime::task_id runtime::spawn_blocking(task_instance task_) {
-        auto task = to_task(task_, true);
+    runtime::task_id runtime::spawn_blocking(task_instance task_, __coro_local_frame *pframe) {
+        auto task = to_task(task_, true, pframe);
         auto res = task.id;
         if (io_worker_count
                 && io_worker_count * calcu_worker_load < calcu_worker_count * io_worker_load) {
@@ -316,12 +316,14 @@ namespace asco {
         return coro_to_task_id[handle.address()];
     }
 
-    sched::task runtime::to_task(task_instance task, bool is_blocking) {
+    sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe) {
         auto id = task_counter++;
         {
             std::lock_guard lk(coro_to_task_id_mutex);
             coro_to_task_id.insert(std::make_pair(task.address(), id));
         }
-        return sched::task{id, task, is_blocking};
+        auto res = sched::task{id, task, is_blocking};
+        res.coro_local_frame->prev = pframe;
+        return res;
     }
 };

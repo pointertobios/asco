@@ -48,7 +48,12 @@ public:
     std::thread::id get_thread_id() const;
     void conditional_suspend();
     void awake();
-    
+
+    __always_inline sched::task &current_task() {
+        auto id = *running_task;
+        return sc.get_task(id);
+    }
+
     static worker *get_worker();
 
     int id;
@@ -60,7 +65,7 @@ public:
     int pid{0};
 #endif
 
-    std::atomic_bool running_task;
+    std::optional<task_id> running_task;
 
     std::binary_semaphore worker_await_sem{0};
 
@@ -89,8 +94,8 @@ concept is_runtime = requires(T t) {
     typename T::task_id;
     typename T::sys;
     { T::get_runtime() } -> std::same_as<T *>;
-    { t.spawn(task_instance{}) } -> std::same_as<typename T::task_id>;
-    { t.spawn_blocking(task_instance{}) } -> std::same_as<typename T::task_id>;
+    { t.spawn(task_instance{}, static_cast<__coro_local_frame *>(nullptr)) } -> std::same_as<typename T::task_id>;
+    { t.spawn_blocking(task_instance{}, static_cast<__coro_local_frame *>(nullptr)) } -> std::same_as<typename T::task_id>;
     { t.awake(typename T::task_id{}) } -> std::same_as<void>;
     { t.suspend(typename T::task_id{}) } -> std::same_as<void>;
     { t.register_sync_awaiter(typename T::task_id{}) } -> std::same_as<sync_awaiter>;
@@ -127,8 +132,8 @@ public:
     explicit runtime(const runtime&&) = delete;
     ~runtime();
 
-    task_id spawn(task_instance task);
-    task_id spawn_blocking(task_instance task);
+    task_id spawn(task_instance task, __coro_local_frame *pframe);
+    task_id spawn_blocking(task_instance task, __coro_local_frame *pframe);
     void awake(task_id id);
     void suspend(task_id id);
 
@@ -150,7 +155,7 @@ private:
     std::map<void *, task_id> coro_to_task_id;
     std::mutex coro_to_task_id_mutex;
 
-    sched::task to_task(task_instance task, bool is_blocking);
+    sched::task to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe);
     void awake_all();
 
 public:

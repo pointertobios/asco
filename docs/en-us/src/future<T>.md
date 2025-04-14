@@ -1,4 +1,4 @@
-# future\<T\>
+# Asynchronous Programming with Future\<T\> Coroutines
 
 `asco::future<T>` is an awaiter for C++20 coroutines and has no relation to `std::future<T>`.
 
@@ -16,6 +16,7 @@ A function named `async_main` with no parameters and returning `asco::future<int
 when annotated with the macro `asco_main`, becomes an asynchronous main function:
 
 ```c++
+#include <asco/future.h>
 asco_main future<int> async_main() {
     ...
     co_return 0;
@@ -79,8 +80,6 @@ the coroutine is resumed **inline** in the current context and executed to compl
 
 This awaiter is suitable for functions that are inherently short but must execute asynchronous code.
 
----
-
 ### future_blocking\<T\>
 
 `future_blocking<T>` behaves similarly to `std::future` but creates a **blocking task**.
@@ -94,6 +93,33 @@ This awaiter is designed for CPU-intensive tasks.
 > **calculating worker** threads will run on big cores.
 
 ---
+
+## **Coroutine-Local Variables**
+
+Coroutine-local variables propagate along the call chain. The implementation uses **type checking** and **variable name lookup** based on **compile-time computed** hash values, where variable searches ascend upward through the call chain.
+
+### Declaration & Initialization
+
+Use the macro `decl_local(name, ...)` to declare and initialize coroutine-local variables:
+
+```cpp
+int decl_local(i);
+i += 5;
+std::string decl_local(str, new std::string("Hello ASCO"));
+```
+
+- Prefer the `new` operator over `new[]` for variable construction.
+
+### Accessing Variables
+
+Use the macro `coro_local(name)` to retrieve coroutine-local variables:
+
+```cpp
+std::string coro_local(str);
+for (char c : str) {
+    std::cout << c << ' ';
+}
+```
 
 [^1]: See [asco Async Runtime](asco_async_runtime.md)
 [^2]: Refers to `std::move()`. The template parameter `T` must implement a **move constructor** and **move assignment operator**.
