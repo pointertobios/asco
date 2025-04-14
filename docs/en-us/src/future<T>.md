@@ -72,7 +72,7 @@ The current task is suspended and awaits cleanup by the *asco async runtime*.
 
 ### future_inline\<T\>
 
-`future_inline<T>` behaves similarly to `std::future`,
+`future_inline<T>` behaves similarly to `future<T>`,
 but when created, it is **not** sent to the *asco async runtime*.
 Instead, the coroutine is suspended immediately.
 When this object is **co_awaited**,
@@ -82,7 +82,7 @@ This awaiter is suitable for functions that are inherently short but must execut
 
 ### future_blocking\<T\>
 
-`future_blocking<T>` behaves similarly to `std::future` but creates a **blocking task**.
+`future_blocking<T>` behaves similarly to `future<T>` but creates a **blocking task**.
 Blocking tasks cannot be stolen and are prioritized for dispatch to **calculating worker** threads[^3].
 
 This awaiter is designed for CPU-intensive tasks.

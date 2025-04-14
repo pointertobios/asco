@@ -80,12 +80,13 @@ asco_main future<int> async_main() {
 
 **协程本地变量**沿调用链传播。使用基于编译期计算哈希值的类型检查和变量名查找，查找变量名时沿调用链一路向上搜索。
 
-### 使用宏 `decl_local(name, ...)` 声明及初始化协程本地变量
+### 使用宏 `decl_local(name, ...)` 和 `decl_local_array(name, ptr)` 声明及初始化协程本地变量
 
 ```c++
 int decl_local(i);
 i += 5;
 std::string decl_local(str, new std::string("Hello ASCO"));
+int *decl_local_array(arr, new int[10]);
 ```
 
 推荐使用 `new` 运算符而不是 `new []` 运算符构造变量。
@@ -93,6 +94,7 @@ std::string decl_local(str, new std::string("Hello ASCO"));
 ### 使用宏 `coro_local(name)` 获取协程本地变量
 
 ```c++
+int *coro_local(arr);
 std::string coro_local(str);
 for (char c : str) {
     std::cout << c << ' ';

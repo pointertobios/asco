@@ -7,6 +7,7 @@
 
 future<uint64_t> foo(uint64_t i) {
     char coro_local(y);
+    char *coro_local(str);
     std::cout << "foo " << y;
     y = 'c';
     co_return i;
@@ -14,6 +15,7 @@ future<uint64_t> foo(uint64_t i) {
 
 asco_main future<int> async_main() {
     char decl_local(y, new char{'a'});
+    char *decl_local_array(str, new char[10]);
     std::cout << "async_main" << std::endl;
     uint64_t s = 0;
     for (uint64_t i = 1; i <= 100000; i++) {
