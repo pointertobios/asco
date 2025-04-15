@@ -22,8 +22,9 @@
 #include <asco/sched.h>
 
 namespace asco {
+    std::map<worker::task_id, std::binary_semaphore *> worker::workers_by_task_id_sem;
+    std::mutex worker::wsem_mutex;
     std::map<worker::task_id, worker *> worker::workers_by_task_id;
-    std::mutex worker::workers_by_task_id_mutex;
     std::unordered_map<std::thread::id, worker *> worker::workers;
     thread_local worker *worker::current_worker{nullptr};
     runtime *runtime::current_runtime{nullptr};
@@ -68,10 +69,29 @@ namespace asco {
     worker *worker::get_worker_from_task_id(task_id id) {
         if (!id)
             throw std::runtime_error("[ASCO] Inner error: unexpectedly got a 0 as task id");
-        while (true) if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
-            while (!it->second);
-            return it->second;
+
+        bool b = false;
+        if (auto its_ = workers_by_task_id_sem.find(id); its_ != workers_by_task_id_sem.end()) {
+            auto its = its_->second;
+            b = true;
+            its->acquire();
+            if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
+                auto p = it->second;
+                if (b)
+                    its->release();
+                return p;
+            } else {
+                if (b)
+                    its->release();
+                throw std::runtime_error("[ASCO] Inner error: task id does not exist");
+            }
         }
+        throw std::runtime_error("[ASCO] Inner error: task id does not exist in sems");
+    }
+
+    void worker::set_task_sem(task_id id) {
+        std::lock_guard<std::mutex> lock{wsem_mutex};
+        workers_by_task_id_sem.emplace(std::make_pair(id, new std::binary_semaphore{0}));
     }
 
     worker *worker::get_worker() {
@@ -137,10 +157,10 @@ namespace asco {
                     break;
 
                 while (true) if (auto task = self.task_rx->try_recv(); task) {
-                    // std::cout << std::format("worker {} received task {}\n", self.id, task->id);
                     self.sc.push_task(std::move(*task));
-                    std::lock_guard lk(worker::workers_by_task_id_mutex);
-                    worker::workers_by_task_id[task->id] = self_;
+                    std::lock_guard lk{worker::wsem_mutex};
+                    worker::workers_by_task_id.emplace(task->id, self_);
+                    worker::workers_by_task_id_sem.at(task->id)->release();
                 } else break;
 
                 if (auto task = self.sc.sched(); task) {
@@ -161,10 +181,16 @@ namespace asco {
                             it->second.send(0);
                         }
                         {
-                            std::lock_guard lk(coro_to_task_id_mutex);
-                            std::lock_guard lk_(worker::workers_by_task_id_mutex);
+                            std::lock_guard lk{coro_to_task_id_mutex};
                             coro_to_task_id.erase(task->handle.address());
+                        }
+                        {
+                            std::lock_guard lk{worker::wsem_mutex};
+                            worker::workers_by_task_id_sem.at(task->id)->acquire();
                             worker::workers_by_task_id.erase(task->id);
+                            worker::workers_by_task_id_sem.at(task->id)->release();
+                            delete worker::workers_by_task_id_sem.at(task->id);
+                            worker::workers_by_task_id_sem.erase(task->id);
                         }
                         if (self.is_calculator)
                             calcu_worker_load--;
@@ -281,13 +307,13 @@ namespace asco {
     runtime::task_id runtime::spawn_blocking(task_instance task_, __coro_local_frame *pframe) {
         auto task = to_task(task_, true, pframe);
         auto res = task.id;
-        if (io_worker_count
-                && io_worker_count * calcu_worker_load < calcu_worker_count * io_worker_load) {
-            io_worker_load++;
-            io_task_tx->send(task);
-        } else {
+        if (calcu_worker_count
+                && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_load) {
             calcu_worker_load++;
             calcu_task_tx->send(task);
+        } else {
+            io_worker_load++;
+            io_task_tx->send(task);
         }
         awake_all();
         return res;
@@ -318,6 +344,7 @@ namespace asco {
 
     sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe) {
         auto id = task_counter++;
+        worker::set_task_sem(id);
         {
             std::lock_guard lk(coro_to_task_id_mutex);
             coro_to_task_id.insert(std::make_pair(task.address(), id));

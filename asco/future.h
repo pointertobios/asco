@@ -92,7 +92,11 @@ struct future_base {
                     auto id = rt->task_id_from_corohandle(caller_task);
                     rt->awake(id);
                 }
-                rt->suspend(task_id);
+                // When catch an exception, it means the task successfully destroyed.
+                // Just ignore.
+                try {
+                    rt->suspend(task_id);
+                } catch (...) {}
                 return std::suspend_always{};
             } else {
                 return std::suspend_always{};
@@ -105,7 +109,7 @@ struct future_base {
         }
     };
 
-    bool await_ready() { return false; }
+    bool await_ready() { return task.promise().returned; }
 
     bool await_suspend(std::coroutine_handle<> handle) {
         // std::cout << std::format("future_base::await_suspend({}): {}\n", handle.address(), task.promise().retval);
@@ -128,7 +132,7 @@ struct future_base {
 
     T await_resume() {
         // std::cout << std::format("future_base::await_resume() -> {}\n", task.promise().retval);
-        return task.promise().retval;
+        return std::move(task.promise().retval);
     }
 
     T await() {

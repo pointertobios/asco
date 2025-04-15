@@ -78,8 +78,10 @@ private:
 
 public:
     static worker *get_worker_from_task_id(task_id id);
+    static void set_task_sem(task_id id);
+    static std::map<task_id, std::binary_semaphore *> workers_by_task_id_sem;
+    static std::mutex wsem_mutex;
     static std::map<task_id, worker *> workers_by_task_id;
-    static std::mutex workers_by_task_id_mutex;
 
 private:
     static std::unordered_map<std::thread::id, worker *> workers;
@@ -89,10 +91,11 @@ private:
 template<typename T>
 concept is_runtime = requires(T t) {
     typename T::__worker;
-    { T::__worker::get_worker() } -> std::same_as<typename T::__worker *>;
     typename T::scheduler;
     typename T::task_id;
     typename T::sys;
+    { T::__worker::get_worker() } -> std::same_as<typename T::__worker *>;
+    { T::__worker::set_task_sem(typename T::task_id{}) } -> std::same_as<void>;
     { T::get_runtime() } -> std::same_as<T *>;
     { t.spawn(task_instance{}, static_cast<__coro_local_frame *>(nullptr)) } -> std::same_as<typename T::task_id>;
     { t.spawn_blocking(task_instance{}, static_cast<__coro_local_frame *>(nullptr)) } -> std::same_as<typename T::task_id>;
