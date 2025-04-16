@@ -9,10 +9,10 @@ namespace asco::sched {
 
     std_scheduler::std_scheduler() {}
 
-    void std_scheduler::push_task(task t) {
+    void std_scheduler::push_task(task t, task_control::__control_state initial_state) {
         std::lock_guard lk{active_tasks_mutex};
         auto p = new task_control{t};
-        p->state = task_control::__control_state::running;
+        p->state = initial_state;
         active_tasks.push_back(p);
     }
 
@@ -48,7 +48,8 @@ namespace asco::sched {
     }
 
     bool std_scheduler::currently_finished_all() {
-        return active_tasks.empty() && suspended_tasks.empty();
+        std::erase_if(suspended_tasks, [] (auto &p) { return p.second->t.done(); });
+        return active_tasks.empty() && suspended_tasks.empty() && gave_outs.empty();
     }
 
     bool std_scheduler::has_buffered_awakes() {
@@ -77,11 +78,17 @@ namespace asco::sched {
             return;
         }
         std::lock_guard lk{active_tasks_mutex};
-        for (auto &t : active_tasks) {
-            if (t->t.id == id) {
-                t->state = task_control::__control_state::suspending;
-                break;
-            }
+        // for (auto &t : active_tasks) {
+        //     if (t->t.id == id) {
+        //         t->state = task_control::__control_state::suspending;
+        //         break;
+        //     }
+        // }
+        if (auto it = std::find_if(
+                active_tasks.begin(), active_tasks.end(),
+                [id] (task_control *t) { return t->t.id == id; });
+            it != active_tasks.end()) {
+            (*it)->state = task_control::__control_state::suspending;
         }
     }
 
@@ -123,8 +130,28 @@ namespace asco::sched {
         } else if (auto it = suspended_tasks.find(id); it != suspended_tasks.end()) {
             return it->second->t;
         } else {
-            throw std::runtime_error("[ASCO] Task not found (maybe because you call it in synchronous texture)");
+            throw std::runtime_error(std::format("[ASCO] Task {} not found (maybe because you call it in synchronous texture)", id));
         }
+    }
+
+    std_scheduler::task_handle std_scheduler::give_out(task::task_id id) {
+        std::lock_guard lk{active_tasks_mutex};
+        if (auto it = std::find_if(
+                active_tasks.begin(), active_tasks.end(),
+                [id] (task_control *t) { return t->t.id == id; });
+            it != active_tasks.end()) {
+            auto p = *it;
+            active_tasks.erase(it);
+            return std_scheduler::task_handle{p, this};
+        }
+        auto iter = suspended_tasks.find(id);
+        if (iter == suspended_tasks.end())
+            throw std::runtime_error(std::format("[ASCO] Task {} not found", id));
+        
+        auto p = iter->second;
+        suspended_tasks.erase(iter);
+        gave_outs.insert(id);
+        return std_scheduler::task_handle{p, this};
     }
 
 };

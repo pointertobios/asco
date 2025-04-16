@@ -65,6 +65,23 @@ namespace asco {
         worker_await_sem.release();
     }
 
+    void worker::remove_task_map(task_id id) {
+        std::lock_guard lk{wsem_mutex};
+        if (workers_by_task_id_sem.find(id) == workers_by_task_id_sem.end())
+            return;
+        workers_by_task_id_sem.at(id)->acquire();
+        workers_by_task_id.erase(id);
+        workers_by_task_id_sem.at(id)->release();
+        delete workers_by_task_id_sem.at(id);
+        workers_by_task_id_sem.erase(id);
+    }
+
+    void worker::insert_task_map(task_id id, worker *self) {
+        std::lock_guard lk{wsem_mutex};
+        workers_by_task_id.emplace(id, self);
+        workers_by_task_id_sem.at(id)->release();
+    }
+
     // always promis the id is an exist id.
     worker *worker::get_worker_from_task_id(task_id id) {
         if (!id)
@@ -152,15 +169,11 @@ namespace asco {
             self.pid = syscall(SYS_gettid);
 #endif
 
-            while (true) {
-                if (self.task_rx->is_stopped() && self.sc.currently_finished_all())
-                    break;
+            while (!(self.task_rx->is_stopped() && self.sc.currently_finished_all())) {
 
                 while (true) if (auto task = self.task_rx->try_recv(); task) {
-                    self.sc.push_task(std::move(*task));
-                    std::lock_guard lk{worker::wsem_mutex};
-                    worker::workers_by_task_id.emplace(task->id, self_);
-                    worker::workers_by_task_id_sem.at(task->id)->release();
+                    self.sc.push_task(std::move(*task), scheduler::task_control::__control_state::running);
+                    worker::insert_task_map(task->id, self_);
                 } else break;
 
                 if (auto task = self.sc.sched(); task) {
@@ -177,20 +190,12 @@ namespace asco {
                     if (task->done()) {
                         self.sc.destroy(task->id);
                         if (auto it = self.sync_awaiters_tx.find(task->id);
-                        it != self.sync_awaiters_tx.end()) {
+                            it != self.sync_awaiters_tx.end()) {
                             it->second.send(0);
                         }
-                        {
-                            std::lock_guard lk{coro_to_task_id_mutex};
-                            coro_to_task_id.erase(task->handle.address());
-                        }
-                        {
-                            std::lock_guard lk{worker::wsem_mutex};
-                            worker::workers_by_task_id_sem.at(task->id)->acquire();
-                            worker::workers_by_task_id.erase(task->id);
-                            worker::workers_by_task_id_sem.at(task->id)->release();
-                            delete worker::workers_by_task_id_sem.at(task->id);
-                            worker::workers_by_task_id_sem.erase(task->id);
+                        if (!task->is_inline) { // Inline task remove map relation themselves
+                            remove_task_map(task->handle.address());
+                            self.remove_task_map(task->id);
                         }
                         if (self.is_calculator)
                             calcu_worker_load--;
@@ -335,20 +340,23 @@ namespace asco {
         return sync_awaiter{make_shared_receiver(std::move(rx))};
     }
 
+    void runtime::remove_task_map(void *addr) {
+        std::lock_guard lk{coro_to_task_id_mutex};
+        coro_to_task_id.erase(addr);
+    }
+
     runtime::task_id runtime::task_id_from_corohandle(std::coroutine_handle<> handle) {
-        std::lock_guard lk(coro_to_task_id_mutex);
+        std::lock_guard lk{coro_to_task_id_mutex};
         if (coro_to_task_id.find(handle.address()) == coro_to_task_id.end())
             throw std::runtime_error(std::format("[ASCO] runtime::task_id runtime::task_id_from_corohandle() Inner error: coro_to_task_id[{}] unexists", handle.address()));
         return coro_to_task_id[handle.address()];
     }
 
     sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe) {
+        std::lock_guard lk{coro_to_task_id_mutex};
         auto id = task_counter++;
         worker::set_task_sem(id);
-        {
-            std::lock_guard lk(coro_to_task_id_mutex);
-            coro_to_task_id.insert(std::make_pair(task.address(), id));
-        }
+        coro_to_task_id.insert(std::make_pair(task.address(), id));
         auto res = sched::task{id, task, is_blocking};
         res.coro_local_frame->prev = pframe;
         return res;

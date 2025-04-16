@@ -8,7 +8,7 @@ set(ASCO_SOURCES
 
 add_library(asco ${ASCO_SOURCES})
 target_include_directories(asco PUBLIC ../)
-# target_link_libraries(asco atomic)
+target_link_libraries(asco atomic)
 
 add_library(asco-shared SHARED ${ASCO_SOURCES})
 target_include_directories(asco-shared PUBLIC ../)

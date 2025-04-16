@@ -7,9 +7,9 @@
 #include <functional>
 #include <unordered_map>
 
-namespace asco {
+#include <asco/utils/pubusing.h>
 
-using size_t = std::size_t;
+namespace asco {
 
 consteval size_t __consteval_str_hash(const char *name) {
     constexpr size_t offset_basis = 0xcbf29ce484222325ULL;

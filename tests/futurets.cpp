@@ -9,7 +9,7 @@ future<uint64_t> foo(uint64_t i) {
     char coro_local(y);
     char *coro_local(str);
     std::cout << "foo " << y;
-    y = 'c';
+    y = i % 26 + 'a';
     co_return i;
 }
 
