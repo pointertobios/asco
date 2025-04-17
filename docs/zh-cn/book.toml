@@ -4,3 +4,9 @@ language = "zh"
 multilingual = false
 src = "src"
 title = "ASCO协程异步框架"
+
+[output.html]
+smart-punctuation = true
+mathjax-support = true
+git-repository-url = "https://github.com/pointertobios/asco"
+hash-files = true

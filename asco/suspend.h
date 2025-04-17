@@ -15,7 +15,6 @@ struct suspend {
     bool await_ready() { return false; }
 
     bool await_suspend(std::coroutine_handle<> handle) {
-        // Always can get the latest non-inline task id
         auto id = RT::__worker::get_worker()->current_task_id();
         auto worker = RT::__worker::get_worker_from_task_id(id);
         // When in semaphore_base<>::acquire function, this id will unexist

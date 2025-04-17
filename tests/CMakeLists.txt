@@ -10,7 +10,10 @@ target_link_libraries(test_futurets PRIVATE asco)
 add_executable(test_inline inline.cpp)
 target_link_libraries(test_inline PRIVATE asco)
 
+add_executable(test_sems sems.cpp)
+target_link_libraries(test_sems PRIVATE asco)
 
 add_test(NAME inner_channel COMMAND inner_channel_test)
 add_test(NAME futurets COMMAND test_futurets)
 add_test(NAME inline COMMAND test_inline)
+add_test(NAME sems COMMAND test_sems)

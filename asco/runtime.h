@@ -20,7 +20,7 @@
 #include <asco/sched.h>
 #include <asco/sync_awaiter.h>
 #include <asco/utils/channel.h>
-#include <asco/utils/utils.h>
+#include <asco/utils/concepts.h>
 
 using namespace asco_inner;
 
@@ -99,8 +99,10 @@ template<typename T>
 concept is_runtime = requires(T t) {
     typename T::__worker;
     typename T::scheduler;
+    typename T::scheduler::task;
     typename T::task_id;
     typename T::sys;
+    // Exception: runtime error when there is not a worker on the current thread.
     { T::__worker::get_worker() } -> std::same_as<typename T::__worker *>;
     { T::__worker::set_task_sem(typename T::task_id{}) } -> std::same_as<void>;
     { T::__worker::remove_task_map(typename T::task_id{}) } -> std::same_as<void>;
@@ -119,6 +121,7 @@ concept is_runtime = requires(T t) {
     { w.current_task() } -> std::same_as<typename T::scheduler::task &>;
     { w.current_task_id() } -> std::same_as<typename T::task_id>;
     { w.is_calculator } -> std::same_as<bool &>;
+    { w.running_task } -> std::same_as<std::optional<typename T::task_id> &>;
 } && sched::is_scheduler<typename T::scheduler>;
 
 class runtime {

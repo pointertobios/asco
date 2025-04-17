@@ -1,8 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#ifndef ASCO_CHANNEL_H
-#define ASCO_CHANNEL_H
+#ifndef ASCO_UTILS_CHANNEL_H
+#define ASCO_UTILS_CHANNEL_H
 
 #include <condition_variable>
 #include <mutex>
@@ -10,7 +10,7 @@
 #include <semaphore>
 #include <tuple>
 
-#include <asco/utils/utils.h>
+#include <asco/utils/concepts.h>
 
 using namespace asco;
 

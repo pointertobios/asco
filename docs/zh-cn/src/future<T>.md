@@ -101,6 +101,52 @@ for (char c : str) {
 }
 ```
 
+## 可打断协程
+
+协程函数需要自己实现被打断时的恢复功能，以将状态恢复到协程开始执行前。
+
+* 打断任务
+
+对 `future` 调用 `.abort()` 函数将任务设置为已打断状态。
+
+```c++
+    asco::binary_semaphore sem{1};
+    auto task = sem.acquire();
+    task.abort();
+    co_await task; // acquire() 返回 future_void_inline 类型，需要手动 co_await 使任务开始执行
+    assert_eq(sem.get_counter(), 1);
+```
+
+* 恢复任务状态
+
+在返回类型为 `future<T>` 的协程中调用 `futures::aborted<future<T>>()` ，返回 `true` 时执行状态恢复逻辑。
+
+最佳实践：使用 RAII 封装状态恢复逻辑，在构造时保存状态，析构时恢复状态。
+
+为避免在判断协程**没有被打断**后即将返回结果时协程被**打断**，可以在协程开始处构造如下结构体实例：
+
+```c++
+struct __restorer {
+    T ret;
+    ~__restorer() noexcept {
+        if (futures::aborted<future<T>>()) {
+            // 恢复逻辑
+        }
+    }
+} restorer{};
+```
+
+在协程返回处：
+
+```c++
+co_return std::move(restorer.res);
+```
+
+这样可以迫使 `restorer` 在返回后析构，以达到返回时立即唤醒调用者协程，返回后判断协程是否被打断并在打断时恢复状态的效果。
+
+需要注意的是， `__restorer` 的析构函数需要主动维持并发安全；析构函数必须被标记为 `noexcept` ，否则异常逃逸出析构函数后
+不会被调用方处理，产生未定义行为。
+
 [^1]: 见[asco 异步运行时](asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。
 [^3]: 见[asco 工作线程](asco工作线程.md)

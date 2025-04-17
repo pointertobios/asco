@@ -16,9 +16,9 @@ C++20 coroutine based async framework.
   - [x] Linux full support
   - [ ] Windows full support
   - [ ] MacOS full support
-- [ ] Basic tools for parallel programming
+- [x] Basic tools for parallel programming
   - [ ] Timer
-  - [ ] Semaphore
+  - [x] Semaphore
   - [ ] Condition variable
   - [ ] Locks
   - [ ] Pipe
@@ -50,7 +50,7 @@ target_link_libraries(<your-target> PRIVATE asco-shared)
 ### Documentations
 
 - [简体中文](https://pointertobios.github.io/asco/zhcn/)
-- [English](https://pointertobios.github.io/asco/enus/)
+- [English (May NOT be Latest)](https://pointertobios.github.io/asco/enus/)
 
 ## License
 
