@@ -76,6 +76,8 @@ asco_main future<int> async_main() {
 > 高能效核心（“小核”）均为 **io worker** 工作线程。
 > 在未来，对于ARM big.LITTLE异构架构处理器（“大小核架构”）的安卓设备， **calculating worker** 工作线程将运行在大核上。
 
+---
+
 ## 协程本地变量
 
 **协程本地变量**沿调用链传播。使用基于编译期计算哈希值的类型检查和变量名查找，查找变量名时沿调用链一路向上搜索。
@@ -101,6 +103,8 @@ for (char c : str) {
 }
 ```
 
+---
+
 ## 可打断协程
 
 协程函数需要自己实现被打断时的恢复功能，以将状态恢复到协程开始执行前。
@@ -110,11 +114,11 @@ for (char c : str) {
 对 `future` 调用 `.abort()` 函数将任务设置为已打断状态。
 
 ```c++
-    asco::binary_semaphore sem{1};
-    auto task = sem.acquire();
-    task.abort();
-    co_await task; // acquire() 返回 future_void_inline 类型，需要手动 co_await 使任务开始执行
-    assert_eq(sem.get_counter(), 1);
+asco::binary_semaphore sem{1};
+auto task = sem.acquire();
+task.abort();
+co_await task; // acquire() 返回 future_void_inline 类型，需要手动 co_await 使任务开始执行
+assert_eq(sem.get_counter(), 1);
 ```
 
 * 恢复任务状态
