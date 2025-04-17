@@ -121,6 +121,8 @@ private:
 
     std::set<task::task_id> not_in_suspended_but_awake_tasks;
     std::set<task::task_id> gave_outs;
+
+    std::unordered_map<task::task_id, task> task_map;
 };
 
 };

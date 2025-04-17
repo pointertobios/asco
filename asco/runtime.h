@@ -179,7 +179,7 @@ private:
 
     std::map<void *, task_id> coro_to_task_id;
     std::mutex coro_to_task_id_mutex;
-    task_id task_counter{1};
+    atomic<task_id> task_counter{1};
 
     void awake_all();
 

@@ -62,7 +62,6 @@ struct future_base {
         std::exception_ptr e;
 
         future_base<T, Inline, Blocking> get_return_object() {
-            // std::cout << std::format("future_base::promise_type::get_return_object()\n");
             __coro_local_frame *curr_clframe;
             try {
                 curr_clframe = worker::get_worker()->current_task().coro_local_frame;
@@ -121,7 +120,6 @@ struct future_base {
         // to let this task execute recover logic.
         // At the same time the caller coroutine will continue without waiting for the current task final_suspend().
         void return_value(T val) {
-            // std::cout << std::format("future_base::promise_type::return_value({})\n", val);
             awaiter_sem.acquire();
             awaiter->retval = std::move(val);
             returned.release();
@@ -142,20 +140,12 @@ struct future_base {
                     rt->suspend(task_id);
                 } catch (...) {}
 
-            } else {
-
-                auto rt = RT::get_runtime();
-                auto worker = worker::get_worker();
-
-                rt->remove_task_map(corohandle::from_promise(*this).address());
-                worker->remove_task_map(task_id);
             }
         }
 
         // The inline future will return the caller_resumer to symmatrical transform
         // to the caller task.
         auto final_suspend() noexcept {
-            // std::cout << std::format("future_base::promise_type::final_suspend()\n");
             if constexpr (!Inline) {
                 return std::suspend_always{};
             } else {
@@ -167,20 +157,27 @@ struct future_base {
                     std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle) {
                         auto rt = RT::get_runtime();
                         auto worker = worker::get_worker();
-                        auto id = RT::get_runtime()->task_id_from_corohandle(caller_task);
+
+                        auto id = rt->task_id_from_corohandle(caller_task);
                         worker->running_task.push(worker->sc.get_task(id));
-                        worker->awake();
+
                         return caller_task;
                     }
 
                     void await_resume() noexcept {}
                 };
+
+                auto rt = RT::get_runtime();
+                auto worker = worker::get_worker();
+
+                rt->remove_task_map(corohandle::from_promise(*this).address());
+                worker->remove_task_map(task_id);
+
                 return caller_resumer{caller_task};
             }
         }
 
         void unhandled_exception() {
-            // std::cout << std::format("future_base::promise_type::unhandled_exception()\n");
             e = std::current_exception();
         }
     };
@@ -195,7 +192,6 @@ struct future_base {
     // The inline future will return current task corohandle to symmatrical transform
     // to the callee task.
     auto await_suspend(std::coroutine_handle<> handle) {
-        // std::cout << std::format("future_base::await_suspend({}): {}\n", handle.address(), task.promise().retval);
         if constexpr (!Inline) {
             std::lock_guard lk{task.promise().suspend_mutex};
             if (!task.promise().returned.try_acquire()) {
@@ -226,10 +222,7 @@ struct future_base {
         }
     }
 
-    T await_resume() {
-        // std::cout << std::format("future_base::await_resume() -> {}\n", task.promise().retval);
-        return std::move(retval);
-    }
+    T await_resume() { return std::move(retval); }
 
     T await() {
         try {

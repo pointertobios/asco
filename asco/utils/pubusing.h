@@ -14,6 +14,9 @@ using size_t = std::size_t;
 using atomic_size_t = std::atomic_size_t;
 using atomic_bool = std::atomic_bool;
 
+template<typename T>
+using atomic = std::atomic<T>;
+
 using morder = std::memory_order;
 
 };

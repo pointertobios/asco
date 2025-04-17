@@ -15,6 +15,15 @@ future_void foo() {
     co_return {};
 }
 
+future_void bar() {
+    binary_semaphore coro_local(sem);
+    for (int i = 0; i < 1000; i++) {
+        sem.release();
+        co_await sem.acquire();
+    }
+    co_return {};
+}
+
 asco_main future<int> async_main() {
     binary_semaphore decl_local(sem, new binary_semaphore{0});
     foo();
@@ -26,5 +35,13 @@ asco_main future<int> async_main() {
     co_await task;
     std::cout << "test the abortable task (must be 1): " << sem.get_counter() << std::endl;
     assert(sem.get_counter() == 1);
+    co_await sem.acquire();
+    auto t = bar();
+    for (int i = 0; i < 1000; i++) {
+        co_await sem.acquire();
+        std::cout << i << endl;
+        sem.release();
+    }
+    co_await t;
     co_return 0;
 }

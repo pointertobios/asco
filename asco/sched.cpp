@@ -11,9 +11,13 @@ namespace asco::sched {
 
     void std_scheduler::push_task(task t, task_control::__control_state initial_state) {
         std::lock_guard lk{active_tasks_mutex};
+        task_map.emplace(t.id, t);
         auto p = new task_control{t};
         p->state = initial_state;
-        active_tasks.push_back(p);
+        if (initial_state == task_control::__control_state::running)
+            active_tasks.push_back(p);
+        else
+            suspended_tasks.emplace(t.id, p);
     }
 
     std::optional<task> std_scheduler::sched() {
@@ -95,11 +99,8 @@ namespace asco::sched {
     void std_scheduler::destroy(task::task_id id) {
         // std::cout << std::format("scheduler: destroying task {}\n", id);
         std::lock_guard lk{active_tasks_mutex};
-        if (auto it = std::find_if(
-                active_tasks.begin(), active_tasks.end(),
-                [id] (task_control *t) { return t->t.id == id; });
-            it != active_tasks.end()) {
-            active_tasks.erase(it);
+        task_map.erase(id);
+        if (std::erase_if(active_tasks, [id] (task_control *t) { return t->t.id == id; })) {
             return;
         }
         auto iter = suspended_tasks.find(id);
@@ -122,13 +123,8 @@ namespace asco::sched {
     }
 
     task &std_scheduler::get_task(task::task_id id) {
-        auto it = std::find_if(
-                    active_tasks.begin(), active_tasks.end(),
-                    [id] (task_control *t) { return t->t.id == id; });
-        if (it != active_tasks.end()) {
-            return (*it)->t;
-        } else if (auto it = suspended_tasks.find(id); it != suspended_tasks.end()) {
-            return it->second->t;
+        if (auto it = task_map.find(id); it != task_map.end()) {
+            return it->second;
         } else {
             throw std::runtime_error(std::format("[ASCO] Task {} not found (maybe because you call it in synchronous texture)", id));
         }

@@ -177,7 +177,7 @@ namespace asco {
                 } else break;
 
                 if (auto task = self.sc.sched(); task) {
-                    // std::cout << std::format("Worker {} got task {}\n", self.id, task->id);
+
                     self.running_task.push(*task);
                     try {
                         if (!task->done())
@@ -185,7 +185,7 @@ namespace asco {
                     } catch (std::exception &e) {
                         std::cerr << std::format("[ASCO] Inner error at task {}: {}\n", task->id, e.what());
                     }
-                    // std::cout << std::format("Worker {} suspend task {}\n", self.id, *self.running_task);
+
                     while (!self.running_task.empty()) {
                         auto task = self.running_task.top();
                         self.running_task.pop();
@@ -357,7 +357,7 @@ namespace asco {
 
     sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe) {
         std::lock_guard lk{coro_to_task_id_mutex};
-        auto id = task_counter++;
+        auto id = task_counter.fetch_add(1, morder::relaxed);
         worker::set_task_sem(id);
         coro_to_task_id.insert(std::make_pair(task.address(), id));
         auto res = sched::task{id, task, is_blocking};

@@ -55,6 +55,7 @@ public:
         }
     }
 
+    [[nodiscard("co_await or assign it")]]
     future_void_inline acquire() {
         size_t c;
 
