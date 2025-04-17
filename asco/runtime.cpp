@@ -178,29 +178,32 @@ namespace asco {
 
                 if (auto task = self.sc.sched(); task) {
                     // std::cout << std::format("Worker {} got task {}\n", self.id, task->id);
-                    self.running_task = task->id;
+                    self.running_task.push(*task);
                     try {
                         if (!task->done())
                             task->resume();
                     } catch (std::exception &e) {
                         std::cerr << std::format("[ASCO] Inner error at task {}: {}\n", task->id, e.what());
                     }
-                    self.running_task = std::nullopt;
-                    // std::cout << std::format("Worker {} suspend task {}\n", self.id, task->id);
-                    if (task->done()) {
-                        self.sc.destroy(task->id);
-                        if (auto it = self.sync_awaiters_tx.find(task->id);
-                            it != self.sync_awaiters_tx.end()) {
-                            it->second.send(0);
+                    // std::cout << std::format("Worker {} suspend task {}\n", self.id, *self.running_task);
+                    while (!self.running_task.empty()) {
+                        auto task = self.running_task.top();
+                        self.running_task.pop();
+                        if (task.done()) {
+                            self.sc.destroy(task.id);
+                            if (auto it = self.sync_awaiters_tx.find(task.id);
+                                it != self.sync_awaiters_tx.end()) {
+                                it->second.send(0);
+                            }
+                            if (!task.is_inline) { // Inline task remove map relation themselves
+                                remove_task_map(task.handle.address());
+                                self.remove_task_map(task.id);
+                            }
+                            if (self.is_calculator)
+                                calcu_worker_load--;
+                            else
+                                io_worker_load--;
                         }
-                        if (!task->is_inline) { // Inline task remove map relation themselves
-                            remove_task_map(task->handle.address());
-                            self.remove_task_map(task->id);
-                        }
-                        if (self.is_calculator)
-                            calcu_worker_load--;
-                        else
-                            io_worker_load--;
                     }
                 } else if (self.sc.has_buffered_awakes()) {
                     self.sc.try_reawake_buffered();

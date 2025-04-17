@@ -18,5 +18,6 @@ future_void_inline foo() {
 asco_main future<int> async_main() {
     std::cout << "Hello, World!" << std::endl;
     co_await foo();
+    std::cout << "main done" << std::endl;
     co_return 0;
 }

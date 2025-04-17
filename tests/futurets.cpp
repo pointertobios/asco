@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <iostream>
+#include <cassert>
 
 #include <asco/future.h>
 
@@ -20,10 +21,7 @@ asco_main future<int> async_main() {
     uint64_t s = 0;
     for (uint64_t i = 1; i <= 100000; i++) {
         auto x = co_await foo(i);
-        if (x != i) {
-            std::cout << std::endl << x << std::endl;
-            break;
-        }
+        assert(x == i);
         s += x;
         std::cout << ' ' << y << std::endl;
         std::cout << x << " : " << s << std::endl;

@@ -12,6 +12,7 @@
 #include <mutex>
 #include <optional>
 #include <semaphore>
+#include <stack>
 #include <thread>
 #include <tuple>
 #include <unordered_map>
@@ -53,12 +54,12 @@ public:
     static void insert_task_map(task_id id, worker *self);
 
     __always_inline sched::task &current_task() {
-        auto id = *running_task;
+        auto id = running_task.top().id;
         return sc.get_task(id);
     }
 
     __always_inline task_id current_task_id() {
-        return *running_task;
+        return running_task.top().id;
     }
 
     static worker *get_worker();
@@ -72,7 +73,7 @@ public:
     int pid{0};
 #endif
 
-    std::optional<task_id> running_task;
+    std::stack<sched::task> running_task;
 
     std::binary_semaphore worker_await_sem{0};
 
@@ -121,7 +122,7 @@ concept is_runtime = requires(T t) {
     { w.current_task() } -> std::same_as<typename T::scheduler::task &>;
     { w.current_task_id() } -> std::same_as<typename T::task_id>;
     { w.is_calculator } -> std::same_as<bool &>;
-    { w.running_task } -> std::same_as<std::optional<typename T::task_id> &>;
+    { w.running_task } -> std::same_as<std::stack<typename T::scheduler::task> &>;
 } && sched::is_scheduler<typename T::scheduler>;
 
 class runtime {

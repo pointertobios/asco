@@ -1,8 +1,9 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <asco/future.h>
+#include <cassert>
 
+#include <asco/future.h>
 #include <asco/sync/semaphore.h>
 
 using asco::binary_semaphore;
@@ -24,5 +25,6 @@ asco_main future<int> async_main() {
     task.abort();
     co_await task;
     std::cout << "test the abortable task (must be 1): " << sem.get_counter() << std::endl;
+    assert(sem.get_counter() == 1);
     co_return 0;
 }

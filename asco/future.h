@@ -146,17 +146,37 @@ struct future_base {
 
                 auto rt = RT::get_runtime();
                 auto worker = worker::get_worker();
-                auto id = rt->task_id_from_corohandle(caller_task);
-                rt->awake(id);
 
                 rt->remove_task_map(corohandle::from_promise(*this).address());
                 worker->remove_task_map(task_id);
             }
         }
 
-        std::suspend_always final_suspend() noexcept {
+        // The inline future will return the caller_resumer to symmatrical transform
+        // to the caller task.
+        auto final_suspend() noexcept {
             // std::cout << std::format("future_base::promise_type::final_suspend()\n");
-            return {};
+            if constexpr (!Inline) {
+                return std::suspend_always{};
+            } else {
+                struct caller_resumer {
+                    std::coroutine_handle<> caller_task;
+
+                    bool await_ready() noexcept { return false; }
+
+                    std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle) {
+                        auto rt = RT::get_runtime();
+                        auto worker = worker::get_worker();
+                        auto id = RT::get_runtime()->task_id_from_corohandle(caller_task);
+                        worker->running_task.push(worker->sc.get_task(id));
+                        worker->awake();
+                        return caller_task;
+                    }
+
+                    void await_resume() noexcept {}
+                };
+                return caller_resumer{caller_task};
+            }
         }
 
         void unhandled_exception() {
@@ -172,6 +192,8 @@ struct future_base {
         return res;
     }
 
+    // The inline future will return current task corohandle to symmatrical transform
+    // to the callee task.
     auto await_suspend(std::coroutine_handle<> handle) {
         // std::cout << std::format("future_base::await_suspend({}): {}\n", handle.address(), task.promise().retval);
         if constexpr (!Inline) {
@@ -199,7 +221,7 @@ struct future_base {
             // If there is no any suspend point, it will be then never resumed
             // after final_suspend().
             // or it will be awake after first co_await.
-            worker->running_task = task_id; // Correct running task
+            worker->running_task.push(worker->sc.get_task(task_id)); // Correct running task
             return task;
         }
     }

@@ -30,7 +30,7 @@ concept is_future = requires(F f) {
     { p.get_return_object() } -> std::same_as<F>;
     { p.initial_suspend() } -> std::same_as<std::suspend_always>;
     { p.return_value(std::declval<typename F::return_type>()) } -> std::same_as<void>;
-    { p.final_suspend() } -> std::same_as<std::suspend_always>;
+    { p.final_suspend() };
     { p.unhandled_exception() } -> std::same_as<void>;
 };
 
