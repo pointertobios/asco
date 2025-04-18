@@ -21,11 +21,35 @@ struct __coro_local_var {
 struct __coro_local_frame {
     __coro_local_frame *prev{nullptr};
     std::unordered_map<size_t, __coro_local_var> vars;
+    atomic_size_t ref_count{1};
 
-    __always_inline ~__coro_local_frame() {
+    inline ~__coro_local_frame() {
+        if (prev) {
+            prev->subframe_exit();
+
+            if (!prev->get_ref_count())
+                delete prev;
+        }
+
         for (auto &[_, v] : vars) {
             v.deconstruct(v.p);
         }
+    }
+
+    inline size_t get_ref_count() {
+        return ref_count.load(morder::acquire);
+    }
+
+    inline void subframe_exit() {
+        ref_count.fetch_sub(1, morder::seq_cst);
+        if (prev)
+            prev->subframe_exit();
+    }
+
+    inline void subframe_enter() {
+        ref_count.fetch_add(1, morder::seq_cst);
+        if (prev)
+            prev->subframe_enter();
     }
 
     template<typename T, size_t hash>
@@ -42,7 +66,6 @@ struct __coro_local_frame {
     }
 
     template<typename T, size_t hash>
-    // requires (!std::is_pointer_v<T>)
     T &decl_var(const char *name, T *pt, std::function<void (void *)> destructor) {
         if (auto it = vars.find(hash); it != vars.end()) {
             throw std::runtime_error(std::format("[ASCO] Coroutine local variable \'{}\' already declared", name));
@@ -53,13 +76,11 @@ struct __coro_local_frame {
     }
 
     template<typename T, size_t hash>
-    // requires (!std::is_pointer_v<T>)
     T &decl_var(const char *name, T *pt) {
         return decl_var<T, hash>(name, pt, [](void *p) { delete reinterpret_cast<T *>(p); });
     }
 
     template<typename T, size_t hash>
-    // requires (!std::is_pointer_v<T>)
     T &decl_var(const char *name) {
         return decl_var<T, hash>(name, new T, [] (void *p) { delete reinterpret_cast<T *>(p); });
     }

@@ -41,8 +41,10 @@ struct task {
     }
 
     __always_inline bool done() const {
+        if (destroyed)
+            return true;
         bool b = handle.done();
-        if (b && !destroyed) {
+        if (b) {
             handle.destroy();
             destroyed = true;
         }

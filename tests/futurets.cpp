@@ -6,7 +6,7 @@
 
 #include <asco/future.h>
 
-future<uint64_t> foo(uint64_t i) {
+future_inline<uint64_t> foo(uint64_t i) {
     char coro_local(y);
     char *coro_local(str);
     std::cout << "foo " << y;
@@ -14,10 +14,9 @@ future<uint64_t> foo(uint64_t i) {
     co_return i;
 }
 
-asco_main future<int> async_main() {
+future_void_blocking bar() {
     char decl_local(y, new char{'a'});
     char *decl_local_array(str, new char[10]);
-    std::cout << "async_main" << std::endl;
     uint64_t s = 0;
     for (uint64_t i = 1; i <= 100000; i++) {
         auto x = co_await foo(i);
@@ -27,5 +26,11 @@ asco_main future<int> async_main() {
         std::cout << x << " : " << s << std::endl;
         y = 'a';
     }
+    co_return {};
+}
+
+asco_main future<int> async_main() {
+    std::cout << "async_main" << std::endl;
+    co_await bar();
     co_return 0;
 }

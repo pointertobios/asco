@@ -13,7 +13,11 @@ target_link_libraries(test_inline PRIVATE asco)
 add_executable(test_sems sems.cpp)
 target_link_libraries(test_sems PRIVATE asco)
 
+add_executable(test_clf_lazyde clf_lazyde.cpp)
+target_link_libraries(test_clf_lazyde PRIVATE asco)
+
 add_test(NAME inner_channel COMMAND inner_channel_test)
 add_test(NAME futurets COMMAND test_futurets)
 add_test(NAME inline COMMAND test_inline)
 add_test(NAME sems COMMAND test_sems)
+add_test(NAME clf_lazyde COMMAND test_clf_lazyde)
