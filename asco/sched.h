@@ -53,7 +53,6 @@ struct task {
 template<typename T>
 concept is_scheduler = requires(T t) {
     typename T::task;
-    typename T::task_handle;
     typename T::task_control;
     { t.push_task(task{}, std::declval<typename T::task_control::__control_state>()) } -> std::same_as<void>;
     { t.sched() } -> std::same_as<std::optional<task>>;
@@ -67,9 +66,6 @@ concept is_scheduler = requires(T t) {
     { t.destroy(task::task_id{}) } -> std::same_as<void>;
     { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
     { t.get_task(task::task_id{}) } -> std::same_as<task &>;
-    { t.give_out(task::task_id{}) } -> std::same_as<typename T::task_handle>;
-} && requires(T::task_handle h) {
-    { h.put_back() } -> std::same_as<void>;
 };
 
 // I call it std_scheduler because it uses STL.
@@ -83,17 +79,6 @@ public:
             running,
             suspending,
         } state{__control_state::running};
-    };
-
-    struct task_handle {
-        task_control *taskctl;
-        std_scheduler *sc;
-
-        __always_inline void put_back() {
-            taskctl->state = task_control::__control_state::running;
-            sc->active_tasks.push_back(taskctl);
-            sc->gave_outs.erase(taskctl->t.id);
-        }
     };
 
     std_scheduler();
@@ -112,15 +97,12 @@ public:
     bool task_exists(task::task_id id);
     task &get_task(task::task_id id);
 
-    task_handle give_out(task::task_id id);
-
 private:
     std::vector<task_control *> active_tasks;
     std::mutex active_tasks_mutex;
     std::unordered_map<task::task_id, task_control *> suspended_tasks;
 
     std::set<task::task_id> not_in_suspended_but_awake_tasks;
-    std::set<task::task_id> gave_outs;
 
     std::unordered_map<task::task_id, task> task_map;
 };

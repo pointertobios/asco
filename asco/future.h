@@ -20,6 +20,8 @@ using std::cout, std::endl;
 
 namespace asco {
 
+struct __future_void {};
+
 template<typename R = RT>
 requires is_runtime<R>
 R *get_runtime() {
@@ -161,6 +163,10 @@ struct future_base {
                         auto id = rt->task_id_from_corohandle(caller_task);
                         worker->running_task.push(worker->sc.get_task(id));
 
+                        // Do not awake this task, but resume it inplace.
+                        // If there is no any suspend point, it will be then never resumed
+                        // after final_suspend().
+                        // or it will be awaken after first co_await.
                         return caller_task;
                     }
 
@@ -216,7 +222,7 @@ struct future_base {
             // Do not awake this task, but resume it inplace.
             // If there is no any suspend point, it will be then never resumed
             // after final_suspend().
-            // or it will be awake after first co_await.
+            // or it will be awaken after first co_await.
             worker->running_task.push(worker->sc.get_task(task_id)); // Correct running task
             return task;
         }
@@ -270,8 +276,6 @@ using future_inline = future_base<T, true, false, R>;
 template<typename T, typename R = RT>
 requires is_move_secure_v<T> && is_runtime<R>
 using future_blocking = future_base<T, false, true, R>;
-
-struct __future_void {};
 
 using future_void = future<__future_void>;
 using future_void_inline = future_inline<__future_void>;

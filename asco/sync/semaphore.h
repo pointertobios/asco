@@ -18,8 +18,6 @@ template<size_t CounterMax, typename R = RT>
 requires is_runtime<R>
 class semaphore_base {
 public:
-    using task_handle = RT::scheduler::task_handle;
-
     semaphore_base(size_t count)
         : counter(std::min(count, CounterMax)) {}
     
@@ -32,60 +30,76 @@ public:
             throw std::runtime_error(
                 std::format("[ASCO] semaphore_base<{}>::release({}): Cannot release for non-positive-integer.",
                     CounterMax, update));
-        if (counter.load(morder::relaxed) == CounterMax)
+
+        if (counter.load(morder::relaxed) > CounterMax) {
+            counter.store(CounterMax, morder::relaxed);
+            return;
+        }
+        if (counter.load(morder::relaxed) >= CounterMax)
             return;
 
-        size_t c = counter.load(morder::acquire);
-        while (true) if (counter.compare_exchange_strong(
-                c, std::min(c + update, CounterMax),
-                morder::release, morder::relaxed)) {
+        size_t old_count;
+        size_t new_count;
 
-            auto [h, worker] = ({
-                auto guard = waiting_tasks.lock();
-                if (guard->empty())
-                    return;
-                auto res = std::move(guard->front());
-                guard->pop();
-                res;
-            });
+        do {
 
-            h.put_back();
+            old_count = counter.load(morder::relaxed);
+            new_count = std::min(old_count + update, CounterMax);
+
+        } while (!counter.compare_exchange_weak(
+            old_count, new_count,
+            morder::release,
+            morder::relaxed
+        ));
+
+        const size_t awake_x = new_count - old_count;
+
+        auto guard = waiting_tasks.lock();
+        for (size_t i = 0; i < awake_x && !guard->empty(); ++i) {
+
+            auto [id, worker] = std::move(guard->front());
+            guard->pop();
+
+            worker->sc.awake(id);
             worker->awake();
-            return;
+
         }
     }
 
     [[nodiscard("co_await or assign it")]]
     future_void_inline acquire() {
-        size_t c;
-
-    try_acquire:
-        c = counter.load(morder::acquire);
-        if (c > 0 && counter.compare_exchange_strong(
-                c, c - 1,
-                morder::acquire, morder::relaxed)) {
-
-            if (futures::aborted<future_void_inline>())
-                counter.store(c, morder::release);
-
+        if (futures::aborted<future_void_inline>())
             co_return {};
-        } else {
+
+        do {
+
+            auto guard = std::optional(waiting_tasks.lock());
+
+            size_t val = counter.load(morder::acquire);
+            if (val > 0 && counter.compare_exchange_weak(val, val - 1, morder::acq_rel, morder::relaxed))
+                break;
+
             auto worker = RT::__worker::get_worker();
-            auto taskh = worker->sc.give_out(worker->current_task().id);
-            waiting_tasks.lock()->push(std::make_pair(taskh, worker));
+            auto id = worker->current_task_id();
+            worker->sc.suspend(id);
+
+            (*guard)->push(std::make_pair(id, worker));
+
+            guard.reset();
 
             co_await suspend{};
 
-            if (futures::aborted<future_void_inline>())
-                co_return {};
+        } while (true);
 
-            goto try_acquire;
-        }
+        if (futures::aborted<future_void_inline>())
+            counter.fetch_add(1, morder::release); 
+
+        co_return {};
     }
 
 private:
     atomic_size_t counter;
-    spin<std::queue<std::pair<task_handle, worker *>>> waiting_tasks;
+    spin<std::queue<std::pair<sched::task::task_id, worker *>>> waiting_tasks;
 };
 
 using binary_semaphore = semaphore_base<1>;

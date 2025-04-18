@@ -12,6 +12,7 @@ namespace asco {
 using size_t = std::size_t;
 
 using atomic_size_t = std::atomic_size_t;
+using atomic_in64_t = std::atomic_int64_t;
 using atomic_bool = std::atomic_bool;
 
 template<typename T>

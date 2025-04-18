@@ -53,7 +53,7 @@ namespace asco::sched {
 
     bool std_scheduler::currently_finished_all() {
         std::erase_if(suspended_tasks, [] (auto &p) { return p.second->t.done(); });
-        return active_tasks.empty() && suspended_tasks.empty() && gave_outs.empty();
+        return active_tasks.empty() && suspended_tasks.empty();
     }
 
     bool std_scheduler::has_buffered_awakes() {
@@ -129,25 +129,4 @@ namespace asco::sched {
             throw std::runtime_error(std::format("[ASCO] Task {} not found (maybe because you call it in synchronous texture)", id));
         }
     }
-
-    std_scheduler::task_handle std_scheduler::give_out(task::task_id id) {
-        std::lock_guard lk{active_tasks_mutex};
-        if (auto it = std::find_if(
-                active_tasks.begin(), active_tasks.end(),
-                [id] (task_control *t) { return t->t.id == id; });
-            it != active_tasks.end()) {
-            auto p = *it;
-            active_tasks.erase(it);
-            return std_scheduler::task_handle{p, this};
-        }
-        auto iter = suspended_tasks.find(id);
-        if (iter == suspended_tasks.end())
-            throw std::runtime_error(std::format("[ASCO] Task {} not found", id));
-        
-        auto p = iter->second;
-        suspended_tasks.erase(iter);
-        gave_outs.insert(id);
-        return std_scheduler::task_handle{p, this};
-    }
-
 };

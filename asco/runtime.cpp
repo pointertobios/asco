@@ -184,6 +184,7 @@ namespace asco {
                             task->resume();
                     } catch (std::exception &e) {
                         std::cerr << std::format("[ASCO] Inner error at task {}: {}\n", task->id, e.what());
+                        break;
                     }
 
                     while (!self.running_task.empty()) {

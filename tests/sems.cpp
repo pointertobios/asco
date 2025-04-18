@@ -10,24 +10,28 @@ using asco::binary_semaphore;
 
 future_void foo() {
     binary_semaphore coro_local(sem);
-    std::cout << "foo release semaphore" << std::endl;
     sem.release();
+    std::cout << "foo release semaphore, counter: " << sem.get_counter() << std::endl;
     co_return {};
 }
 
 future_void bar() {
     binary_semaphore coro_local(sem);
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 5; i++) {
         sem.release();
+        std::cout << "bar after release " << i << " counter: " << sem.get_counter() << std::endl;
         co_await sem.acquire();
     }
+    sem.release();
+    std::cout << "bar release, counter: " << sem.get_counter() << std::endl;
     co_return {};
 }
 
 asco_main future<int> async_main() {
     binary_semaphore decl_local(sem, new binary_semaphore{0});
-    foo();
+    auto tt = foo();
     co_await sem.acquire();
+    co_await tt;
     std::cout << "main acquire semaphore" << std::endl;
     sem.release();
     auto task = sem.acquire();
@@ -37,10 +41,11 @@ asco_main future<int> async_main() {
     assert(sem.get_counter() == 1);
     co_await sem.acquire();
     auto t = bar();
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 5; i++) {
         co_await sem.acquire();
-        std::cout << i << endl;
+        std::cout << i << " counter: " << sem.get_counter() << endl;
         sem.release();
+        std::cout << "release, counter: " << sem.get_counter() << std::endl;
     }
     co_await t;
     co_return 0;
