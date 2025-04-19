@@ -64,10 +64,10 @@ future<int> async_main() {
 
 此等待器适用于本身十分短小但不得不执行异步代码的函数。
 
-### future_blocking\<T\>
+### future_core\<T\>
 
-`future_blocking<T>` 的功能与 `std::future` 相同，但是它创建阻塞任务，
-阻塞任务不可以被窃取且优先发送至 *calculating worker* 工作线程[^1]。
+`future_core<T>` 的功能与 `std::future` 相同，但是它创建核心任务，
+核心任务不可以被窃取且优先发送至 *calculating worker* 工作线程[^1]。
 
 此等待器适用于 CPU 密集型任务。
 

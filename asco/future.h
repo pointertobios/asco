@@ -269,11 +269,11 @@ using future_inline = future_base<T, true, false, R>;
 
 template<typename T, typename R = RT>
 requires is_move_secure_v<T> && is_runtime<R>
-using future_blocking = future_base<T, false, true, R>;
+using future_core = future_base<T, false, true, R>;
 
 using future_void = future<__future_void>;
 using future_void_inline = future_inline<__future_void>;
-using future_void_blocking = future_blocking<__future_void>;
+using future_void_core = future_core<__future_void>;
 
 using runtime_initializer_t = std::optional<std::function<runtime *()>>;
 

@@ -24,6 +24,7 @@ struct task {
     task_id id;
     std::coroutine_handle<> handle;
 
+    // A sort of task that blocking worker thread and don't be stolen to other workers.
     bool is_blocking;
 
     __coro_local_frame *coro_local_frame;
