@@ -25,10 +25,18 @@ struct task {
     std::coroutine_handle<> handle;
 
     bool is_blocking;
+
+    __coro_local_frame *coro_local_frame;
+
     bool is_inline{false};
+
     bool mutable destroyed{false};
 
-    __coro_local_frame *coro_local_frame{new __coro_local_frame};
+    __always_inline void exit() {
+        coro_local_frame->subframe_exit();
+        if (!coro_local_frame->get_ref_count())
+            delete coro_local_frame;
+    }
 
     __always_inline bool operator==(task &rhs) const {
         return id == rhs.id;

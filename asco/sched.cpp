@@ -97,17 +97,6 @@ namespace asco::sched {
     }
 
     void std_scheduler::destroy(task::task_id id) {
-        auto destroy_task = [&] (task_control *t) {
-            // Until now the current coroutine local frame is still owned by current task,
-            // so the last owner can only be current task.
-            // If bigger than 1, there are not done sub coroutines, cannot delete.
-            if (t->t.coro_local_frame->get_ref_count() == 1)
-                delete t->t.coro_local_frame;
-            else
-                t->t.coro_local_frame->subframe_exit();
-            delete t;
-        };
-
         std::lock_guard lk{active_tasks_mutex};
         task_map.erase(id);
         if (auto it = std::find_if(
@@ -115,16 +104,19 @@ namespace asco::sched {
                     [id] (task_control *t) { return t->t.id == id; });
                 it != active_tasks.end()) {
 
-            destroy_task(*it);
+            (*it)->t.exit();
+            delete *it;
 
             active_tasks.erase(it);
             return;
         }
+
         auto iter = suspended_tasks.find(id);
         if (iter == suspended_tasks.end())
             return;
 
-        destroy_task(iter->second);
+        iter->second->t.exit();
+        delete iter->second;
 
         suspended_tasks.erase(iter);
     }

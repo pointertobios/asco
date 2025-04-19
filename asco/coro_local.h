@@ -23,12 +23,15 @@ struct __coro_local_frame {
     std::unordered_map<size_t, __coro_local_var> vars;
     atomic_size_t ref_count{1};
 
-    inline ~__coro_local_frame() {
-        if (prev) {
-            prev->subframe_exit();
+    inline __coro_local_frame(__coro_local_frame *prev)
+        : prev(prev) {
+        if (prev)
+            prev->subframe_enter();
+    }
 
-            if (!prev->get_ref_count())
-                delete prev;
+    inline ~__coro_local_frame() {
+        if (prev && !prev->get_ref_count()) {
+            delete prev;
         }
 
         for (auto &[_, v] : vars) {

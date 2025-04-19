@@ -366,10 +366,7 @@ namespace asco {
         auto id = task_counter.fetch_add(1, morder::relaxed);
         worker::set_task_sem(id);
         coro_to_task_id.insert(std::make_pair(task.address(), id));
-        auto res = sched::task{id, task, is_blocking};
-        res.coro_local_frame->prev = pframe;
-        if (pframe)
-            res.coro_local_frame->prev->subframe_enter();
+        auto res = sched::task{id, task, is_blocking, new __coro_local_frame(pframe)};
         return res;
     }
 };
