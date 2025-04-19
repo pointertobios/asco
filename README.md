@@ -4,11 +4,30 @@
 
 C++20 coroutine based async framework.
 
-## Compilers
+## Getting Started
 
-- Clang: Fully supported.
-- GCC: Currently not complete, there are some bugs with the compiler generated code.
-- MSVC: Not tested.
+### Documentations
+
+- [简体中文](https://pointertobios.github.io/asco/zhcn/)
+
+### Import into your project
+
+1. Clone one of this repository's version tag branch.
+2. Import with cmake:
+
+- static link:
+
+```cmake
+add_subdirectory(<path-to-this-repo>)
+target_link_libraries(<your-target> PRIVATE asco asco-main)
+```
+
+- dynamic link:
+
+```cmake
+add_subdirectory(<path-to-this-repo>)
+target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
+```
 
 ## Features
 
@@ -26,31 +45,11 @@ C++20 coroutine based async framework.
   - [ ] Async file read/write
   - [ ] Async TCP/UDP stream
 
-## Getting Started
+## Compilers
 
-### Import into your project
-
-1. Clone one of this repository's version tag branch.
-2. Import with cmake:
-
-- static link:
-
-```cmake
-add_subdirectory(<path-to-this-repo>)
-target_link_libraries(<your-target> PRIVATE asco)
-```
-
-- dynamic link:
-
-```cmake
-add_subdirectory(<path-to-this-repo>)
-target_link_libraries(<your-target> PRIVATE asco-shared)
-```
-
-### Documentations
-
-- [简体中文](https://pointertobios.github.io/asco/zhcn/)
-- [English (May NOT be Latest)](https://pointertobios.github.io/asco/enus/)
+- Clang: Fully supported.
+- GCC: Not complete.
+- MSVC: Not tested.
 
 ## License
 

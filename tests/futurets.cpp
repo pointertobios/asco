@@ -6,6 +6,8 @@
 
 #include <asco/future.h>
 
+using asco::future, asco::future_inline, asco::future_void_blocking;
+
 future_inline<uint64_t> foo(uint64_t i) {
     char coro_local(y);
     char *coro_local(str);
@@ -29,7 +31,7 @@ future_void_blocking bar() {
     co_return {};
 }
 
-asco_main future<int> async_main() {
+future<int> async_main() {
     std::cout << "async_main" << std::endl;
     co_await bar();
     co_return 0;

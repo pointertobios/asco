@@ -1,8 +1,16 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <asco/future.h>
 #include <iostream>
+
+#include <asco/future.h>
+
+inline asco::runtime_initializer_t runtime_initializer = [] () {
+    std::cout << "runtime_initializer test" << std::endl;
+    return new asco::runtime;
+};
+
+using asco::future, asco::future_void_inline;
 
 future<std::string> bar() {
     std::cout << "bar" << std::endl;
@@ -15,7 +23,7 @@ future_void_inline foo() {
     co_return {};
 }
 
-asco_main future<int> async_main() {
+future<int> async_main() {
     std::cout << "Hello, World!" << std::endl;
     co_await foo();
     std::cout << "main done" << std::endl;

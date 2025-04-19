@@ -3,8 +3,12 @@
 
 // Test for lazy delete of coroutine local frame
 
+#include <iostream>
+
 #include <asco/future.h>
 #include <asco/coro_local.h>
+
+using asco::future, asco::future_void;
 
 future_void foo() {
     int *coro_local(arr);
@@ -15,7 +19,7 @@ future_void foo() {
     co_return {};
 }
 
-asco_main future<int> async_main() {
+future<int> async_main() {
     int *decl_local_array(arr, new int[1000]);
     foo();
     std::cout << "main exited" << std::endl;

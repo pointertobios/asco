@@ -9,11 +9,12 @@
 
 ## 异步主函数
 
-使用宏 `asco_main` 标注名为 `async_main` 、没有形参、返回值为 `asco::future<int>` 的函数，则该函数成为异步主函数：
+名为 `async_main` 、没有形参、返回值为 `asco::future<int>` 的函数是异步主函数：
 
 ```c++
 #include <asco/future.h>
-asco_main future<int> async_main() {
+
+future<int> async_main() {
     ...
     co_return 0;
 }
@@ -23,7 +24,7 @@ asco_main future<int> async_main() {
 
 ```c++
 using asco::runtime::sys;
-asco_main future<int> async_main() {
+future<int> async_main() {
     for (auto& arg : sys::args()) {
         std::cout << arg << std::endl;
     }
@@ -35,8 +36,6 @@ asco_main future<int> async_main() {
 ```
 
 `asco_main` 使用默认配置[^1]创建异步 *asco 运行时*并对 `async_main` 函数的返回值调用 `.await()` 。
-
-也可以自己编写 `main()` 函数对运行时进行特殊配置[^1]，但是无法使用 `runtime` 获取命令行参数和环境变量，必须自行从 `main()` 函数的参数读取。
 
 ---
 
@@ -68,7 +67,7 @@ asco_main future<int> async_main() {
 ### future_blocking\<T\>
 
 `future_blocking<T>` 的功能与 `std::future` 相同，但是它创建阻塞任务，
-阻塞任务不可以被窃取且优先发送至 *calculating worker* 工作线程[^3]。
+阻塞任务不可以被窃取且优先发送至 *calculating worker* 工作线程[^1]。
 
 此等待器适用于 CPU 密集型任务。
 
@@ -153,4 +152,3 @@ co_return std::move(restorer.res);
 
 [^1]: 见[asco 异步运行时](asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。
-[^3]: 见[asco 工作线程](asco工作线程.md)

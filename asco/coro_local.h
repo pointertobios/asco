@@ -93,17 +93,17 @@ struct __coro_local_frame {
 
 #define coro_local(name)                                                                        \
     &name = RT::__worker::get_worker()->current_task().coro_local_frame                         \
-        ->get_var<std::remove_reference_t<decltype(name)>, __consteval_str_hash(#name)>(#name);
+        ->get_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name);
 
 #define decl_local_1arg(name)                                                                           \
     &name = RT::__worker::get_worker()->current_task().coro_local_frame                                 \
-        ->decl_var<std::remove_reference_t<decltype(name)>, __consteval_str_hash(#name)>(#name)
+        ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name)
 #define decl_local_2arg(name, ptr)                                                                      \
     &name = RT::__worker::get_worker()->current_task().coro_local_frame                                 \
-        ->decl_var<std::remove_reference_t<decltype(name)>, __consteval_str_hash(#name)>(#name, ptr)
+        ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name, ptr)
 #define decl_local_3arg(name, ptr, destructor)                                                                  \
     &name = RT::__worker::get_worker()->current_task().coro_local_frame                                         \
-        ->decl_var<std::remove_reference_t<decltype(name)>, __consteval_str_hash(#name)>(#name, ptr, destructor)
+        ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name, ptr, destructor)
 
 #define dispatch(_1, _2, _3, NAME, ...) NAME
 #define decl_local(...) \

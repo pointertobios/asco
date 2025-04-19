@@ -12,9 +12,8 @@
 
 #include <asco/utils/concepts.h>
 
-using namespace asco;
 
-namespace asco_inner {
+namespace asco::inner {
 
 template<typename T>
 requires is_move_secure_v<T>

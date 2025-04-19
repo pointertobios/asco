@@ -9,7 +9,7 @@
 namespace asco {
 
 struct sync_awaiter {
-    asco_inner::shared_receiver<__u8> rx;
+    inner::shared_receiver<__u8> rx;
 
     __always_inline void await() {
         rx->recv();

@@ -23,16 +23,14 @@
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 
-using namespace asco_inner;
-
 namespace asco {
 
 class worker;
 using worker_fn = std::function<void(worker *)>;
 
 using task_instance = std::coroutine_handle<>;
-using task_sender = sender<sched::task>;
-using task_receiver = shared_receiver<sched::task>;
+using task_sender = inner::sender<sched::task>;
+using task_receiver = inner::shared_receiver<sched::task>;
 
 class worker {
 public:
@@ -77,7 +75,7 @@ public:
 
     std::binary_semaphore worker_await_sem{0};
 
-    std::unordered_map<task_id, asco_inner::sender<__u8>> sync_awaiters_tx;
+    std::unordered_map<task_id, inner::sender<__u8>> sync_awaiters_tx;
 
 private:
     std::jthread thread;
@@ -199,6 +197,6 @@ private:
 #define set_runtime(rt) \
     using RT = rt
 
-};
+}; // namespace asco
 
 #endif

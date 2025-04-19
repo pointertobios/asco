@@ -3,8 +3,6 @@
 
 #include <asco/sched.h>
 
-#include <iostream>
-
 namespace asco::sched {
 
     std_scheduler::std_scheduler() {}
@@ -61,33 +59,24 @@ namespace asco::sched {
     }
 
     void std_scheduler::awake(task::task_id id) {
-        // std::cout << std::format("scheduler: awake task {}\n", id);
         std::lock_guard lk{active_tasks_mutex};
         if (auto it = suspended_tasks.find(id); it != suspended_tasks.end()) {
             it->second->state = task_control::__control_state::running;
             active_tasks.push_back(it->second);
             suspended_tasks.erase(it);
         } else {
-            // std::cout << std::format("scheduler: task {} not in suspended tasks\n", id);
             not_in_suspended_but_awake_tasks.insert(id);
         }
     }
 
     void std_scheduler::suspend(task::task_id id) {
-        // std::cout << std::format("scheduler: suspend task {}\n", id);
         if (not_in_suspended_but_awake_tasks.find(id)
                 != not_in_suspended_but_awake_tasks.end()) {
-            // std::cout << std::format("scheduler: task {} awake right now\n", id);
             not_in_suspended_but_awake_tasks.erase(id);
             return;
         }
+
         std::lock_guard lk{active_tasks_mutex};
-        // for (auto &t : active_tasks) {
-        //     if (t->t.id == id) {
-        //         t->state = task_control::__control_state::suspending;
-        //         break;
-        //     }
-        // }
         if (auto it = std::find_if(
                 active_tasks.begin(), active_tasks.end(),
                 [id] (task_control *t) { return t->t.id == id; });

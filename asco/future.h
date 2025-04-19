@@ -5,14 +5,11 @@
 #define ASCO_FUTURE_H
 
 #include <atomic>
-#include <iostream>
 #include <coroutine>
 
 #include <asco/runtime.h>
 #include <asco/utils/pubusing.h>
 #include <asco/utils/concepts.h>
-
-using std::cout, std::endl;
 
 #ifndef SET_RUNTIME
     using RT = asco::runtime;
@@ -125,7 +122,11 @@ struct future_base {
             awaiter_sem.acquire();
             awaiter->retval = std::move(val);
             returned.release();
+        }
 
+        // The inline future will return the caller_resumer to symmatrical transform
+        // to the caller task.
+        auto final_suspend() noexcept {
             if constexpr (!Inline) {
 
                 while (!task_id);
@@ -142,13 +143,6 @@ struct future_base {
                     rt->suspend(task_id);
                 } catch (...) {}
 
-            }
-        }
-
-        // The inline future will return the caller_resumer to symmatrical transform
-        // to the caller task.
-        auto final_suspend() noexcept {
-            if constexpr (!Inline) {
                 return std::suspend_always{};
             } else {
                 struct caller_resumer {
@@ -281,16 +275,8 @@ using future_void = future<__future_void>;
 using future_void_inline = future_inline<__future_void>;
 using future_void_blocking = future_blocking<__future_void>;
 
-#define asco_main                                                   \
-    using asco::future, asco::future_inline, asco::future_blocking; \
-    asco::future<int> async_main();                                 \
-    int main(int argc, const char **argv, const char **env) {       \
-        asco::runtime rt;                                           \
-        asco::runtime::sys::set_args(argc, argv);                   \
-        asco::runtime::sys::set_env(const_cast<char **>(env));      \
-        return async_main().await();                                \
-    }
+using runtime_initializer_t = std::optional<std::function<runtime *()>>;
 
-};
+}; // namespace asco
 
 #endif

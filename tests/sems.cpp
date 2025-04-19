@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <cassert>
+#include <iostream>
 
 #include <asco/future.h>
 #include <asco/sync/semaphore.h>
 
-using asco::binary_semaphore;
+using asco::future, asco::future_void, asco::binary_semaphore;
 
 future_void foo() {
     binary_semaphore coro_local(sem);
@@ -27,7 +28,7 @@ future_void bar() {
     co_return {};
 }
 
-asco_main future<int> async_main() {
+future<int> async_main() {
     binary_semaphore decl_local(sem, new binary_semaphore{0});
     auto tt = foo();
     co_await sem.acquire();
@@ -43,7 +44,7 @@ asco_main future<int> async_main() {
     auto t = bar();
     for (int i = 0; i < 5; i++) {
         co_await sem.acquire();
-        std::cout << i << " counter: " << sem.get_counter() << endl;
+        std::cout << i << " counter: " << sem.get_counter() << std::endl;
         sem.release();
         std::cout << "release, counter: " << sem.get_counter() << std::endl;
     }

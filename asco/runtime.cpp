@@ -164,7 +164,7 @@ namespace asco {
         auto worker_lambda = [this](worker *self_) {
             worker &self = *self_;
             
-            pthread_setname_np(pthread_self(), std::format("asco::worker{}", self.id).c_str());
+            ::pthread_setname_np(pthread_self(), std::format("asco::worker{}", self.id).c_str());
 #ifdef __linux__
             self.pid = syscall(SYS_gettid);
 #endif
@@ -224,11 +224,11 @@ namespace asco {
         auto cpus = get_cpus();
 #endif
 
-        auto [io_tx, io_rx_] = channel<sched::task>(128);
+        auto [io_tx, io_rx_] = inner::channel<sched::task>(128);
         io_task_tx = std::move(io_tx);
         task_receiver io_rx = make_shared_receiver(std::move(io_rx_));
 
-        auto [calcu_tx, calcu_rx_] = channel<sched::task>(128);
+        auto [calcu_tx, calcu_rx_] = inner::channel<sched::task>(128);
         calcu_task_tx = std::move(calcu_tx);
         task_receiver calcu_rx = make_shared_receiver(std::move(calcu_rx_));
 
@@ -344,7 +344,7 @@ namespace asco {
     }
 
     sync_awaiter runtime::register_sync_awaiter(task_id id) {
-        auto [tx, rx] = channel<__u8>(1);
+        auto [tx, rx] = inner::channel<__u8>(1);
         worker::get_worker_from_task_id(id)->sync_awaiters_tx[id] = std::move(tx);
         return sync_awaiter{make_shared_receiver(std::move(rx))};
     }
