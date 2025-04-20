@@ -59,12 +59,12 @@ struct __coro_local_frame {
     T &get_var(const char *name) {
         if (auto it = vars.find(hash); it != vars.end()) {
             if (it->second.type != type_hash<T>())
-                throw std::runtime_error("[ASCO] Coroutine local variable type mismatch");
+                throw std::runtime_error("[ASCO] __coro_local_frame::get_var(): Coroutine local variable type mismatch");
             return *reinterpret_cast<T *>(it->second.p);
         } else if (prev) {
             return prev->get_var<T, hash>(name);
         } else {
-            throw std::runtime_error(std::format("[ASCO] Coroutine local variable \'{}\' not found", name));
+            throw std::runtime_error(std::format("[ASCO] __coro_local_frame::get_var(): Coroutine local variable \'{}\' not found", name));
         }
     }
 

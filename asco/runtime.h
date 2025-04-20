@@ -184,7 +184,7 @@ private:
 public:
     __always_inline static runtime *get_runtime() {
         if (!current_runtime)
-            throw std::runtime_error("The async function must be called with asco::runtime initialized");
+            throw std::runtime_error("[ASCO] runtime::get_runtime(): The async function must be called with asco::runtime initialized");
         return current_runtime;
     }
 

@@ -45,7 +45,7 @@ struct task {
 
     __always_inline void resume() const {
         if (handle.done())
-            throw std::runtime_error("[ASCO] Inner error: task is done but not destroyed.");
+            throw std::runtime_error("[ASCO] task::resume() Inner error: task is done but not destroyed.");
         handle.resume();
     }
 

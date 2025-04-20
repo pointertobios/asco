@@ -42,7 +42,7 @@ struct future_base {
     struct promise_type {
         // Alway put this at the first,
         // so that we can authenticate the coroutine_handle type when we
-        // reinterpret it with raw pointer.
+        // reinterpret it from raw pointer.
         size_t future_type_hash;
 
         std::binary_semaphore returned{0};
@@ -99,6 +99,15 @@ struct future_base {
 
         std::suspend_always initial_suspend() { return {}; }
 
+        void return_value(T val) {
+            awaiter_sem.acquire();
+            awaiter->retval = std::move(val);
+            returned.release();
+        }
+
+        // The inline future will return the caller_resumer to symmatrical transform
+        // to the caller task.
+        //
         // To support abortable task, the logic of suspent current task and awake caller
         // task execute here instrad of in final_suspend().
         // The current task (if returns future<T>/future_blocking<T>/future_inline<T>) can create a struct like this:
@@ -118,14 +127,6 @@ struct future_base {
         // ```
         // to let this task execute recover logic.
         // At the same time the caller coroutine will continue without waiting for the current task final_suspend().
-        void return_value(T val) {
-            awaiter_sem.acquire();
-            awaiter->retval = std::move(val);
-            returned.release();
-        }
-
-        // The inline future will return the caller_resumer to symmatrical transform
-        // to the caller task.
         auto final_suspend() noexcept {
             if constexpr (!Inline) {
 

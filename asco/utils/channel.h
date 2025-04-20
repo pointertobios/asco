@@ -161,7 +161,7 @@ public:
 
     bool is_stopped() const {
         if (moved)
-            throw std::runtime_error("[ASCO] Channel error: Moved channel.");
+            throw std::runtime_error("[ASCO] inner::receiver::is_stopped(): Moved channel.");
         if (!frame)
             return true;
         return state->stopped
@@ -170,7 +170,7 @@ public:
 
     std::optional<T> try_recv() {
         if (moved)
-            throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
+            throw std::runtime_error("[ASCO] inner::receiver::try_recv(): Cannot receive on a moved channel.");
         
         if (is_stopped())
             return std::nullopt;
@@ -195,9 +195,9 @@ public:
 
         if (*frame->receiver_index == frame_size) {
             if (frame->sender_index)
-                throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but sender_index is not std::nullopt.");
+                throw std::runtime_error("[ASCO] inner::receiver::try_recv() inner error: The sender went to next frame but sender_index is not std::nullopt.");
             if (frame->next == nullptr)
-                throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but next frame is nullptr.");
+                throw std::runtime_error("[ASCO] inner::receiver::try_recv() inner error: The sender went to next frame but next frame is nullptr.");
             auto *p = frame;
             frame = frame->next;
             delete p;
@@ -211,7 +211,7 @@ public:
 
     std::optional<T> recv() {
         if (moved)
-            throw std::runtime_error("[ASCO] Channel error: Cannot receive on a moved channel.");
+            throw std::runtime_error("[ASCO] inner::receiver::recv(): Cannot receive on a moved channel.");
         
         if (is_stopped())
             return std::nullopt;
@@ -242,9 +242,9 @@ public:
 
         if (*frame->receiver_index == frame_size) {
             if (frame->sender_index)
-                throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but sender_index is not std::nullopt.");
+                throw std::runtime_error("[ASCO] inner::receiver::recv() Inner error: The sender went to next frame but sender_index is not std::nullopt.");
             if (frame->next == nullptr)
-                throw std::runtime_error("[ASCO] Channel inner error: The sender went to next frame but next frame is nullptr.");
+                throw std::runtime_error("[ASCO] inner::receiver::recv() inner error: The sender went to next frame but next frame is nullptr.");
             auto *p = frame;
             frame = frame->next;
             delete p;

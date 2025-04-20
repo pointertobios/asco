@@ -28,8 +28,7 @@ public:
     void release(size_t update = 1) {
         if (update < 1)
             throw std::runtime_error(
-                std::format("[ASCO] semaphore_base<{}>::release({}): Cannot release for non-positive-integer.",
-                    CounterMax, update));
+                std::format("[ASCO] semaphore_base<{}>::release(): Cannot release for non-positive-integer.", CounterMax));
 
         if (counter.load(morder::relaxed) > CounterMax) {
             counter.store(CounterMax, morder::relaxed);

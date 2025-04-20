@@ -123,7 +123,7 @@ namespace asco::sched {
         if (auto it = task_map.find(id); it != task_map.end()) {
             return it->second;
         } else {
-            throw std::runtime_error(std::format("[ASCO] Task {} not found (maybe because you call it in synchronous texture)", id));
+            throw std::runtime_error(std::format("[ASCO] std_scheduler::get_task(): Task {} not found (maybe because you call it in synchronous texture)", id));
         }
     }
 };

@@ -85,7 +85,7 @@ namespace asco {
     // always promis the id is an exist id.
     worker *worker::get_worker_from_task_id(task_id id) {
         if (!id)
-            throw std::runtime_error("[ASCO] Inner error: unexpectedly got a 0 as task id");
+            throw std::runtime_error("[ASCO] worker::get_worker_from_task_id() Inner error: unexpectedly got a 0 as task id");
 
         bool b = false;
         if (auto its_ = workers_by_task_id_sem.find(id); its_ != workers_by_task_id_sem.end()) {
@@ -103,7 +103,7 @@ namespace asco {
                 throw std::runtime_error("[ASCO] Inner error: task id does not exist");
             }
         }
-        throw std::runtime_error("[ASCO] Inner error: task id does not exist in sems");
+        throw std::runtime_error("[ASCO] worker::get_worker_from_task_id() Inner error: task id does not exist in sems");
     }
 
     void worker::set_task_sem(task_id id) {
@@ -113,7 +113,7 @@ namespace asco {
 
     worker *worker::get_worker() {
         if (workers.find(std::this_thread::get_id()) == workers.end())
-            throw std::runtime_error("[ASCO] Currently not in any asco::worker thread");
+            throw std::runtime_error("[ASCO] worker::get_worker(): Currently not in any asco::worker thread");
         if (!current_worker)
             current_worker = workers[std::this_thread::get_id()];
         return current_worker;
@@ -158,7 +158,7 @@ namespace asco {
                 (nthread_ > 0 && nthread_ <= std::thread::hardware_concurrency())
                     ? nthread_ : std::thread::hardware_concurrency()) {
         if (current_runtime)
-            throw std::runtime_error("[ASCO] Cannot create multiple runtimes in a process");
+            throw std::runtime_error("[ASCO] runtime::runtime(): Cannot create multiple runtimes in a process");
         current_runtime = this;
 
         auto worker_lambda = [this](worker *self_) {
@@ -183,7 +183,7 @@ namespace asco {
                         if (!task->done())
                             task->resume();
                     } catch (std::exception &e) {
-                        std::cerr << std::format("[ASCO] Inner error at task {}: {}\n", task->id, e.what());
+                        std::cerr << std::format("[ASCO] worker thread: Inner error at task {}: {}\n", task->id, e.what());
                         break;
                     }
 
@@ -241,7 +241,7 @@ namespace asco {
             std::string path = std::format("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list", i % cpus.size());
             std::ifstream f(path);
             if (!f.is_open())
-                throw std::runtime_error("[ASCO] Failed to detect CPU hyperthreading");
+                throw std::runtime_error("[ASCO] runtime::runtime(): Failed to detect CPU hyperthreading");
             std::string buf;
             std::vector<int> siblings;
             while (std::getline(f, buf, '-')) {
@@ -267,7 +267,7 @@ namespace asco {
             }
             auto *p = new worker(i, worker_lambda, rx);
             if (!p)
-                throw std::runtime_error("[ASCO] Failed to create worker");
+                throw std::runtime_error("[ASCO] runtime::runtime(): Failed to create worker");
             pool.push_back(p);
             auto &workeri = pool[i];
 
@@ -279,7 +279,7 @@ namespace asco {
                 sizeof(decltype(cpu)),
                 &cpu
             ) == -1) {
-                throw std::runtime_error("[ASCO] Failed to set affinity");
+                throw std::runtime_error("[ASCO] runtime::runtime(): Failed to set affinity");
             }
 #endif
 
@@ -357,7 +357,7 @@ namespace asco {
     runtime::task_id runtime::task_id_from_corohandle(std::coroutine_handle<> handle) {
         std::lock_guard lk{coro_to_task_id_mutex};
         if (coro_to_task_id.find(handle.address()) == coro_to_task_id.end())
-            throw std::runtime_error(std::format("[ASCO] runtime::task_id runtime::task_id_from_corohandle() Inner error: coro_to_task_id[{}] unexists", handle.address()));
+            throw std::runtime_error(std::format("[ASCO] runtime::task_id_from_corohandle() Inner error: coro_to_task_id[{}] unexists", handle.address()));
         return coro_to_task_id[handle.address()];
     }
 

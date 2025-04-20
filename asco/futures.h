@@ -14,7 +14,7 @@ bool aborted() {
     auto h_ = RT::__worker::get_worker()->current_task().handle;
     typename F::corohandle h = *(typename F::corohandle *)(&h_);
     if (h.promise().future_type_hash != type_hash<F>())
-        throw std::runtime_error("[ASCO] aborted<F>(): The F is not matched with your current coroutine.");
+        throw std::runtime_error("[ASCO] aborted<F>(): F is not matched with your current coroutine.");
     return h.promise().aborted.load(morder::acquire);
 }
 
