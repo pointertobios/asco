@@ -4,7 +4,7 @@
 #ifndef ASCO_SYNC_CHANNEL_H
 #define ASCO_SYNC_CHANNEL_H 1
 
-#include <map>
+#include <tuple>
 #include <iostream>
 #include <optional>
 
@@ -269,7 +269,7 @@ private:
 namespace ss {
 
 template<typename T, size_t FrameSize = 1024>
-std::pair<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
+std::tuple<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
     auto *frame = new channel_frame<T, FrameSize>;
     frame->receiver = 0;
     return {sender<T, FrameSize>(frame), receiver<T, FrameSize>(frame)};

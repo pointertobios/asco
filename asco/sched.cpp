@@ -9,8 +9,8 @@ namespace asco::sched {
 
     void std_scheduler::push_task(task t, task_control::__control_state initial_state) {
         std::lock_guard lk{active_tasks_mutex};
-        task_map.emplace(t.id, t);
         auto p = new task_control{t};
+        task_map.emplace(t.id, p);
         p->state = initial_state;
         if (initial_state == task_control::__control_state::running)
             active_tasks.push_back(p);
@@ -121,7 +121,7 @@ namespace asco::sched {
 
     task &std_scheduler::get_task(task::task_id id) {
         if (auto it = task_map.find(id); it != task_map.end()) {
-            return it->second;
+            return it->second->t;
         } else {
             throw std::runtime_error(std::format("[ASCO] std_scheduler::get_task(): Task {} not found (maybe because you call it in synchronous texture)", id));
         }

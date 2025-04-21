@@ -4,6 +4,7 @@
 #ifndef ASCO_SYNC_SEMAPHORE_H
 #define ASCO_SYNC_SEMAPHORE_H 1
 
+#include <coroutine>
 #include <queue>
 
 #include <asco/future.h>
@@ -47,7 +48,7 @@ public:
 
         } while (!counter.compare_exchange_weak(
             old_count, new_count,
-            morder::release,
+            morder::seq_cst,
             morder::relaxed
         ));
 
@@ -65,28 +66,40 @@ public:
         }
     }
 
-    [[nodiscard("co_await or assign it")]]
+    [[nodiscard("[ASCO] semaphore_base<N>::acquire(): co_await or assign its return value.")]]
     future_void_inline acquire() {
         if (futures::aborted<future_void_inline>())
             co_return {};
 
         do {
 
-            auto guard = std::optional(waiting_tasks.lock());
-
             size_t val = counter.load(morder::acquire);
-            if (val > 0 && counter.compare_exchange_weak(val, val - 1, morder::acq_rel, morder::relaxed))
-                break;
+            if (val > 0) {
+                if (counter.compare_exchange_strong(
+                        val, val - 1,
+                        morder::acq_rel, morder::relaxed))
+                    break;
+                continue;
+            }
 
-            auto worker = RT::__worker::get_worker();
-            auto id = worker->current_task_id();
-            worker->sc.suspend(id);
+            if (counter.load(morder::acquire) > 0)
+                continue;
 
-            (*guard)->push(std::make_pair(id, worker));
+            {
+                auto guard = waiting_tasks.lock();
 
-            guard.reset();
+                if (counter.load(morder::acquire) == 0) {
+                    auto worker = RT::__worker::get_worker();
+                    auto id = worker->current_task_id();
+                    worker->sc.suspend(id);
 
-            co_await suspend{};
+                    guard->push(std::make_pair(id, worker));
+                } else {
+                    continue;
+                }
+            }
+
+            co_await std::suspend_always{};
 
         } while (true);
 

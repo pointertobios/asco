@@ -18,7 +18,7 @@ future_void foo() {
 
 future_void bar() {
     binary_semaphore coro_local(sem);
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 100; i++) {
         sem.release();
         std::cout << "bar after release " << i << " counter: " << sem.get_counter() << std::endl;
         co_await sem.acquire();
@@ -42,7 +42,7 @@ future<int> async_main() {
     assert(sem.get_counter() == 1);
     co_await sem.acquire();
     auto t = bar();
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 100; i++) {
         co_await sem.acquire();
         std::cout << i << " counter: " << sem.get_counter() << std::endl;
         sem.release();

@@ -12,17 +12,16 @@ namespace asco {
 
 template<typename R = RT>
 struct suspend {
-    bool await_ready() { return false; }
+    __always_inline bool await_ready() { return false; }
 
-    bool await_suspend(std::coroutine_handle<> handle) {
+    __always_inline bool await_suspend(std::coroutine_handle<> handle) {
         auto id = RT::__worker::get_worker()->current_task_id();
         auto worker = RT::__worker::get_worker_from_task_id(id);
-        if (worker->sc.task_exists(id))
-            worker->sc.suspend(id);
+        worker->sc.suspend(id);
         return true;
     }
 
-    void await_resume() {}
+    __always_inline void await_resume() {}
 };
 
 };
