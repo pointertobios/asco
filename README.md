@@ -36,11 +36,11 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
   - [ ] Windows full support
   - [ ] MacOS full support
 - [x] Basic tools for parallel programming
-  - [ ] Timer
   - [x] Semaphore
+  - [x] Pipe(Channel)
+  - [ ] Timer
   - [ ] Condition variable
   - [ ] Locks
-  - [ ] Pipe
 - [ ] Async IO
   - [ ] Async file read/write
   - [ ] Async TCP/UDP stream
@@ -49,7 +49,7 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
 
 - Clang: Fully supported.
 - GCC: Not complete.
-- MSVC: Not tested.
+- MSVC: Not supported.
 
 ## License
 

@@ -93,6 +93,7 @@ public:
             throw std::runtime_error("[ASCO] Channel error: Cannot send on a closed channel.");
         mutex.lock();
         if (*frame->sender_index == frame_size) {
+            state->sem.release();
             frame->next = new channel_frame<T>(frame_size);
             auto *p = frame;
             frame = frame->next;

@@ -11,6 +11,10 @@
 #include <asco/utils/pubusing.h>
 #include <asco/utils/concepts.h>
 
+#if defined(_MSC_VER) && !defined(__clang__)
+    #error "[ASCO] Compile with clang-cl instead of MSVC"
+#endif
+
 #ifndef SET_RUNTIME
     using RT = asco::runtime;
 #endif
@@ -28,8 +32,8 @@ R *get_runtime() {
 template<typename T, bool Inline, bool Blocking, typename R = RT>
 requires is_move_secure_v<T> && is_runtime<R>
 struct future_base {
-    static_assert(!std::is_void_v<T>, "Use asco::future_void instead.");
-    static_assert(!Inline || !Blocking, "Inline coroutine cannot be blocking.");
+    static_assert(!std::is_void_v<T>, "[ASCO] Use asco::future_void instead.");
+    static_assert(!Inline || !Blocking, "[ASCO] Inline coroutine cannot be blocking.");
 
     using worker = RT::__worker;
 

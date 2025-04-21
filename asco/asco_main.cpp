@@ -10,15 +10,12 @@ extern future<int> async_main();
 inline asco::runtime_initializer_t runtime_initializer;
 
 int main(int argc, const char **argv, const char **env) {
-    auto rt = ({
-        asco::runtime *rt;
-        if (runtime_initializer) {
-            rt = (*runtime_initializer)();
-        } else {
-            rt = new asco::runtime();
-        }
-        rt;
-    });
+    asco::runtime *rt;
+    if (runtime_initializer) {
+        rt = (*runtime_initializer)();
+    } else {
+        rt = new asco::runtime();
+    }
     asco::runtime::sys::set_args(argc, argv);
     asco::runtime::sys::set_env(const_cast<char **>(env));
     return async_main().await();
