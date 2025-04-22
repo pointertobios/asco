@@ -198,9 +198,9 @@ namespace asco {
 
                         if (task.done()) {
                             self.sc.destroy(task.id);
-                            if (auto it = self.sync_awaiters_tx.find(task.id);
-                                it != self.sync_awaiters_tx.end()) {
-                                it->second.send(0);
+                            if (auto it = self.sync_awaiters.find(task.id);
+                                it != self.sync_awaiters.end()) {
+                                it->second.release();
                             }
 
                             if (!task.is_inline) { // Inline task remove map relation themselves
@@ -228,11 +228,11 @@ namespace asco {
         auto cpus = get_cpus();
 #endif
 
-        auto [io_tx, io_rx_] = inner::channel<sched::task>(128);
+        auto [io_tx, io_rx_] = inner::channel<sched::task>();
         io_task_tx = std::move(io_tx);
         task_receiver io_rx = make_shared_receiver(std::move(io_rx_));
 
-        auto [calcu_tx, calcu_rx_] = inner::channel<sched::task>(128);
+        auto [calcu_tx, calcu_rx_] = inner::channel<sched::task>();
         calcu_task_tx = std::move(calcu_tx);
         task_receiver calcu_rx = make_shared_receiver(std::move(calcu_rx_));
 
@@ -313,10 +313,10 @@ namespace asco {
         if (io_worker_count
                 && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_load) {
             io_worker_load++;
-            io_task_tx->send(task);
+            auto _ = io_task_tx->send(task);
         } else {
             calcu_worker_load++;
-            calcu_task_tx->send(task);
+            auto _ = calcu_task_tx->send(task);
         }
         awake_all();
         return res;
@@ -328,10 +328,10 @@ namespace asco {
         if (calcu_worker_count
                 && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_load) {
             calcu_worker_load++;
-            calcu_task_tx->send(task);
+            auto _ = calcu_task_tx->send(task);
         } else {
             io_worker_load++;
-            io_task_tx->send(task);
+            auto _ = io_task_tx->send(task);
         }
         awake_all();
         return res;
@@ -347,10 +347,8 @@ namespace asco {
         worker::get_worker_from_task_id(id)->sc.suspend(id);
     }
 
-    sync_awaiter runtime::register_sync_awaiter(task_id id) {
-        auto [tx, rx] = inner::channel<__u8>(1);
-        worker::get_worker_from_task_id(id)->sync_awaiters_tx[id] = std::move(tx);
-        return sync_awaiter{make_shared_receiver(std::move(rx))};
+    void runtime::register_sync_awaiter(task_id id) {
+        worker::get_worker_from_task_id(id)->sync_awaiters.emplace(id, 0);
     }
 
     void runtime::remove_task_map(void *addr) {

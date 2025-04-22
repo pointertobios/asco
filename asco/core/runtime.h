@@ -19,7 +19,6 @@
 #include <vector>
 
 #include <asco/core/sched.h>
-#include <asco/core/sync_awaiter.h>
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 
@@ -76,7 +75,7 @@ public:
 
     std::binary_semaphore worker_await_sem{0};
 
-    std::unordered_map<task_id, inner::sender<__u8>> sync_awaiters_tx;
+    std::unordered_map<task_id, std::binary_semaphore> sync_awaiters;
 
 private:
     std::jthread thread;
@@ -112,7 +111,7 @@ concept is_runtime = requires(T t) {
     { t.spawn_blocking(task_instance{}, std::declval<__coro_local_frame *>()) } -> std::same_as<typename T::task_id>;
     { t.awake(typename T::task_id{}) } -> std::same_as<void>;
     { t.suspend(typename T::task_id{}) } -> std::same_as<void>;
-    { t.register_sync_awaiter(typename T::task_id{}) } -> std::same_as<sync_awaiter>;
+    { t.register_sync_awaiter(typename T::task_id{}) } -> std::same_as<void>;
     { t.task_id_from_corohandle(std::declval<std::coroutine_handle<>>()) } -> std::same_as<typename T::task_id>;
     { t.to_task(std::declval<task_instance>(), bool{}, std::declval<__coro_local_frame *>()) } -> std::same_as<sched::task>;
     { t.remove_task_map(nullptr) } -> std::same_as<void>;
@@ -159,7 +158,7 @@ public:
     void awake(task_id id);
     void suspend(task_id id);
 
-    sync_awaiter register_sync_awaiter(task_id id);
+    void register_sync_awaiter(task_id id);
     task_id task_id_from_corohandle(std::coroutine_handle<> handle);
     sched::task to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe);
 

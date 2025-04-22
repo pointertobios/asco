@@ -238,7 +238,8 @@ struct future_base {
             if (task.promise().returned.try_acquire())
                 return std::move(retval);
 
-            RT::get_runtime()->register_sync_awaiter(task_id).await();
+            RT::get_runtime()->register_sync_awaiter(task_id);
+            RT::__worker::get_worker_from_task_id(task_id)->sync_awaiters.at(task_id).acquire();
 
             return std::move(retval);
 
