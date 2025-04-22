@@ -230,7 +230,7 @@ struct future_base {
     T await_resume() { return std::move(retval); }
 
     T await() {
-        if (!RT::__worker::in_worker())
+        if (RT::__worker::in_worker())
             throw std::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime");
 
         if constexpr (!Inline) {

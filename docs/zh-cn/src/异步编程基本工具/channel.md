@@ -17,7 +17,9 @@
 * 构造函数： 仅有移动构造函数
 * 赋值运算符： 仅有移动赋值运算符
 * `future_inline<std::optional<T>> recv()`：***可打断***的***异步***接收，若发送端关闭且通道中没有更多对象，返回 `std::nullopt`
-* `bool is_stopped()`：判断管道是否关闭
+* `std::expected<T, receive_fail> try_recv()`: 尝试接收一个对象，通道中没有新对象返回 `std::unexpected(receive_fail::non_object)`
+    ，通道关闭返回 `std::unexpected(receive_fail::closed)`
+* `bool is_stopped()`：判断通道是否关闭
 * `void stop()`：关闭接收端，发送端将无法继续发送数据，析构时自动调用此函数
 
 ## 单生产者单消费者通道（ `asco::ss::channel` ）

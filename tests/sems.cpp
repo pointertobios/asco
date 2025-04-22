@@ -33,8 +33,12 @@ future<int> async_main() {
     auto tt = foo();
     co_await sem.acquire();
     co_await tt;
-    std::cout << "main acquire semaphore" << std::endl;
+    std::cout << "main acquire semaphore, try acquire: " << (sem.try_acquire() ? "true" : "false") << std::endl;
     sem.release();
+    if (sem.try_acquire()) {
+        std::cout << "main try acquire semaphore success: " << sem.get_counter() << std::endl;
+        sem.release();
+    }
     auto task = sem.acquire();
     task.abort();
     co_await task;

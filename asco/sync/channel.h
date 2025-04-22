@@ -4,9 +4,10 @@
 #ifndef ASCO_SYNC_CHANNEL_H
 #define ASCO_SYNC_CHANNEL_H 1
 
-#include <tuple>
+#include <expected>
 #include <iostream>
 #include <optional>
+#include <tuple>
 
 #include <asco/future.h>
 #include <asco/futures.h>
@@ -138,6 +139,11 @@ private:
 template<typename T, size_t FrameSize = 1024>
 class receiver {
 public:
+    enum class receive_fail {
+        non_object,
+        closed,
+    };
+
     receiver() : none{true} {}
 
     receiver(channel_frame<T, FrameSize> *start_frame)
@@ -199,6 +205,46 @@ public:
             return true;
 
         return false;
+    }
+
+    std::expected<T, receive_fail> try_recv() {
+        if (none)
+            throw std::runtime_error("[ASCO] receiver::try_recv(): Cannot do any action on a NONE receiver object.");
+        if (moved)
+            throw std::runtime_error("[ASCO] receiver::try_recv(): Cannot do any action after receiver moved.");
+
+        if (!frame->sem.try_acquire())
+            return std::unexpected(receive_fail::non_object);
+
+        if (frame->sender.has_value()) {
+
+            if (is_stopped())
+                return std::unexpected(receive_fail::closed);
+
+            if (*frame->sender == *frame->receiver)
+                throw std::runtime_error("[ASCO] receiver::try_recv(): Sender game a new object, but sender index equals to receiver index.");
+
+        } else if (*frame->receiver == FrameSize) {
+
+            auto *f = frame;
+            if (!f->next)
+                throw std::runtime_error("[ASCO] receiver::recv(): Sender went to next frame, but next frame is nullptr.");
+            frame = f->next;
+            delete f;
+            frame->receiver = 0;
+
+            if (!frame->sem.try_acquire())
+                return std::unexpected(receive_fail::non_object);
+
+            if (is_stopped())
+                return std::unexpected(receive_fail::closed);
+
+            if (frame->sender && *frame->sender == *frame->receiver)
+                throw std::runtime_error("[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
+
+        }
+
+        return std::move(frame->buffer[(*frame->receiver)++]);
     }
 
     // If receive successful, return T value.

@@ -109,6 +109,24 @@ public:
         co_return {};
     }
 
+    bool try_acquire() {
+        size_t val = counter.load(morder::acquire);
+
+    try_once:
+        if (val > 0) {
+            if (counter.compare_exchange_strong(
+                    val, val - 1,
+                    morder::acq_rel, morder::relaxed))
+                return true;
+            goto try_once;
+        }
+
+        if (counter.load(morder::acquire) > 0)
+            goto try_once;
+
+        return false;
+    }
+
 private:
     atomic_size_t counter;
     spin<std::queue<std::pair<sched::task::task_id, worker *>>> waiting_tasks;
