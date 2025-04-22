@@ -1,7 +1,7 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <asco/runtime.h>
+#include <asco/core/runtime.h>
 
 #include <cassert>
 #include <cerrno>
@@ -19,7 +19,7 @@
     #include <sys/syscall.h>
 #endif
 
-#include <asco/sched.h>
+#include <asco/core/sched.h>
 
 namespace asco {
     std::map<worker::task_id, std::binary_semaphore *> worker::workers_by_task_id_sem;

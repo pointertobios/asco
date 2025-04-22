@@ -71,7 +71,7 @@ public:
         if (futures::aborted<future_void_inline>())
             co_return {};
 
-        do {
+        while (true) {
 
             size_t val = counter.load(morder::acquire);
             if (val > 0) {
@@ -101,7 +101,7 @@ public:
 
             co_await std::suspend_always{};
 
-        } while (true);
+        }
 
         if (futures::aborted<future_void_inline>())
             counter.fetch_add(1, morder::release); 
@@ -111,20 +111,20 @@ public:
 
     bool try_acquire() {
         size_t val = counter.load(morder::acquire);
+        while (true) {
 
-    try_once:
-        if (val > 0) {
-            if (counter.compare_exchange_strong(
-                    val, val - 1,
-                    morder::acq_rel, morder::relaxed))
-                return true;
-            goto try_once;
+            if (val > 0) {
+                if (counter.compare_exchange_strong(
+                        val, val - 1,
+                        morder::acq_rel, morder::relaxed))
+                    return true;
+                continue;
+            }
+
+            if (!counter.load(morder::acquire))
+                return false;
+
         }
-
-        if (counter.load(morder::acquire) > 0)
-            goto try_once;
-
-        return false;
     }
 
 private:

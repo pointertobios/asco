@@ -1,7 +1,7 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <asco/sched.h>
+#include <asco/core/sched.h>
 
 namespace asco::sched {
 

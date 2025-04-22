@@ -18,8 +18,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include <asco/sched.h>
-#include <asco/sync_awaiter.h>
+#include <asco/core/sched.h>
+#include <asco/core/sync_awaiter.h>
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 

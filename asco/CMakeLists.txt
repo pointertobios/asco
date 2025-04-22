@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 set(ASCO_SOURCES
-    runtime.cpp
-    sched.cpp
+    core/runtime.cpp
+    core/sched.cpp
 )
 
 add_library(asco-main asco_main.cpp)

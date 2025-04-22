@@ -2,7 +2,7 @@
 #include <optional>
 
 #include <asco/future.h>
-#include <asco/utils/lazy_delete.h>
+#include <asco/lazy_delete.h>
 
 using asco::future, asco::lazy_delete;
 using asco::runtime;

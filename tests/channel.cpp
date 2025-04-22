@@ -5,7 +5,7 @@
 #include <iostream>
 
 #include <asco/future.h>
-#include <asco/sync/channel.h>
+#include <asco/channel.h>
 
 using asco::future, asco::future_void, asco::ss::channel;
 
