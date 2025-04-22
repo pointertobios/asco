@@ -60,6 +60,7 @@ public:
         return running_task.top().id;
     }
 
+    static bool in_worker();
     static worker *get_worker();
 
     int id;

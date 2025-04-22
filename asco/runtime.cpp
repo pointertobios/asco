@@ -8,14 +8,14 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <pthread.h>
 #include <ranges>
 #include <string>
 #include <string_view>
 
 #ifdef __linux__
-    #include <sched.h>
     #include <cpuid.h>
+    #include <pthread.h>
+    #include <sched.h>
     #include <sys/syscall.h>
 #endif
 
@@ -111,6 +111,10 @@ namespace asco {
         workers_by_task_id_sem.emplace(std::make_pair(id, new std::binary_semaphore{0}));
     }
 
+    bool worker::in_worker() {
+        return workers.find(std::this_thread::get_id()) != workers.end();
+    }
+
     worker *worker::get_worker() {
         if (workers.find(std::this_thread::get_id()) == workers.end())
             throw std::runtime_error("[ASCO] worker::get_worker(): Currently not in any asco::worker thread");
@@ -163,9 +167,9 @@ namespace asco {
 
         auto worker_lambda = [this](worker *self_) {
             worker &self = *self_;
-            
-            ::pthread_setname_np(pthread_self(), std::format("asco::worker{}", self.id).c_str());
+
 #ifdef __linux__
+            ::pthread_setname_np(pthread_self(), std::format("asco::worker{}", self.id).c_str());
             self.pid = syscall(SYS_gettid);
 #endif
 

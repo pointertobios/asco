@@ -11,9 +11,13 @@ target_include_directories(asco-main PRIVATE ../)
 
 add_library(asco ${ASCO_SOURCES})
 target_include_directories(asco PUBLIC ../)
-target_link_libraries(asco atomic)
+if (NOT WIN32)
+    target_link_libraries(asco atomic)
+endif()
 
 add_library(asco-shared SHARED ${ASCO_SOURCES})
 target_include_directories(asco-shared PUBLIC ../)
-set_target_properties(asco-shared PROPERTIES OUTPUT_NAME asco)
+if (NOT WIN32)
+    set_target_properties(asco-shared PROPERTIES OUTPUT_NAME asco)
+endif()
 

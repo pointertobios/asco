@@ -20,6 +20,14 @@ using atomic = std::atomic<T>;
 
 using morder = std::memory_order;
 
+#ifdef _WIN32
+    using __u8 = unsigned char;
+#endif
+
 };
+
+#ifdef _WIN32
+    #define __always_inline __forceinline
+#endif
 
 #endif

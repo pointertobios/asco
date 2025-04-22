@@ -155,7 +155,7 @@ struct future_base {
 
                     bool await_ready() noexcept { return false; }
 
-                    std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle) {
+                    std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle) noexcept {
                         auto rt = RT::get_runtime();
                         auto worker = worker::get_worker();
 
@@ -230,23 +230,21 @@ struct future_base {
     T await_resume() { return std::move(retval); }
 
     T await() {
-        try {
-            R::__worker::get_worker();
-        } catch (...) {
-            if constexpr (!Inline) {
+        if (!RT::__worker::in_worker())
+            throw std::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime");
 
-                if (task.promise().returned.try_acquire())
-                    return std::move(retval);
+        if constexpr (!Inline) {
 
-                RT::get_runtime()->register_sync_awaiter(task_id).await();
-
+            if (task.promise().returned.try_acquire())
                 return std::move(retval);
 
-            } else {
-                static_assert(false, "[ASCO] future_inline<T> cannot be awaited in synchronized context.");
-            }
+            RT::get_runtime()->register_sync_awaiter(task_id).await();
+
+            return std::move(retval);
+
+        } else {
+            static_assert(false, "[ASCO] future_inline<T> cannot be awaited in synchronized context.");
         }
-        throw std::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime");
     }
 
     void abort() {
