@@ -16,20 +16,20 @@
 namespace asco {
 
 template<size_t CounterMax, typename R = RT>
-requires is_runtime<R>
+    requires is_runtime<R>
 class semaphore_base {
 public:
     semaphore_base(size_t count)
-        : counter(std::min(count, CounterMax)) {}
-    
-    size_t get_counter() {
-        return counter.load(morder::relaxed);
-    }
+            : counter(std::min(count, CounterMax)) {}
+
+    size_t get_counter() { return counter.load(morder::relaxed); }
 
     void release(size_t update = 1) {
         if (update < 1)
             throw std::runtime_error(
-                std::format("[ASCO] semaphore_base<{}>::release(): Cannot release for non-positive-integer.", CounterMax));
+                std::format(
+                    "[ASCO] semaphore_base<{}>::release(): Cannot release for non-positive-integer.",
+                    CounterMax));
 
         if (counter.load(morder::relaxed) > CounterMax) {
             counter.store(CounterMax, morder::relaxed);
@@ -42,27 +42,19 @@ public:
         size_t new_count;
 
         do {
-
             old_count = counter.load(morder::relaxed);
             new_count = std::min(old_count + update, CounterMax);
 
-        } while (!counter.compare_exchange_weak(
-            old_count, new_count,
-            morder::seq_cst,
-            morder::relaxed
-        ));
+        } while (!counter.compare_exchange_weak(old_count, new_count, morder::seq_cst, morder::relaxed));
 
         const size_t awake_x = new_count - old_count;
 
         auto guard = waiting_tasks.lock();
         for (size_t i = 0; i < awake_x && !guard->empty(); ++i) {
-
             auto [id, worker] = std::move(guard->front());
             guard->pop();
 
-            worker->sc.awake(id);
-            worker->awake();
-
+            RT::get_runtime()->awake(id);
         }
     }
 
@@ -72,12 +64,9 @@ public:
             co_return {};
 
         while (true) {
-
             size_t val = counter.load(morder::acquire);
             if (val > 0) {
-                if (counter.compare_exchange_strong(
-                        val, val - 1,
-                        morder::acq_rel, morder::relaxed))
+                if (counter.compare_exchange_strong(val, val - 1, morder::acq_rel, morder::relaxed))
                     break;
                 continue;
             }
@@ -100,11 +89,10 @@ public:
             }
 
             co_await std::suspend_always{};
-
         }
 
         if (futures::aborted<future_void_inline>())
-            counter.fetch_add(1, morder::release); 
+            counter.fetch_add(1, morder::release);
 
         co_return {};
     }
@@ -112,18 +100,14 @@ public:
     bool try_acquire() {
         size_t val = counter.load(morder::acquire);
         while (true) {
-
             if (val > 0) {
-                if (counter.compare_exchange_strong(
-                        val, val - 1,
-                        morder::acq_rel, morder::relaxed))
+                if (counter.compare_exchange_strong(val, val - 1, morder::acq_rel, morder::relaxed))
                     return true;
                 continue;
             }
 
             if (!counter.load(morder::acquire))
                 return false;
-
         }
     }
 
@@ -137,6 +121,6 @@ using binary_semaphore = semaphore_base<1>;
 template<size_t MaxCount>
 using semaphore = semaphore_base<MaxCount>;
 
-};
+};  // namespace asco
 
 #endif

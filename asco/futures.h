@@ -9,7 +9,7 @@
 namespace asco::futures {
 
 template<typename F, typename R = RT>
-requires is_future<F> && is_runtime<R>
+    requires is_future<F> && is_runtime<R>
 bool aborted() {
     auto h_ = RT::__worker::get_worker()->current_task().handle;
     typename F::corohandle h = *(typename F::corohandle *)(&h_);
@@ -18,6 +18,6 @@ bool aborted() {
     return h.promise().aborted.load(morder::acquire);
 }
 
-};
+};  // namespace asco::futures
 
 #endif

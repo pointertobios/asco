@@ -7,9 +7,10 @@
 #include <atomic>
 #include <chrono>
 #include <concepts>
-#include <mutex>
 #include <coroutine>
+#include <mutex>
 #include <optional>
+#include <semaphore>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -24,12 +25,16 @@ struct task {
     task_id id;
     std::coroutine_handle<> handle;
 
-    // A sort of task that blocking worker thread and don't be stolen to other workers.
-    bool is_blocking;
-
     __coro_local_frame *coro_local_frame;
 
+    // A sort of task that blocking worker thread and don't be stolen to other workers.
+    bool is_blocking;
     bool is_inline{false};
+
+    // Use for timers. After related timer clocked, coroutine must start to run as fast as possible.
+    // Set this to true to let this worker schedule this task earlier or let other worker thread steal this
+    // task earlier.
+    bool real_time{false};
 
     bool mutable destroyed{false};
 
@@ -39,9 +44,7 @@ struct task {
             delete coro_local_frame;
     }
 
-    __always_inline bool operator==(task &rhs) const {
-        return id == rhs.id;
-    }
+    __always_inline bool operator==(task &rhs) const { return id == rhs.id; }
 
     __always_inline void resume() const {
         if (handle.done())
@@ -59,6 +62,13 @@ struct task {
         }
         return b;
     }
+
+    __always_inline void set_real_time() { real_time = true; }
+
+    __always_inline void reset_real_time() {
+        if (real_time)
+            real_time = false;
+    }
 };
 
 template<typename T>
@@ -66,17 +76,20 @@ concept is_scheduler = requires(T t) {
     typename T::task;
     typename T::task_control;
     { t.push_task(task{}, std::declval<typename T::task_control::__control_state>()) } -> std::same_as<void>;
-    { t.sched() } -> std::same_as<std::optional<task>>;
+    { t.sched() } -> std::same_as<std::optional<task *>>;
     { t.try_reawake_buffered() } -> std::same_as<void>;
     { t.find_stealable_and_steal() } -> std::same_as<std::optional<task>>;
     { t.steal(task::task_id{}) } -> std::same_as<std::optional<task>>;
+    // return true only when both active tasks and suspending tasks are empty.
     { t.currently_finished_all() } -> std::same_as<bool>;
     { t.has_buffered_awakes() } -> std::same_as<bool>;
     { t.awake(task::task_id{}) } -> std::same_as<void>;
     { t.suspend(task::task_id{}) } -> std::same_as<void>;
     { t.destroy(task::task_id{}) } -> std::same_as<void>;
     { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
-    { t.get_task(task::task_id{}) } -> std::same_as<task &>;
+    { t.get_task(task::task_id{}) } -> std::same_as<task *>;
+    { t.register_sync_awaiter(task::task_id{}) } -> std::same_as<void>;
+    { t.get_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore &>;
 };
 
 // I call it std_scheduler because it uses STL.
@@ -92,9 +105,8 @@ public:
         } state{__control_state::running};
     };
 
-    std_scheduler();
     void push_task(task t, task_control::__control_state initial_state);
-    std::optional<task> sched();
+    std::optional<task *> sched();
     void try_reawake_buffered();
     std::optional<task> find_stealable_and_steal();
     std::optional<task> steal(task::task_id id);
@@ -106,7 +118,10 @@ public:
     void destroy(task::task_id id);
 
     bool task_exists(task::task_id id);
-    task &get_task(task::task_id id);
+    task *get_task(task::task_id id);
+
+    void register_sync_awaiter(task::task_id id);
+    std::binary_semaphore &get_sync_awaiter(task::task_id id);
 
 private:
     std::vector<task_control *> active_tasks;
@@ -116,8 +131,9 @@ private:
     std::set<task::task_id> not_in_suspended_but_awake_tasks;
 
     std::unordered_map<task::task_id, task_control *> task_map;
+    std::unordered_map<task::task_id, std::binary_semaphore *> sync_awaiters;
 };
 
-};
+};  // namespace asco::sched
 
 #endif

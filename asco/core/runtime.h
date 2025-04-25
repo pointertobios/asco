@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <asco/core/sched.h>
+#include <asco/core/timer.h>
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 
@@ -50,14 +51,9 @@ public:
     static void remove_task_map(task_id id);
     static void insert_task_map(task_id id, worker *self);
 
-    __always_inline sched::task &current_task() {
-        auto id = running_task.top().id;
-        return sc.get_task(id);
-    }
+    __always_inline sched::task &current_task() { return *running_task.top(); }
 
-    __always_inline task_id current_task_id() {
-        return running_task.top().id;
-    }
+    __always_inline task_id current_task_id() { return running_task.top()->id; }
 
     static bool in_worker();
     static worker *get_worker();
@@ -71,11 +67,9 @@ public:
     int pid{0};
 #endif
 
-    std::stack<sched::task> running_task;
+    std::stack<sched::task *> running_task;
 
     std::binary_semaphore worker_await_sem{0};
-
-    std::unordered_map<task_id, std::binary_semaphore> sync_awaiters;
 
 private:
     std::jthread thread;
@@ -99,44 +93,55 @@ concept is_runtime = requires(T t) {
     typename T::__worker;
     typename T::scheduler;
     typename T::scheduler::task;
+    typename T::scheduler::task_control::__control_state;
     typename T::task_id;
     typename T::sys;
     // Exception: runtime error when there is not a worker on the current thread.
     { T::__worker::get_worker() } -> std::same_as<typename T::__worker *>;
     { T::__worker::set_task_sem(typename T::task_id{}) } -> std::same_as<void>;
     { T::__worker::remove_task_map(typename T::task_id{}) } -> std::same_as<void>;
-    { T::__worker::insert_task_map(typename T::task_id{}, std::declval<typename T::__worker *>()) } -> std::same_as<void>;
+    {
+        T::__worker::insert_task_map(typename T::task_id{}, std::declval<typename T::__worker *>())
+    } -> std::same_as<void>;
     { T::get_runtime() } -> std::same_as<T *>;
+    { t.send_task(std::declval<typename T::scheduler::task>()) } -> std::same_as<void>;
+    { t.send_blocking_task(std::declval<typename T::scheduler::task>()) } -> std::same_as<void>;
     { t.spawn(task_instance{}, std::declval<__coro_local_frame *>()) } -> std::same_as<typename T::task_id>;
-    { t.spawn_blocking(task_instance{}, std::declval<__coro_local_frame *>()) } -> std::same_as<typename T::task_id>;
+    {
+        t.spawn_blocking(task_instance{}, std::declval<__coro_local_frame *>())
+    } -> std::same_as<typename T::task_id>;
     { t.awake(typename T::task_id{}) } -> std::same_as<void>;
     { t.suspend(typename T::task_id{}) } -> std::same_as<void>;
     { t.register_sync_awaiter(typename T::task_id{}) } -> std::same_as<void>;
-    { t.task_id_from_corohandle(std::declval<std::coroutine_handle<>>()) } -> std::same_as<typename T::task_id>;
-    { t.to_task(std::declval<task_instance>(), bool{}, std::declval<__coro_local_frame *>()) } -> std::same_as<sched::task>;
+    {
+        t.task_id_from_corohandle(std::declval<std::coroutine_handle<>>())
+    } -> std::same_as<typename T::task_id>;
+    {
+        t.to_task(std::declval<task_instance>(), bool{}, std::declval<__coro_local_frame *>())
+    } -> std::same_as<sched::task>;
     { t.remove_task_map(nullptr) } -> std::same_as<void>;
+    { t.inc_io_load() } -> std::same_as<void>;
+    { t.inc_calcu_load() } -> std::same_as<void>;
+    {
+        t.timer_attach(typename T::task_id{}, std::declval<std::chrono::high_resolution_clock::time_point>())
+    } -> std::same_as<void>;
 } && requires(T::__worker w) {
     { w.conditional_suspend() } -> std::same_as<void>;
     { w.current_task() } -> std::same_as<typename T::scheduler::task &>;
     { w.current_task_id() } -> std::same_as<typename T::task_id>;
     { w.is_calculator } -> std::same_as<bool &>;
-    { w.running_task } -> std::same_as<std::stack<typename T::scheduler::task> &>;
+    { w.running_task } -> std::same_as<std::stack<typename T::scheduler::task *> &>;
 } && sched::is_scheduler<typename T::scheduler>;
 
 class runtime {
 public:
     struct sys {
         static void set_args(int argc, const char **argv);
-        __always_inline
-        static std::vector<std::string> &args() {
-            return __args;
-        }
+        __always_inline static std::vector<std::string> &args() { return __args; }
 
         static void set_env(char **env);
-        __always_inline
-        static std::unordered_map<std::string, std::string> &env() {
-            return __env;
-        }
+        __always_inline static std::unordered_map<std::string, std::string> &env() { return __env; }
+
     private:
         static std::vector<std::string> __args;
         static std::unordered_map<std::string, std::string> __env;
@@ -149,10 +154,12 @@ public:
     using task_id = sched::task::task_id;
 
     explicit runtime(int nthread = 0);
-    explicit runtime(const runtime&) = delete;
-    explicit runtime(const runtime&&) = delete;
+    explicit runtime(const runtime &) = delete;
+    explicit runtime(const runtime &&) = delete;
     ~runtime();
 
+    void send_task(sched::task task);
+    void send_blocking_task(sched::task task);
     task_id spawn(task_instance task, __coro_local_frame *pframe);
     task_id spawn_blocking(task_instance task, __coro_local_frame *pframe);
     void awake(task_id id);
@@ -164,27 +171,35 @@ public:
 
     void remove_task_map(void *addr);
 
+    __always_inline void inc_io_load() { io_worker_load++; }
+    __always_inline void inc_calcu_load() { calcu_worker_load++; }
+
+    void timer_attach(task_id id, std::chrono::high_resolution_clock::time_point time);
+
 private:
     int nthread;
     std::vector<worker *> pool;
 
     std::optional<task_sender> io_task_tx{std::nullopt};
-    std::atomic<int> io_worker_count{0};
-    int io_worker_load{0};
+    atomic_size_t io_worker_count{0};
+    atomic_size_t io_worker_load{0};
     std::optional<task_sender> calcu_task_tx{std::nullopt};
-    std::atomic<int> calcu_worker_count{0};
-    int calcu_worker_load{0};
+    atomic_size_t calcu_worker_count{0};
+    atomic_size_t calcu_worker_load{0};
 
     std::map<void *, task_id> coro_to_task_id;
     std::mutex coro_to_task_id_mutex;
     atomic<task_id> task_counter{1};
+
+    timer::timer timer;
 
     void awake_all();
 
 public:
     __always_inline static runtime *get_runtime() {
         if (!current_runtime)
-            throw std::runtime_error("[ASCO] runtime::get_runtime(): The async function must be called with asco::runtime initialized");
+            throw std::runtime_error(
+                "[ASCO] runtime::get_runtime(): The async function must be called with asco::runtime initialized");
         return current_runtime;
     }
 
@@ -194,9 +209,12 @@ private:
 
 // Define macro `SET_RUNTIME` with set_runtime(rt)
 // And use this before include future.h
-#define set_runtime(rt) \
-    using RT = rt
+#define set_runtime(rt) using RT = rt
 
-}; // namespace asco
+};  // namespace asco
+
+#ifndef SET_RUNTIME
+using RT = asco::runtime;
+#endif
 
 #endif

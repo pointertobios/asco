@@ -1,8 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <iostream>
 #include <cassert>
+#include <iostream>
 
 #include <asco/future.h>
 

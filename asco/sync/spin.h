@@ -15,41 +15,31 @@ public:
 
     class guard {
         spin &s;
+
     public:
-        guard(spin &s) : s{s} {
+        guard(spin &s)
+                : s{s} {
             for (bool b{false};
-                !s.locked.compare_exchange_strong(b, true, morder::acquire, morder::relaxed););
+                 !s.locked.compare_exchange_strong(b, true, morder::acquire, morder::relaxed););
         }
 
-        ~guard() {
-            s.locked.store(false, morder::release);
-        }
+        ~guard() { s.locked.store(false, morder::release); }
 
-        T &operator*() {
-            return s;
-        }
+        T &operator*() { return s; }
 
-        const T &operator*() const {
-            return s;
-        }
+        const T &operator*() const { return s; }
 
-        T *operator->() {
-            return &s;
-        }
+        T *operator->() { return &s; }
 
-        const T *operator->() const {
-            return &s;
-        }
+        const T *operator->() const { return &s; }
     };
 
-    guard lock() {
-        return guard{*this};
-    }
+    guard lock() { return guard{*this}; }
 
 private:
     atomic_bool locked{false};
 };
 
-};
+};  // namespace asco
 
 #endif

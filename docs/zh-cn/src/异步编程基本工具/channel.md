@@ -29,6 +29,8 @@
 此通道仅支持一个协程访问发送端，一个协程访问接收端，两个端没有并发安全特性。
 
 ```c++
+#include <asco/channel.h>
+
 future_void sending(asco::sender<int> tx) {
     for (int i = 0; i < 30000; i++) {
         auto r = tx.send(i);

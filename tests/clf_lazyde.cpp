@@ -5,8 +5,8 @@
 
 #include <iostream>
 
-#include <asco/future.h>
 #include <asco/coro_local.h>
+#include <asco/future.h>
 
 using asco::future, asco::future_void;
 

@@ -24,7 +24,6 @@ struct suspend {
     __always_inline void await_resume() {}
 };
 
-};
+};  // namespace asco
 
 #endif
-

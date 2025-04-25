@@ -4,6 +4,7 @@
 set(ASCO_SOURCES
     core/runtime.cpp
     core/sched.cpp
+    core/timer.cpp
 )
 
 add_library(asco-main asco_main.cpp)

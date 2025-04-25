@@ -4,8 +4,8 @@
 #include <cassert>
 #include <iostream>
 
-#include <asco/future.h>
 #include <asco/channel.h>
+#include <asco/future.h>
 
 using asco::future, asco::future_void, asco::ss::channel;
 

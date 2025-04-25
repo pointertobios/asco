@@ -6,17 +6,14 @@
 
 #include <atomic>
 #include <coroutine>
+#include <iostream>
 
 #include <asco/core/runtime.h>
-#include <asco/utils/pubusing.h>
 #include <asco/utils/concepts.h>
+#include <asco/utils/pubusing.h>
 
 #if defined(_MSC_VER) && !defined(__clang__)
-    #error "[ASCO] Compile with clang-cl instead of MSVC"
-#endif
-
-#ifndef SET_RUNTIME
-    using RT = asco::runtime;
+#    error "[ASCO] Compile with clang-cl instead of MSVC"
 #endif
 
 namespace asco {
@@ -24,13 +21,13 @@ namespace asco {
 struct __future_void {};
 
 template<typename R = RT>
-requires is_runtime<R>
+    requires is_runtime<R>
 R *get_runtime() {
     return R::get_runtime();
 }
 
 template<typename T, bool Inline, bool Blocking, typename R = RT>
-requires is_move_secure_v<T> && is_runtime<R>
+    requires is_move_secure_v<T> && is_runtime<R>
 struct future_base {
     static_assert(!std::is_void_v<T>, "[ASCO] Use asco::future_void instead.");
     static_assert(!Inline || !Blocking, "[ASCO] Inline coroutine cannot be blocking.");
@@ -44,8 +41,7 @@ struct future_base {
     T retval;
 
     struct promise_type {
-        // Alway put this at the first,
-        // so that we can authenticate the coroutine_handle type when we
+        // Alway put this at the first, so that we can authenticate the coroutine_handle type when we
         // reinterpret it from raw pointer.
         size_t future_type_hash;
 
@@ -95,6 +91,11 @@ struct future_base {
                     worker->sc.push_task(t, state::suspending);
                 }
 
+                if (worker->is_calculator)
+                    RT::get_runtime()->inc_calcu_load();
+                else
+                    RT::get_runtime()->inc_io_load();
+
                 worker::insert_task_map(task_id, worker);
             }
             future_type_hash = type_hash<future_base<T, Inline, Blocking>>();
@@ -109,31 +110,9 @@ struct future_base {
             returned.release();
         }
 
-        // The inline future will return the caller_resumer to symmatrical transform
-        // to the caller task.
-        //
-        // To support abortable task, the logic of suspent current task and awake caller
-        // task execute here instrad of in final_suspend().
-        // The current task (if returns future<T>/future_blocking<T>/future_inline<T>) can create a struct like this:
-        // ```c++
-        // struct __restorer {
-        //     T ret;
-        //     ~__restorer() noexcept {
-        //         if (futures::aborted<future<T>>()) {
-        //             // recover logic
-        //         }
-        //     }
-        // } restorer{};
-        // ```
-        // Then after the task ended, you can use:
-        // ```c++
-        // co_return std::move(restorer.res);
-        // ```
-        // to let this task execute recover logic.
-        // At the same time the caller coroutine will continue without waiting for the current task final_suspend().
+        // The inline future will return the caller_resumer to symmatrical transform to the caller task.
         auto final_suspend() noexcept {
             if constexpr (!Inline) {
-
                 while (!task_id);
                 std::lock_guard lk{suspend_mutex};
                 auto rt = RT::get_runtime();
@@ -146,7 +125,8 @@ struct future_base {
                 // Just ignore.
                 try {
                     rt->suspend(task_id);
-                } catch (...) {}
+                } catch (...) {
+                }
 
                 return std::suspend_always{};
             } else {
@@ -182,9 +162,7 @@ struct future_base {
             }
         }
 
-        void unhandled_exception() {
-            e = std::current_exception();
-        }
+        void unhandled_exception() { e = std::current_exception(); }
     };
 
     bool await_ready() {
@@ -200,7 +178,6 @@ struct future_base {
         if constexpr (!Inline) {
             std::lock_guard lk{task.promise().suspend_mutex};
             if (!task.promise().returned.try_acquire()) {
-
                 task.promise().caller_task = handle;
                 auto rt = RT::get_runtime();
                 auto id = rt->task_id_from_corohandle(handle);
@@ -222,7 +199,7 @@ struct future_base {
             // If there is no any suspend point, it will be then never resumed
             // after final_suspend().
             // or it will be awaken after first co_await.
-            worker->running_task.push(worker->sc.get_task(task_id)); // Correct running task
+            worker->running_task.push(worker->sc.get_task(task_id));  // Correct running task
             return task;
         }
     }
@@ -234,12 +211,11 @@ struct future_base {
             throw std::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime");
 
         if constexpr (!Inline) {
-
             if (task.promise().returned.try_acquire())
                 return std::move(retval);
 
             RT::get_runtime()->register_sync_awaiter(task_id);
-            RT::__worker::get_worker_from_task_id(task_id)->sync_awaiters.at(task_id).acquire();
+            RT::__worker::get_worker_from_task_id(task_id)->sc.get_sync_awaiter(task_id).acquire();
 
             return std::move(retval);
 
@@ -248,12 +224,11 @@ struct future_base {
         }
     }
 
-    void abort() {
-        task.promise().aborted.store(true, morder::acq_rel);
-    }
+    void abort() { task.promise().aborted.store(true, morder::acq_rel); }
 
     future_base(corohandle task, size_t task_id)
-        : task(task), task_id(task_id) {
+            : task(task)
+            , task_id(task_id) {
         task.promise().awaiter = this;
         task.promise().awaiter_sem.release();
     }
@@ -264,15 +239,15 @@ private:
 };
 
 template<typename T, typename R = RT>
-requires is_move_secure_v<T> && is_runtime<R>
+    requires is_move_secure_v<T> && is_runtime<R>
 using future = future_base<T, false, false, R>;
 
 template<typename T, typename R = RT>
-requires is_move_secure_v<T> && is_runtime<R>
+    requires is_move_secure_v<T> && is_runtime<R>
 using future_inline = future_base<T, true, false, R>;
 
 template<typename T, typename R = RT>
-requires is_move_secure_v<T> && is_runtime<R>
+    requires is_move_secure_v<T> && is_runtime<R>
 using future_core = future_base<T, false, true, R>;
 
 using future_void = future<__future_void>;
@@ -281,6 +256,6 @@ using future_void_core = future_core<__future_void>;
 
 using runtime_initializer_t = std::optional<std::function<runtime *()>>;
 
-}; // namespace asco
+};  // namespace asco
 
 #endif

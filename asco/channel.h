@@ -45,20 +45,21 @@ struct channel_frame {
 template<typename T, size_t FrameSize = 1024>
 class sender {
 public:
-    sender() : none{true} {}
+    sender()
+            : none{true} {}
 
     sender(channel_frame<T, FrameSize> *start_frame)
-        : frame{start_frame} {}
+            : frame{start_frame} {}
 
     sender(const sender &&rhs)
-        : frame{rhs.frame} {
+            : frame{rhs.frame} {
         if (rhs.none)
             throw std::runtime_error("[ASCO] sender::sender(): Cannot move from a NONE sender object.");
         rhs.moved = true;
     }
 
     sender(sender &&rhs)
-        : frame{rhs.frame} {
+            : frame{rhs.frame} {
         if (rhs.none)
             throw std::runtime_error("[ASCO] sender::sender(): Cannot move from a NONE sender object.");
         rhs.moved = true;
@@ -108,7 +109,6 @@ public:
 
         // This frame full, go to next frame.
         if (*frame->sender == FrameSize) {
-
             auto *f = frame;
 
             frame->sender = std::nullopt;
@@ -117,7 +117,6 @@ public:
             frame = frame->next;
 
             f->sem.release();
-
         }
 
         frame->buffer[(*frame->sender)++] = std::move(data);
@@ -127,7 +126,9 @@ public:
     }
 
     [[nodiscard("[ASCO] sender::send(): You must deal with the case of channel closed.")]]
-    __always_inline std::optional<T> send(T &data) { return send(std::move(data)); }
+    __always_inline std::optional<T> send(T &data) {
+        return send(std::move(data));
+    }
 
 private:
     channel_frame<T, FrameSize> *frame;
@@ -144,23 +145,24 @@ public:
         closed,
     };
 
-    receiver() : none{true} {}
+    receiver()
+            : none{true} {}
 
     receiver(channel_frame<T, FrameSize> *start_frame)
-        : frame{start_frame} {}
+            : frame{start_frame} {}
 
     receiver(const receiver &&rhs)
-        : frame{rhs.frame} {
+            : frame{rhs.frame} {
         if (rhs.none)
             throw std::runtime_error("[ASCO] receiver::receiver(): Cannot move from a NONE receiver object.");
-        rhs.moved =true;
+        rhs.moved = true;
     }
 
     receiver(receiver &&rhs)
-        : frame{rhs.frame} {
+            : frame{rhs.frame} {
         if (rhs.none)
             throw std::runtime_error("[ASCO] receiver::receiver(): Cannot move from a NONE receiver object.");
-        rhs.moved =true;
+        rhs.moved = true;
     }
 
     receiver(const receiver &) = delete;
@@ -188,8 +190,7 @@ public:
             return;
 
         auto *f = frame;
-        while (f->next)
-            f = f->next;
+        while (f->next) f = f->next;
         f->receiver_lost.store(true, morder::seq_cst);
         none = true;
     }
@@ -209,26 +210,28 @@ public:
 
     std::expected<T, receive_fail> try_recv() {
         if (none)
-            throw std::runtime_error("[ASCO] receiver::try_recv(): Cannot do any action on a NONE receiver object.");
+            throw std::runtime_error(
+                "[ASCO] receiver::try_recv(): Cannot do any action on a NONE receiver object.");
         if (moved)
-            throw std::runtime_error("[ASCO] receiver::try_recv(): Cannot do any action after receiver moved.");
+            throw std::runtime_error(
+                "[ASCO] receiver::try_recv(): Cannot do any action after receiver moved.");
 
         if (!frame->sem.try_acquire())
             return std::unexpected(receive_fail::non_object);
 
         if (frame->sender.has_value()) {
-
             if (is_stopped())
                 return std::unexpected(receive_fail::closed);
 
             if (*frame->sender == *frame->receiver)
-                throw std::runtime_error("[ASCO] receiver::try_recv(): Sender game a new object, but sender index equals to receiver index.");
+                throw std::runtime_error(
+                    "[ASCO] receiver::try_recv(): Sender game a new object, but sender index equals to receiver index.");
 
         } else if (*frame->receiver == FrameSize) {
-
             auto *f = frame;
             if (!f->next)
-                throw std::runtime_error("[ASCO] receiver::recv(): Sender went to next frame, but next frame is nullptr.");
+                throw std::runtime_error(
+                    "[ASCO] receiver::recv(): Sender went to next frame, but next frame is nullptr.");
             frame = f->next;
             delete f;
             frame->receiver = 0;
@@ -240,8 +243,8 @@ public:
                 return std::unexpected(receive_fail::closed);
 
             if (frame->sender && *frame->sender == *frame->receiver)
-                throw std::runtime_error("[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
-
+                throw std::runtime_error(
+                    "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
         }
 
         return std::move(frame->buffer[(*frame->receiver)++]);
@@ -255,7 +258,8 @@ public:
     [[nodiscard("[ASCO] receiver::recv(): You must deal with the case of channel closed.")]]
     future_inline<std::optional<T>> recv() {
         if (none)
-            throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action on a NONE receiver object.");
+            throw std::runtime_error(
+                "[ASCO] receiver::recv(): Cannot do any action on a NONE receiver object.");
         if (moved)
             throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
 
@@ -270,19 +274,19 @@ public:
         }
 
         if (frame->sender.has_value()) {
-
             if (is_stopped())
                 co_return std::nullopt;
 
             if (*frame->sender == *frame->receiver)
-                throw std::runtime_error("[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
+                throw std::runtime_error(
+                    "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
 
         } else if (*frame->receiver == FrameSize) {
-
             // go to next frame.
             auto *f = frame;
             if (!f->next)
-                throw std::runtime_error("[ASCO] receiver::recv(): Sender went to next frame, but next frame is nullptr.");
+                throw std::runtime_error(
+                    "[ASCO] receiver::recv(): Sender went to next frame, but next frame is nullptr.");
             frame = f->next;
             delete f;
             frame->receiver = 0;
@@ -298,8 +302,8 @@ public:
                 co_return std::nullopt;
 
             if (frame->sender && *frame->sender == *frame->receiver)
-                throw std::runtime_error("[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
-
+                throw std::runtime_error(
+                    "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
         }
 
         co_return std::move(frame->buffer[(*frame->receiver)++]);
@@ -321,8 +325,8 @@ std::tuple<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
     return {sender<T, FrameSize>(frame), receiver<T, FrameSize>(frame)};
 }
 
-};
+};  // namespace ss
 
-};
+};  // namespace asco
 
 #endif

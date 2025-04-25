@@ -5,7 +5,7 @@
 
 #include <asco/future.h>
 
-inline asco::runtime_initializer_t runtime_initializer = [] () {
+inline asco::runtime_initializer_t runtime_initializer = []() {
     std::cout << "runtime_initializer test" << std::endl;
     return new asco::runtime;
 };

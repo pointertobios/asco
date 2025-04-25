@@ -4,8 +4,8 @@
 #ifndef ASCO_UTILS_PUBUSING_H
 #define ASCO_UTILS_PUBUSING_H 1
 
-#include <cstddef>
 #include <atomic>
+#include <cstddef>
 
 namespace asco {
 
@@ -21,13 +21,13 @@ using atomic = std::atomic<T>;
 using morder = std::memory_order;
 
 #ifdef _WIN32
-    using __u8 = unsigned char;
+using __u8 = unsigned char;
 #endif
 
-};
+};  // namespace asco
 
 #ifdef _WIN32
-    #define __always_inline __forceinline
+#    define __always_inline __forceinline
 #endif
 
 #endif
