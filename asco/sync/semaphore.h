@@ -60,8 +60,23 @@ public:
 
     [[nodiscard("[ASCO] semaphore_base<N>::acquire(): co_await or assign its return value.")]]
     future_void_inline acquire() {
-        if (futures::aborted<future_void_inline>())
+        struct re {
+            semaphore_base *self;
+            int state{0};
+
+            ~re() {
+                if (!futures::aborted<future_void_inline>())
+                    return;
+
+                if (state == 1)
+                    self->counter.fetch_add(1, morder::release);
+            }
+        } restorer{this};
+
+        if (futures::aborted<future_void_inline>()) {
+            restorer.state = 0;
             co_return {};
+        }
 
         while (true) {
             size_t val = counter.load(morder::acquire);
@@ -91,9 +106,11 @@ public:
             co_await std::suspend_always{};
         }
 
-        if (futures::aborted<future_void_inline>())
+        restorer.state = 1;
+        if (futures::aborted<future_void_inline>()) {
+            restorer.state = 0;
             counter.fetch_add(1, morder::release);
-
+        }
         co_return {};
     }
 

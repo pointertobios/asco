@@ -1,8 +1,6 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <iostream>
-
 #ifdef __linux__
 #    include <cpuid.h>
 #    include <pthread.h>

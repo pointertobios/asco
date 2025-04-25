@@ -8,6 +8,7 @@
 #include <iostream>
 #include <optional>
 #include <tuple>
+#include <vector>
 
 #include <asco/future.h>
 #include <asco/futures.h>
@@ -257,25 +258,58 @@ public:
     // ignore the return value.
     [[nodiscard("[ASCO] receiver::recv(): You must deal with the case of channel closed.")]]
     future_inline<std::optional<T>> recv() {
+        struct re {
+            receiver *self;
+            int state{0};
+
+            ~re() {
+                if (!futures::aborted<future_inline<std::optional<T>>>())
+                    return;
+
+                switch (state) {
+                case 2:
+                    self->buffer.push_back(
+                        futures::move_back_return_value<future_inline<std::optional<T>>, std::optional<T>>());
+                case 1:
+                    self->frame->sem.release();
+                    break;
+                default:
+                    break;
+                }
+            }
+        } restorer{this};
+
         if (none)
             throw std::runtime_error(
                 "[ASCO] receiver::recv(): Cannot do any action on a NONE receiver object.");
         if (moved)
             throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
 
-        if (futures::aborted<future_inline<std::optional<T>>>())
+        if (futures::aborted<future_inline<std::optional<T>>>()) {
+            restorer.state = 0;
             co_return std::nullopt;
+        }
+
+        if (!buffer.empty()) {
+            std::optional<T> res{std::move(buffer[0])};
+            buffer.erase(buffer.begin());
+            restorer.state = 2;
+            co_return std::move(res);
+        }
 
         co_await frame->sem.acquire();
 
         if (futures::aborted<future_inline<std::optional<T>>>()) {
             frame->sem.release();
+            restorer.state = 0;
             co_return std::nullopt;
         }
 
         if (frame->sender.has_value()) {
-            if (is_stopped())
+            if (is_stopped()) {
+                restorer.state = 1;
                 co_return std::nullopt;
+            }
 
             if (*frame->sender == *frame->receiver)
                 throw std::runtime_error(
@@ -295,22 +329,27 @@ public:
 
             if (futures::aborted<future_inline<std::optional<T>>>()) {
                 frame->sem.release();
+                restorer.state = 0;
                 co_return std::nullopt;
             }
 
-            if (is_stopped())
+            if (is_stopped()) {
+                restorer.state = 1;
                 co_return std::nullopt;
+            }
 
             if (frame->sender && *frame->sender == *frame->receiver)
                 throw std::runtime_error(
                     "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
         }
 
+        restorer.state = 2;
         co_return std::move(frame->buffer[(*frame->receiver)++]);
     }
 
 private:
     channel_frame<T, FrameSize> *frame;
+    std::vector<std::optional<T>> buffer;
 
     bool mutable moved{false};
     bool none{false};

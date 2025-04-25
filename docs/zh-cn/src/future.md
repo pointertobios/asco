@@ -124,12 +124,117 @@ assert_eq(sem.get_counter(), 1);
 
 ### 恢复任务状态
 
-在返回类型为 `future<T>` 的协程中调用 `futures::aborted<future<T>>()` ，
+在返回类型为 `future<T>` 的协程中调用 `bool futures::aborted<future<T>>()` ，
 返回 `true` 时执行状态恢复逻辑或缓存已得到的结果供下次调用时使用，此处的代码称为**打断判定点**。
 
 `futures::aborted` 函数在编译期计算模板参数的哈希值，用于在运行时验证模板参数与所在函数返回值是否一致。
 
-最佳实践：在每个**协程暂停点**[^3]前设置一个打断判定点。
+最佳实践：在每个**协程暂停点**[^3]前设置一个打断判定点，并在 `co_return` 之后使用 `raii` 间接设置一个**打断判定点**。
+
+以本项目的 `channel::reveiver<T>::recv()` 为例：
+
+可以看到，每个打断判定点外的 `co_return` 前都有一个打断判定点。
+
+协程的非动态储存期变量（通常所谓的**本地变量**，这里与**协程本地变量**作区分使用此名称）会在 `co_return` 后按照初始化相反的顺序析构。
+因此，变量 `restorer` 的存在使得协程在返回后依然有机会判断是否被打断。
+
+在每个 `co_return` 前，都设置 `restorer.state` 的值，因此，
+`restorer` 的析构函数可以在不同的 `co_return` 返回后执行不同的恢复操作。
+
+在此期间，可以使用 `T &&futures::move_back_return_value<future<T>, T>()` 将返回值移动回当前上下文以避免其被丢弃。
+
+```c++
+[[nodiscard("[ASCO] receiver::recv(): You must deal with the case of channel closed.")]]
+future_inline<std::optional<T>> recv() {
+    struct re {
+        receiver *self;
+        int state{0};
+
+        ~re() {
+            if (!futures::aborted<future_inline<std::optional<T>>>())
+                return;
+
+            switch (state) {
+            case 2:
+                self->buffer.push_back(
+                    futures::move_back_return_value<future_inline<std::optional<T>>, std::optional<T>>());
+            case 1:
+                self->frame->sem.release();
+                break;
+            default:
+                break;
+            }
+        }
+    } restorer{this};
+
+    if (none)
+        throw std::runtime_error(
+            "[ASCO] receiver::recv(): Cannot do any action on a NONE receiver object.");
+    if (moved)
+        throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
+
+    if (futures::aborted<future_inline<std::optional<T>>>()) {
+        restorer.state = 0;
+        co_return std::nullopt;
+    }
+
+    if (!buffer.empty()) {
+        std::optional<T> res{std::move(buffer[0])};
+        buffer.erase(buffer.begin());
+        restorer.state = 2;
+        co_return std::move(res);
+    }
+
+    co_await frame->sem.acquire();
+
+    if (futures::aborted<future_inline<std::optional<T>>>()) {
+        frame->sem.release();
+        restorer.state = 0;
+        co_return std::nullopt;
+    }
+
+    if (frame->sender.has_value()) {
+        if (is_stopped()) {
+            restorer.state = 1;
+            co_return std::nullopt;
+        }
+
+        if (*frame->sender == *frame->receiver)
+            throw std::runtime_error(
+                "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
+
+    } else if (*frame->receiver == FrameSize) {
+        // go to next frame.
+        auto *f = frame;
+        if (!f->next)
+            throw std::runtime_error(
+                "[ASCO] receiver::recv(): Sender went to next frame, but next frame is nullptr.");
+        frame = f->next;
+        delete f;
+        frame->receiver = 0;
+
+        co_await frame->sem.acquire();
+
+        if (futures::aborted<future_inline<std::optional<T>>>()) {
+            frame->sem.release();
+            restorer.state = 0;
+            co_return std::nullopt;
+        }
+
+        if (is_stopped()) {
+            restorer.state = 1;
+            co_return std::nullopt;
+        }
+
+        if (frame->sender && *frame->sender == *frame->receiver)
+            throw std::runtime_error(
+                "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
+    }
+
+    restorer.state = 2;
+    co_return std::move(frame->buffer[(*frame->receiver)++]);
+}
+```
 
 [^1]: 见[asco 异步运行时](asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。

@@ -30,8 +30,38 @@ public:
             : duration(duration_cast<nanoseconds>(s)) {}
 
     future_inline<nanoseconds> tick() {
-        if (!duration.count())
-            co_return {};
+        // restorer to restore if aboreted after co_return
+        struct re {
+            interval *self;
+            int state{0};
+            time_point<high_resolution_clock> last;
+            time_point<high_resolution_clock> start;
+
+            re(interval *self)
+                    : self(self)
+                    , last(self->last)
+                    , start(self->start) {}
+
+            ~re() {
+                if (!futures::aborted<future_inline<nanoseconds>>())
+                    return;
+
+                switch (state) {
+                case 2:
+                    self->last = last;
+                case 1:
+                    self->start = start;
+                    break;
+                default:
+                    break;
+                }
+            }
+        } restorer{this};
+
+        if (!duration.count()) {
+            restorer.state = 0;
+            co_return 0ns;
+        }
 
         auto tmp = start;
         start = high_resolution_clock::now();
@@ -41,9 +71,11 @@ public:
             while (high_resolution_clock::now() < awake_time)
                 if (futures::aborted<future_inline<nanoseconds>>()) {
                     start = tmp;
+                    restorer.state = 0;
                     co_return 0ns;
                 }
 
+            restorer.state = 1;
             co_return duration;
         }
 
@@ -56,15 +88,15 @@ public:
 
         if (futures::aborted<future_inline<nanoseconds>>()) {
             start = tmp;
+            restorer.state = 0;
             co_return 0ns;
         }
 
         auto now = high_resolution_clock::now();
         last = now;
-        if (duration.count())
-            co_return now - start;
-        else
-            co_return 0ns;
+
+        restorer.state = 2;
+        co_return now - start;
     }
 
 private:
