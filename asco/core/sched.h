@@ -38,7 +38,9 @@ struct task {
 
     bool mutable destroyed{false};
 
-    __always_inline void exit() {
+    bool unawakable{false};
+
+    __always_inline void coro_frame_exit() {
         coro_local_frame->subframe_exit();
         if (!coro_local_frame->get_ref_count())
             delete coro_local_frame;
@@ -63,6 +65,14 @@ struct task {
         return b;
     }
 
+    __always_inline void destroy() {
+        if (!destroyed) {
+            coro_frame_exit();
+            handle.destroy();
+            destroyed = true;
+        }
+    }
+
     __always_inline void set_real_time() { real_time = true; }
 
     __always_inline void reset_real_time() {
@@ -75,7 +85,9 @@ template<typename T>
 concept is_scheduler = requires(T t) {
     typename T::task;
     typename T::task_control;
-    { t.push_task(task{}, std::declval<typename T::task_control::__control_state>()) } -> std::same_as<void>;
+    {
+        t.push_task(std::declval<task>(), std::declval<typename T::task_control::__control_state>())
+    } -> std::same_as<void>;
     { t.sched() } -> std::same_as<std::optional<task *>>;
     { t.try_reawake_buffered() } -> std::same_as<void>;
     { t.find_stealable_and_steal() } -> std::same_as<std::optional<task>>;

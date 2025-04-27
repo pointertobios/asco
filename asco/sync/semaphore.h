@@ -96,6 +96,8 @@ public:
                     auto worker = RT::__worker::get_worker();
                     auto id = worker->current_task_id();
                     worker->sc.suspend(id);
+                    worker->sc.get_task(id)->unawakable = true;
+                    std::cout << std::format("semaphore::acquire(): suspend task {}\n", id);
 
                     guard->push(std::make_pair(id, worker));
                 } else {
@@ -103,7 +105,7 @@ public:
                 }
             }
 
-            co_await std::suspend_always{};
+            co_await suspend{};
         }
 
         restorer.state = 1;

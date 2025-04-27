@@ -5,7 +5,6 @@
 #define ASCO_SYNC_CHANNEL_H 1
 
 #include <expected>
-#include <iostream>
 #include <optional>
 #include <tuple>
 #include <vector>

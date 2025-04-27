@@ -38,6 +38,7 @@ void std_scheduler::try_reawake_buffered() {
     for (auto id : not_in_suspended_but_awake_tasks) {
         std::lock_guard lk{active_tasks_mutex};
         if (auto it = suspended_tasks.find(id); it != suspended_tasks.end()) {
+            while (it->second->t.unawakable);
             it->second->state = task_control::__control_state::running;
             active_tasks.push_back(it->second);
             suspended_tasks.erase(it);
@@ -58,6 +59,7 @@ bool std_scheduler::has_buffered_awakes() { return !not_in_suspended_but_awake_t
 void std_scheduler::awake(task::task_id id) {
     std::lock_guard lk{active_tasks_mutex};
     if (auto it = suspended_tasks.find(id); it != suspended_tasks.end()) {
+        while (it->second->t.unawakable);
         it->second->state = task_control::__control_state::running;
         active_tasks.push_back(it->second);
         suspended_tasks.erase(it);
@@ -89,7 +91,7 @@ void std_scheduler::destroy(task::task_id id) {
     if (auto it = std::find_if(
             active_tasks.begin(), active_tasks.end(), [id](task_control *t) { return t->t.id == id; });
         it != active_tasks.end()) {
-        (*it)->t.exit();
+        (*it)->t.destroy();
         delete *it;
 
         active_tasks.erase(it);
@@ -100,7 +102,7 @@ void std_scheduler::destroy(task::task_id id) {
     if (iter == suspended_tasks.end())
         return;
 
-    iter->second->t.exit();
+    iter->second->t.destroy();
     delete iter->second;
 
     suspended_tasks.erase(iter);

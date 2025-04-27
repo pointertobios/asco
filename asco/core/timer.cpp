@@ -64,7 +64,6 @@ timer::~timer() {
 }
 
 void timer::attach(sched::task::task_id id, high_resolution_clock::time_point time) {
-    // std::cout << std::format("Now: {}, awake time: {}\n", high_resolution_clock::now(), time);
     auto guard = awake_points.lock();
     if (auto it = std::find_if(
             guard->begin(), guard->end(),

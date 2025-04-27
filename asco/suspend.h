@@ -15,9 +15,9 @@ struct suspend {
     __always_inline bool await_ready() { return false; }
 
     __always_inline bool await_suspend(std::coroutine_handle<> handle) {
-        auto id = RT::__worker::get_worker()->current_task_id();
-        auto worker = RT::__worker::get_worker_from_task_id(id);
-        worker->sc.suspend(id);
+        auto worker = RT::__worker::get_worker();
+        auto id = worker->current_task_id();
+        worker->sc.get_task(id)->unawakable = false;
         return true;
     }
 

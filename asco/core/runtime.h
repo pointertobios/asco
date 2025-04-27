@@ -97,6 +97,7 @@ concept is_runtime = requires(T t) {
     typename T::task_id;
     typename T::sys;
     // Exception: runtime error when there is not a worker on the current thread.
+    { T::__worker::in_worker() } -> std::same_as<bool>;
     { T::__worker::get_worker() } -> std::same_as<typename T::__worker *>;
     { T::__worker::set_task_sem(typename T::task_id{}) } -> std::same_as<void>;
     { T::__worker::remove_task_map(typename T::task_id{}) } -> std::same_as<void>;

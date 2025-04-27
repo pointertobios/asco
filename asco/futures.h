@@ -34,6 +34,22 @@ T &&move_back_return_value() {
     return std::move(h.promise().awaiter->retval);
 }
 
+template<typename R = RT>
+    requires is_runtime<R>
+size_t get_task_id() {
+    return RT::__worker::get_worker()->current_task_id();
+}
+
+template<typename F, typename R = RT>
+    requires is_future<F> && is_runtime<R>
+size_t get_caller_id() {
+    auto h_ = RT::__worker::get_worker()->current_task().handle;
+    typename F::corohandle h = *(typename F::corohandle *)(&h_);
+    if (h.promise().future_type_hash != type_hash<F>())
+        throw std::runtime_error("[ASCO] aborted<F>(): F is not matched with your current coroutine.");
+    return h.promise().caller_task_id;
+}
+
 };  // namespace asco::futures
 
 #endif

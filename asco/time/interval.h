@@ -109,7 +109,6 @@ private:
 
 namespace asco {
 
-using namespace std::literals::chrono_literals;
 using time::interval;
 
 };  // namespace asco

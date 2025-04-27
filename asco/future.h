@@ -6,7 +6,6 @@
 
 #include <atomic>
 #include <coroutine>
-#include <iostream>
 
 #include <asco/core/runtime.h>
 #include <asco/utils/concepts.h>
@@ -43,7 +42,7 @@ struct future_base {
     struct promise_type {
         // Alway put this at the first, so that we can authenticate the coroutine_handle type when we
         // reinterpret it from raw pointer.
-        size_t future_type_hash;
+        size_t future_type_hash{type_hash<future_base<T, Inline, Blocking>>()};
 
         std::binary_semaphore returned{0};
         size_t task_id;
@@ -55,17 +54,16 @@ struct future_base {
         std::mutex suspend_mutex;
 
         std::coroutine_handle<> caller_task;
+        size_t caller_task_id{0};
 
         __coro_local_frame *inline_swap_frame;
 
         std::exception_ptr e;
 
         future_base<T, Inline, Blocking> get_return_object() {
-            __coro_local_frame *curr_clframe;
-            try {
-                curr_clframe = worker::get_worker()->current_task().coro_local_frame;
-            } catch (...) {
-                curr_clframe = nullptr;
+            __coro_local_frame *curr_clframe = nullptr;
+            if (RT::__worker::in_worker()) {
+                curr_clframe = RT::__worker::get_worker()->current_task().coro_local_frame;
             }
 
             auto coro = corohandle::from_promise(*this);
@@ -98,7 +96,6 @@ struct future_base {
 
                 worker::insert_task_map(task_id, worker);
             }
-            future_type_hash = type_hash<future_base<T, Inline, Blocking>>();
             return future_base<T, Inline, Blocking>(coro, task_id);
         }
 
@@ -116,10 +113,8 @@ struct future_base {
                 while (!task_id);
                 std::lock_guard lk{suspend_mutex};
                 auto rt = RT::get_runtime();
-                if (caller_task) {
-                    auto id = rt->task_id_from_corohandle(caller_task);
-                    rt->awake(id);
-                }
+                if (caller_task_id)
+                    rt->awake(caller_task_id);
 
                 // When catch an exception, it means the task successfully destroyed.
                 // Just ignore.
@@ -143,9 +138,8 @@ struct future_base {
                         worker->running_task.push(worker->sc.get_task(id));
 
                         // Do not awake this task, but resume it inplace.
-                        // If there is no any suspend point, it will be then never resumed
-                        // after final_suspend().
-                        // or it will be awaken after first co_await.
+                        // If there is no any suspend point, it will be then never resumed after
+                        // final_suspend(), or it will be awaken after first co_await.
                         return caller_task;
                     }
 
@@ -178,21 +172,22 @@ struct future_base {
         if constexpr (!Inline) {
             std::lock_guard lk{task.promise().suspend_mutex};
             if (!task.promise().returned.try_acquire()) {
-                task.promise().caller_task = handle;
                 auto rt = RT::get_runtime();
                 auto id = rt->task_id_from_corohandle(handle);
+                task.promise().caller_task = handle;
+                task.promise().caller_task_id = id;
                 rt->suspend(id);
                 return true;
-
             } else {
                 task.promise().returned.release();
                 return false;
             }
         } else {
-            task.promise().caller_task = handle;
             auto worker = worker::get_worker();
             auto rt = RT::get_runtime();
             auto id = rt->task_id_from_corohandle(handle);
+            task.promise().caller_task = handle;
+            task.promise().caller_task_id = id;
             rt->suspend(id);
 
             // Do not awake this task, but resume it inplace.
@@ -226,9 +221,12 @@ struct future_base {
 
     void abort() { task.promise().aborted.store(true, morder::acq_rel); }
 
+    future_base() {}
+
     future_base(corohandle task, size_t task_id)
             : task(task)
-            , task_id(task_id) {
+            , task_id(task_id)
+            , none(false) {
         task.promise().awaiter = this;
         task.promise().awaiter_sem.release();
     }
@@ -236,6 +234,7 @@ struct future_base {
 private:
     corohandle task;
     size_t task_id;
+    bool none{true};
 };
 
 template<typename T, typename R = RT>
