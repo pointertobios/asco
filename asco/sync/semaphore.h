@@ -9,7 +9,6 @@
 
 #include <asco/future.h>
 #include <asco/futures.h>
-#include <asco/suspend.h>
 #include <asco/sync/spin.h>
 #include <asco/utils/pubusing.h>
 
@@ -96,8 +95,6 @@ public:
                     auto worker = RT::__worker::get_worker();
                     auto id = worker->current_task_id();
                     worker->sc.suspend(id);
-                    worker->sc.get_task(id)->unawakable = true;
-                    std::cout << std::format("semaphore::acquire(): suspend task {}\n", id);
 
                     guard->push(std::make_pair(id, worker));
                 } else {
@@ -105,7 +102,7 @@ public:
                 }
             }
 
-            co_await suspend{};
+            co_await std::suspend_always{};
         }
 
         restorer.state = 1;

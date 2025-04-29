@@ -271,7 +271,7 @@ runtime::runtime(int nthread_)
 #ifdef __linux__
         auto &cpu = cpus[i % cpus.size()];
         while (!workeri->pid);
-        if (sched_setaffinity(workeri->pid, sizeof(decltype(cpu)), &cpu) == -1) {
+        if (::sched_setaffinity(workeri->pid, sizeof(decltype(cpu)), &cpu) == -1) {
             throw std::runtime_error("[ASCO] runtime::runtime(): Failed to set affinity");
         }
 #endif
@@ -318,16 +318,20 @@ void runtime::send_blocking_task(sched::task task) {
     awake_all();
 }
 
-runtime::task_id runtime::spawn(task_instance task_, __coro_local_frame *pframe) {
+runtime::task_id runtime::spawn(task_instance task_, __coro_local_frame *pframe, task_id gid) {
     auto task = to_task(task_, false, pframe);
     auto res = task.id;
+    if (gid)
+        join_task_to_group(res, gid);
     send_task(task);
     return res;
 }
 
-runtime::task_id runtime::spawn_blocking(task_instance task_, __coro_local_frame *pframe) {
+runtime::task_id runtime::spawn_blocking(task_instance task_, __coro_local_frame *pframe, task_id gid) {
     auto task = to_task(task_, true, pframe);
     auto res = task.id;
+    if (gid)
+        join_task_to_group(res, gid);
     send_blocking_task(task);
     return res;
 }
@@ -370,6 +374,20 @@ sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_
 
 void runtime::timer_attach(task_id id, std::chrono::high_resolution_clock::time_point time) {
     timer.attach(id, time);
+}
+
+void runtime::join_task_to_group(task_id id, task_id gid) {
+    if (auto it = task_groups.find(gid); it == task_groups.end())
+        task_groups.emplace(gid, new task_group{gid});
+
+    task_groups[gid]->add_task(id);
+    task_groups.emplace(id, task_groups[gid]);
+}
+
+task_group *runtime::group(task_id id) {
+    if (auto it = task_groups.find(id); it != task_groups.end())
+        return it->second;
+    throw std::runtime_error(std::format("[ASCO] runtime::group(): task_group {} unexists", id));
 }
 
 };  // namespace asco

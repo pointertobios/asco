@@ -38,8 +38,6 @@ struct task {
 
     bool mutable destroyed{false};
 
-    bool unawakable{false};
-
     __always_inline void coro_frame_exit() {
         coro_local_frame->subframe_exit();
         if (!coro_local_frame->get_ref_count())

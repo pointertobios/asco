@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <coroutine>
+#include <optional>
 
 #include <asco/core/runtime.h>
 #include <asco/utils/concepts.h>
@@ -38,6 +39,7 @@ struct future_base {
     using return_type = T;
 
     T retval;
+    bool aborted{false};
 
     struct promise_type {
         // Alway put this at the first, so that we can authenticate the coroutine_handle type when we
@@ -45,34 +47,35 @@ struct future_base {
         size_t future_type_hash{type_hash<future_base<T, Inline, Blocking>>()};
 
         std::binary_semaphore returned{0};
+
         size_t task_id;
         future_base *awaiter{nullptr};
         std::binary_semaphore awaiter_sem{0};
 
-        atomic_bool aborted{false};
-
-        std::mutex suspend_mutex;
-
         std::coroutine_handle<> caller_task;
         size_t caller_task_id{0};
 
-        __coro_local_frame *inline_swap_frame;
-
         std::exception_ptr e;
 
-        future_base<T, Inline, Blocking> get_return_object() {
-            __coro_local_frame *curr_clframe = nullptr;
-            if (RT::__worker::in_worker()) {
-                curr_clframe = RT::__worker::get_worker()->current_task().coro_local_frame;
-            }
+        void *operator new(size_t n) noexcept {
+            size_t *p = reinterpret_cast<size_t *>(::operator new(n + sizeof(size_t)));
+            *p = n;
+            return p + 1;
+        }
 
+        void operator delete(void *p) noexcept {
+            size_t *q = reinterpret_cast<size_t *>(p) - 1;
+            ::operator delete(q);
+        }
+
+        corohandle spawn(__coro_local_frame *curr_clframe) {
             auto coro = corohandle::from_promise(*this);
             if constexpr (!Inline) {
-                if constexpr (Blocking) {
+                if constexpr (Blocking)
                     task_id = RT::get_runtime()->spawn_blocking(coro, curr_clframe);
-                } else {
+                else
                     task_id = RT::get_runtime()->spawn(coro, curr_clframe);
-                }
+                return coro;
             } else {
                 using state = worker::scheduler::task_control::__control_state;
                 auto worker = worker::get_worker();
@@ -95,7 +98,16 @@ struct future_base {
                     RT::get_runtime()->inc_io_load();
 
                 worker::insert_task_map(task_id, worker);
+                return coro;
             }
+        }
+
+        future_base<T, Inline, Blocking> get_return_object() {
+            __coro_local_frame *curr_clframe = nullptr;
+            if (RT::__worker::in_worker()) {
+                curr_clframe = RT::__worker::get_worker()->current_task().coro_local_frame;
+            }
+            auto coro = spawn(curr_clframe);
             return future_base<T, Inline, Blocking>(coro, task_id);
         }
 
@@ -104,6 +116,7 @@ struct future_base {
         void return_value(T val) {
             awaiter_sem.acquire();
             awaiter->retval = std::move(val);
+            awaiter_sem.release();
             returned.release();
         }
 
@@ -111,7 +124,6 @@ struct future_base {
         auto final_suspend() noexcept {
             if constexpr (!Inline) {
                 while (!task_id);
-                std::lock_guard lk{suspend_mutex};
                 auto rt = RT::get_runtime();
                 if (caller_task_id)
                     rt->awake(caller_task_id);
@@ -156,7 +168,11 @@ struct future_base {
             }
         }
 
-        void unhandled_exception() { e = std::current_exception(); }
+        void unhandled_exception() {
+            awaiter_sem.acquire();
+            e = std::current_exception();
+            awaiter_sem.release();
+        }
     };
 
     bool await_ready() {
@@ -170,7 +186,6 @@ struct future_base {
     // to the callee task.
     auto await_suspend(std::coroutine_handle<> handle) {
         if constexpr (!Inline) {
-            std::lock_guard lk{task.promise().suspend_mutex};
             if (!task.promise().returned.try_acquire()) {
                 auto rt = RT::get_runtime();
                 auto id = rt->task_id_from_corohandle(handle);
@@ -193,13 +208,17 @@ struct future_base {
             // Do not awake this task, but resume it inplace.
             // If there is no any suspend point, it will be then never resumed
             // after final_suspend().
-            // or it will be awaken after first co_await.
+            // or it will be awaken after first co_await resumed.
             worker->running_task.push(worker->sc.get_task(task_id));  // Correct running task
             return task;
         }
     }
 
-    T await_resume() { return std::move(retval); }
+    T await_resume() {
+        if (task.promise().e)
+            std::rethrow_exception(task.promise().e);
+        return std::move(retval);
+    }
 
     T await() {
         if (RT::__worker::in_worker())
@@ -212,6 +231,9 @@ struct future_base {
             RT::get_runtime()->register_sync_awaiter(task_id);
             RT::__worker::get_worker_from_task_id(task_id)->sc.get_sync_awaiter(task_id).acquire();
 
+            if (task.promise().e)
+                std::rethrow_exception(task.promise().e);
+
             return std::move(retval);
 
         } else {
@@ -219,7 +241,7 @@ struct future_base {
         }
     }
 
-    void abort() { task.promise().aborted.store(true, morder::acq_rel); }
+    void abort() { aborted = true; }
 
     future_base() {}
 

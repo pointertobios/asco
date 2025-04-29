@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <asco/core/sched.h>
+#include <asco/core/taskgroup.h>
 #include <asco/core/timer.h>
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
@@ -107,9 +108,11 @@ concept is_runtime = requires(T t) {
     { T::get_runtime() } -> std::same_as<T *>;
     { t.send_task(std::declval<typename T::scheduler::task>()) } -> std::same_as<void>;
     { t.send_blocking_task(std::declval<typename T::scheduler::task>()) } -> std::same_as<void>;
-    { t.spawn(task_instance{}, std::declval<__coro_local_frame *>()) } -> std::same_as<typename T::task_id>;
     {
-        t.spawn_blocking(task_instance{}, std::declval<__coro_local_frame *>())
+        t.spawn(task_instance{}, std::declval<__coro_local_frame *>(), typename T::task_id{})
+    } -> std::same_as<typename T::task_id>;
+    {
+        t.spawn_blocking(task_instance{}, std::declval<__coro_local_frame *>(), typename T::task_id{})
     } -> std::same_as<typename T::task_id>;
     { t.awake(typename T::task_id{}) } -> std::same_as<void>;
     { t.suspend(typename T::task_id{}) } -> std::same_as<void>;
@@ -126,12 +129,15 @@ concept is_runtime = requires(T t) {
     {
         t.timer_attach(typename T::task_id{}, std::declval<std::chrono::high_resolution_clock::time_point>())
     } -> std::same_as<void>;
+    { t.join_task_to_group(typename T::task_id{}, typename T::task_id{}) } -> std::same_as<void>;
+    { t.group(typename T::task_id{}) } -> std::same_as<task_group *>;
 } && requires(T::__worker w) {
     { w.conditional_suspend() } -> std::same_as<void>;
     { w.current_task() } -> std::same_as<typename T::scheduler::task &>;
     { w.current_task_id() } -> std::same_as<typename T::task_id>;
     { w.is_calculator } -> std::same_as<bool &>;
     { w.running_task } -> std::same_as<std::stack<typename T::scheduler::task *> &>;
+    { w.sc } -> std::same_as<typename T::scheduler &>;
 } && sched::is_scheduler<typename T::scheduler>;
 
 class runtime {
@@ -161,8 +167,8 @@ public:
 
     void send_task(sched::task task);
     void send_blocking_task(sched::task task);
-    task_id spawn(task_instance task, __coro_local_frame *pframe);
-    task_id spawn_blocking(task_instance task, __coro_local_frame *pframe);
+    task_id spawn(task_instance task, __coro_local_frame *pframe, task_id gid = 0);
+    task_id spawn_blocking(task_instance task, __coro_local_frame *pframe, task_id gid = 0);
     void awake(task_id id);
     void suspend(task_id id);
 
@@ -177,9 +183,14 @@ public:
 
     void timer_attach(task_id id, std::chrono::high_resolution_clock::time_point time);
 
+    void join_task_to_group(task_id id, task_id gid);
+    task_group *group(task_id id);
+
 private:
     int nthread;
     std::vector<worker *> pool;
+
+    std::unordered_map<task_id, task_group *> task_groups;
 
     std::optional<task_sender> io_task_tx{std::nullopt};
     atomic_size_t io_worker_count{0};

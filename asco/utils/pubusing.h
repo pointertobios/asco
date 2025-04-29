@@ -30,4 +30,6 @@ using __u8 = unsigned char;
 #    define __always_inline __forceinline
 #endif
 
+#define __dispatch(_1, _2, _3, NAME, ...) NAME
+
 #endif

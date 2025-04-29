@@ -1,5 +1,8 @@
+#include <cxxabi.h>
 #include <functional>
+#include <iostream>
 #include <optional>
+#include <typeinfo>
 
 #include <asco/future.h>
 #include <asco/lazy_delete.h>
@@ -23,5 +26,14 @@ int main(int argc, const char **argv, const char **env) {
     })};
     runtime::sys::set_args(argc, argv);
     runtime::sys::set_env(const_cast<char **>(env));
-    return async_main().await();
+    try {
+        return async_main().await();
+    } catch (std::exception &e) {
+        int t;
+        std::cerr << std::format(
+            "[asco-main] async main throw \'{}\'", abi::__cxa_demangle(typeid(e).name(), 0, 0, &t))
+                  << std::endl
+                  << std::format("  what():  {}", e.what()) << std::endl;
+        return -1;
+    }
 }
