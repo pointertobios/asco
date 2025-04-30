@@ -77,6 +77,8 @@ void std_scheduler::suspend(task::task_id id) {
             active_tasks.begin(), active_tasks.end(), [id](task_control *t) { return t->t.id == id; });
         it != active_tasks.end()) {
         (*it)->state = task_control::__control_state::suspending;
+        suspended_tasks[id] = *it;
+        active_tasks.erase(it);
     }
 }
 

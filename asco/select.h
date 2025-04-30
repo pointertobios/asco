@@ -4,7 +4,6 @@
 #ifndef ASCO_SELECT_H
 #define ASCO_SELECT_H 1
 
-#include <barrier>
 #include <coroutine>
 
 #include <asco/core/taskgroup.h>
@@ -25,28 +24,25 @@ public:
         auto runtime = RT::get_runtime();
         runtime->join_task_to_group(currid, currid);
 
-        if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_barrier__")>())
-            del_glocal("__asco_select_barrier__");
-        std::barrier<std::function<void()>> decl_glocal(
-            __asco_select_barrier__, new std::barrier<std::function<void()>>(N, [] {}));
-
         if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_sem__")>())
             del_glocal("__asco_select_sem__");
-
         binary_semaphore decl_glocal(__asco_select_sem__, new binary_semaphore{1});
+
+        size_t h[N];
         for (size_t i{1}; i < N; i++) {
             n = i;
-            auto h = futures::inner::clone(handle);
+            h[i] = futures::inner::clone(handle);
         }
         n = 0;
+
+        for (size_t i{1}; i < N; i++) {
+            runtime->awake(h[i]);
+        }
+
         return false;
     }
 
-    size_t await_resume() {
-        std::barrier<std::function<void()>> group_local(__asco_select_barrier__);
-        __asco_select_barrier__.arrive_and_wait();
-        return n;
-    }
+    size_t await_resume() { return n; }
 
 private:
     size_t n{0};

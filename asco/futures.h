@@ -63,7 +63,7 @@ bool group_local_exists() {
 }
 
 // Do **NOT** let all the cloned coroutines co_return!!!!!
-std::coroutine_handle<> clone(std::coroutine_handle<> h);
+size_t clone(std::coroutine_handle<> h);
 
 };  // namespace inner
 

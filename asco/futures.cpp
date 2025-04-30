@@ -9,7 +9,7 @@
 
 namespace asco::futures::inner {
 
-std::coroutine_handle<> clone(std::coroutine_handle<> h) {
+size_t clone(std::coroutine_handle<> h) {
     // Clone coroutine state structure
     size_t *src = reinterpret_cast<size_t *>(h.address()) - 1;
     size_t n = *src;
@@ -30,7 +30,7 @@ std::coroutine_handle<> clone(std::coroutine_handle<> h) {
     auto dst_frame = RT::__worker::get_worker_from_task_id(dst_id)->sc.get_task(dst_id)->coro_local_frame;
     dst_frame->vars = src_frame->vars;
 
-    return coh;
+    return dst_id;
 }
 
 };  // namespace asco::futures::inner

@@ -119,7 +119,9 @@ std::unordered_map<std::string, std::string> runtime::sys::__env;
 
 void runtime::sys::set_args(int argc, const char **argv) {
     __args.clear();
-    for (int i = 0; i < argc; i++) __args.push_back(argv[i]);
+    for (int i = 0; i < argc; i++) {
+        __args.push_back(argv[i]);
+    }
 }
 
 void runtime::sys::set_env(char **env) {
@@ -137,7 +139,7 @@ static std::vector<cpu_set_t> get_cpus() {
     std::vector<cpu_set_t> cpus;
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    for (int i = 0; i < std::thread::hardware_concurrency(); i++) {
+    for (size_t i{0}; i < std::thread::hardware_concurrency(); i++) {
         CPU_SET(i, &cpuset);
         cpus.push_back(cpuset);
     }
@@ -145,7 +147,7 @@ static std::vector<cpu_set_t> get_cpus() {
 }
 #endif
 
-runtime::runtime(int nthread_)
+runtime::runtime(size_t nthread_)
         : nthread(
               (nthread_ > 0 && nthread_ <= std::thread::hardware_concurrency())
                   ? nthread_
@@ -165,7 +167,7 @@ runtime::runtime(int nthread_)
         while (!(self.task_rx->is_stopped() && self.sc.currently_finished_all())) {
             while (true)
                 if (auto task = self.task_rx->try_recv(); task) {
-                    self.sc.push_task(std::move(*task), scheduler::task_control::__control_state::running);
+                    self.sc.push_task(std::move(*task), scheduler::task_control::__control_state::suspending);
                     worker::insert_task_map(task->id, self_);
                 } else
                     break;
@@ -378,7 +380,7 @@ void runtime::timer_attach(task_id id, std::chrono::high_resolution_clock::time_
 
 void runtime::join_task_to_group(task_id id, task_id gid) {
     if (auto it = task_groups.find(gid); it == task_groups.end())
-        task_groups.emplace(gid, new task_group{gid});
+        task_groups.emplace(gid, new task_group{});
 
     task_groups[gid]->add_task(id);
     task_groups.emplace(id, task_groups[gid]);

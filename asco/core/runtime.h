@@ -160,7 +160,7 @@ public:
 
     using task_id = sched::task::task_id;
 
-    explicit runtime(int nthread = 0);
+    explicit runtime(size_t nthread = 0);
     explicit runtime(const runtime &) = delete;
     explicit runtime(const runtime &&) = delete;
     ~runtime();

@@ -142,7 +142,7 @@ struct future_base {
 
                     bool await_ready() noexcept { return false; }
 
-                    std::coroutine_handle<> await_suspend(std::coroutine_handle<> handle) noexcept {
+                    std::coroutine_handle<> await_suspend(std::coroutine_handle<>) noexcept {
                         auto rt = RT::get_runtime();
                         auto worker = worker::get_worker();
 
@@ -161,6 +161,10 @@ struct future_base {
                 auto rt = RT::get_runtime();
                 auto worker = worker::get_worker();
 
+                try {
+                    rt->suspend(task_id);
+                } catch (...) {
+                }
                 rt->remove_task_map(corohandle::from_promise(*this).address());
                 worker->remove_task_map(task_id);
 
@@ -205,11 +209,7 @@ struct future_base {
             task.promise().caller_task_id = id;
             rt->suspend(id);
 
-            // Do not awake this task, but resume it inplace.
-            // If there is no any suspend point, it will be then never resumed
-            // after final_suspend().
-            // or it will be awaken after first co_await resumed.
-            worker->running_task.push(worker->sc.get_task(task_id));  // Correct running task
+            worker->running_task.push(worker->sc.get_task(task_id));
             return task;
         }
     }
@@ -251,6 +251,7 @@ struct future_base {
             , none(false) {
         task.promise().awaiter = this;
         task.promise().awaiter_sem.release();
+        RT::get_runtime()->awake(task_id);
     }
 
 private:

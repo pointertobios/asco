@@ -30,7 +30,6 @@ timer::timer()
                     continue;
 
                 if (auto guard = awake_points.lock(); guard->front().time <= high_resolution_clock::now()) {
-                    auto target = guard->front().time;
                     auto &point = guard->front();
                     for (auto &id : point.id) {
                         runtime::get_runtime()->awake(id);

@@ -17,8 +17,7 @@ namespace asco {
 
 class task_group {
 public:
-    inline task_group(sched::task::task_id id)
-            : gid(id) {}
+    inline task_group() {}
 
     inline void add_task(sched::task::task_id id) { tasks.insert(id); }
 
@@ -66,7 +65,6 @@ public:
     }
 
 private:
-    sched::task::task_id gid;
     std::unordered_set<sched::task::task_id> tasks;
 
     std::unordered_map<size_t, dynvar> vars;
