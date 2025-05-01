@@ -95,11 +95,15 @@ concept is_scheduler = requires(T t) {
     { t.has_buffered_awakes() } -> std::same_as<bool>;
     { t.awake(task::task_id{}) } -> std::same_as<void>;
     { t.suspend(task::task_id{}) } -> std::same_as<void>;
-    { t.destroy(task::task_id{}) } -> std::same_as<void>;
+    { t.destroy(task::task_id{}, bool{}) } -> std::same_as<void>;
     { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
     { t.get_task(task::task_id{}) } -> std::same_as<task *>;
     { t.register_sync_awaiter(task::task_id{}) } -> std::same_as<void>;
     { t.get_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore &>;
+    { t.clone_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore *>;
+    {
+        t.emplace_sync_awaiter(task::task_id{}, std::declval<std::binary_semaphore *>())
+    } -> std::same_as<void>;
 };
 
 // I call it std_scheduler because it uses STL.
@@ -125,13 +129,15 @@ public:
 
     void awake(task::task_id id);
     void suspend(task::task_id id);
-    void destroy(task::task_id id);
+    void destroy(task::task_id id, bool no_sync_awake = false);
 
     bool task_exists(task::task_id id);
     task *get_task(task::task_id id);
 
     void register_sync_awaiter(task::task_id id);
     std::binary_semaphore &get_sync_awaiter(task::task_id id);
+    std::binary_semaphore *clone_sync_awaiter(task::task_id id);
+    void emplace_sync_awaiter(task::task_id id, std::binary_semaphore *sem);
 
 private:
     std::vector<task_control *> active_tasks;

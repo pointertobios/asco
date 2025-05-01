@@ -5,11 +5,11 @@
 #define ASCO_SELECT_H 1
 
 #include <coroutine>
+#include <semaphore>
 
 #include <asco/core/taskgroup.h>
 #include <asco/future.h>
 #include <asco/futures.h>
-#include <asco/sync/semaphore.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco {
@@ -26,7 +26,11 @@ public:
 
         if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_sem__")>())
             del_glocal("__asco_select_sem__");
-        binary_semaphore decl_glocal(__asco_select_sem__, new binary_semaphore{1});
+        std::binary_semaphore decl_glocal(__asco_select_sem__, new std::binary_semaphore{1});
+
+        if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_promise_countdown__")>())
+            del_glocal("__asco_select_promise_countdown__");
+        atomic_size_t decl_glocal(__asco_select_promise_countdown__, new atomic_size_t{N});
 
         size_t h[N];
         for (size_t i{1}; i < N; i++) {

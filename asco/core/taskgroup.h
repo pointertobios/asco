@@ -4,6 +4,7 @@
 #ifndef ASCO_TASKGROUP_H
 #define ASCO_TASKGROUP_H 1
 
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -19,7 +20,21 @@ class task_group {
 public:
     inline task_group() {}
 
+    inline ~task_group() {
+        for (auto &[_, var] : vars) {
+            var.deconstruct(var.p);
+        }
+    }
+
     inline void add_task(sched::task::task_id id) { tasks.insert(id); }
+
+    inline std::optional<sched::task::task_id> remove_task(sched::task::task_id id) {
+        tasks.erase(id);
+        if (tasks.size() == 1)
+            return *tasks.begin();
+        else
+            return std::nullopt;
+    }
 
     template<size_t Hash>
     bool var_exists() {
@@ -57,8 +72,9 @@ public:
         return decl_var<T, Hash>(name, new T);
     }
 
-    inline void del_var(size_t hash) {
-        if (auto it = vars.find(hash); it != vars.end()) {
+    template<size_t Hash>
+    void del_var() {
+        if (auto it = vars.find(Hash); it != vars.end()) {
             it->second.deconstruct(it->second.p);
             vars.erase(it);
         }
@@ -101,6 +117,6 @@ private:
 #define del_glocal(name)                                       \
     RT::get_runtime()                                          \
         ->group(RT::__worker::get_worker()->current_task_id()) \
-        ->del_var(asco::__consteval_str_hash(name))
+        ->del_var<asco::__consteval_str_hash(name)>()
 
 #endif

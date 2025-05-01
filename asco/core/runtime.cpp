@@ -177,6 +177,7 @@ runtime::runtime(size_t nthread_)
                 try {
                     if (!(*task)->done())
                         (*task)->resume();
+                } catch (caller_destroyed &) {
                 } catch (std::exception &e) {
                     std::cerr << std::format(
                         "[ASCO] worker thread: Inner error at task {}: {}\n", (*task)->id, e.what());
@@ -379,15 +380,37 @@ void runtime::timer_attach(task_id id, std::chrono::high_resolution_clock::time_
 }
 
 void runtime::join_task_to_group(task_id id, task_id gid) {
-    if (auto it = task_groups.find(gid); it == task_groups.end())
-        task_groups.emplace(gid, new task_group{});
+    auto guard = task_groups.lock();
+    if (auto it = guard->find(gid); it == guard->end())
+        guard->emplace(gid, new task_group{});
 
-    task_groups[gid]->add_task(id);
-    task_groups.emplace(id, task_groups[gid]);
+    (*guard)[gid]->add_task(id);
+    guard->emplace(id, (*guard)[gid]);
+}
+
+void runtime::exit_group(task_id id) {
+    auto guard = task_groups.lock();
+    if (auto it = guard->find(id); it != guard->end()) {
+        task_id another_erase = 0;
+        if (auto task = it->second->remove_task(id); task) {
+            another_erase = *task;
+            delete it->second;
+        }
+        guard->erase(it);
+        if (another_erase)
+            guard->erase(another_erase);
+    }
+}
+
+bool runtime::in_group(task_id id) {
+    auto guard = task_groups.lock();
+    auto it = guard->find(id);
+    return it != guard->end();
 }
 
 task_group *runtime::group(task_id id) {
-    if (auto it = task_groups.find(id); it != task_groups.end())
+    auto guard = task_groups.lock();
+    if (auto it = guard->find(id); it != guard->end())
         return it->second;
     throw std::runtime_error(std::format("[ASCO] runtime::group(): task_group {} unexists", id));
 }

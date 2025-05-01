@@ -125,11 +125,15 @@ concept is_runtime = requires(T t) {
     } -> std::same_as<sched::task>;
     { t.remove_task_map(nullptr) } -> std::same_as<void>;
     { t.inc_io_load() } -> std::same_as<void>;
+    { t.dec_io_load() } -> std::same_as<void>;
     { t.inc_calcu_load() } -> std::same_as<void>;
+    { t.dec_calcu_load() } -> std::same_as<void>;
     {
         t.timer_attach(typename T::task_id{}, std::declval<std::chrono::high_resolution_clock::time_point>())
     } -> std::same_as<void>;
     { t.join_task_to_group(typename T::task_id{}, typename T::task_id{}) } -> std::same_as<void>;
+    { t.exit_group(typename T::task_id{}) } -> std::same_as<void>;
+    { t.in_group(typename T::task_id{}) } -> std::same_as<bool>;
     { t.group(typename T::task_id{}) } -> std::same_as<task_group *>;
 } && requires(T::__worker w) {
     { w.conditional_suspend() } -> std::same_as<void>;
@@ -179,18 +183,22 @@ public:
     void remove_task_map(void *addr);
 
     __always_inline void inc_io_load() { io_worker_load++; }
+    __always_inline void dec_io_load() { io_worker_load--; }
     __always_inline void inc_calcu_load() { calcu_worker_load++; }
+    __always_inline void dec_calcu_load() { calcu_worker_load--; }
 
     void timer_attach(task_id id, std::chrono::high_resolution_clock::time_point time);
 
     void join_task_to_group(task_id id, task_id gid);
+    void exit_group(task_id id);
+    bool in_group(task_id id);
     task_group *group(task_id id);
 
 private:
     int nthread;
     std::vector<worker *> pool;
 
-    std::unordered_map<task_id, task_group *> task_groups;
+    spin<std::unordered_map<task_id, task_group *>> task_groups;
 
     std::optional<task_sender> io_task_tx{std::nullopt};
     atomic_size_t io_worker_count{0};
@@ -217,6 +225,11 @@ public:
 
 private:
     static runtime *current_runtime;
+};
+
+class caller_destroyed : std::exception {
+public:
+    const char *what() const noexcept override { return "Caller destroyed"; }
 };
 
 // Define macro `SET_RUNTIME` with set_runtime(rt)

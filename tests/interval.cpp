@@ -26,5 +26,6 @@ future<int> async_main() {
         co_await in.tick();
         std::cout << "tick async_main" << std::endl;
     }
+    co_await task;
     co_return 0;
 }

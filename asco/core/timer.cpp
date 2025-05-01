@@ -1,6 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <asco/core/timer.h>
+
 #ifdef __linux__
 #    include <cpuid.h>
 #    include <pthread.h>
@@ -8,7 +10,6 @@
 #endif
 
 #include <asco/core/runtime.h>
-#include <asco/core/timer.h>
 
 namespace asco::timer {
 
@@ -18,7 +19,7 @@ timer::timer()
             ::pthread_setname_np(::pthread_self(), std::format("asco::timer").c_str());
             ptid = ::pthread_self();
 
-            signal(SIGURG, [](int) {});
+            signal(SIGALRM, [](int) {});
 #endif
             init_waiter.store(true, morder::seq_cst);
 
@@ -32,7 +33,10 @@ timer::timer()
                 if (auto guard = awake_points.lock(); guard->front().time <= high_resolution_clock::now()) {
                     auto &point = guard->front();
                     for (auto &id : point.id) {
-                        runtime::get_runtime()->awake(id);
+                        try {
+                            runtime::get_runtime()->awake(id);
+                        } catch (...) {
+                        }
                     }
                     guard->pop_front();
                     continue;
@@ -42,7 +46,7 @@ timer::timer()
                      t = awake_points.lock()->front().time) {
                     // Sleep if waiting time longer than `nonsleep_time`.
                     // Don't worry about new awake points attached during sleeping, in attach function will
-                    // send SIG_BLOCK to break sleeping.
+                    // send SIGALRM to break sleeping.
                     //
                     // There are several levels of sleep time to reduce running time and reduce deviations.
                     if (t - high_resolution_clock::now() > nonsleep_time * 10) {
@@ -77,7 +81,7 @@ void timer::attach(sched::task::task_id id, high_resolution_clock::time_point ti
     std::push_heap(guard->begin(), guard->end(), std::greater<awake_point>());
     while (!init_waiter.load(morder::seq_cst));
 #ifdef __linux__
-    ::pthread_kill(ptid, SIGURG);
+    ::pthread_kill(ptid, SIGALRM);
 #endif
 }
 

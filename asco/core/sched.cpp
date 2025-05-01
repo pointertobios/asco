@@ -82,9 +82,11 @@ void std_scheduler::suspend(task::task_id id) {
     }
 }
 
-void std_scheduler::destroy(task::task_id id) {
-    if (auto it = sync_awaiters.find(id); it != sync_awaiters.end())
-        it->second->release();
+void std_scheduler::destroy(task::task_id id, bool no_sync_awake) {
+    if (!no_sync_awake) {
+        if (auto it = sync_awaiters.find(id); it != sync_awaiters.end())
+            it->second->release();
+    }
 
     std::lock_guard lk{active_tasks_mutex};
     task_map.erase(id);
@@ -138,6 +140,17 @@ std::binary_semaphore &std_scheduler::get_sync_awaiter(task::task_id id) {
         throw std::runtime_error(
             std::format("[ASCO] std_scheduler::get_sync_awaiter(): Sync awaiter of task {} not found", id));
     }
+}
+
+std::binary_semaphore *std_scheduler::clone_sync_awaiter(task::task_id id) {
+    if (auto it = sync_awaiters.find(id); it != sync_awaiters.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+void std_scheduler::emplace_sync_awaiter(task::task_id id, std::binary_semaphore *sem) {
+    sync_awaiters.emplace(id, sem);
 }
 
 };  // namespace asco::sched

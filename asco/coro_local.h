@@ -97,12 +97,11 @@ struct __coro_local_frame {
 
 };  // namespace asco
 
-#define coro_local(name)           \
-    &name =                        \
-        RT::__worker::get_worker() \
-            ->current_task()       \
-            .coro_local_frame      \
-            ->get_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name);
+#define coro_local(name)               \
+    &name = RT::__worker::get_worker() \
+                ->current_task()       \
+                .coro_local_frame      \
+                ->get_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name)
 
 #define decl_local_1arg(name)      \
     &name =                        \
