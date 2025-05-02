@@ -36,6 +36,9 @@ struct task {
     // task earlier.
     bool real_time{false};
 
+    bool aborted{false};
+    task_id waiting{0};
+
     bool mutable destroyed{false};
 
     __always_inline void coro_frame_exit() {
@@ -97,7 +100,7 @@ concept is_scheduler = requires(T t) {
     { t.suspend(task::task_id{}) } -> std::same_as<void>;
     { t.destroy(task::task_id{}, bool{}) } -> std::same_as<void>;
     { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
-    { t.get_task(task::task_id{}) } -> std::same_as<task *>;
+    { t.get_task(task::task_id{}) } -> std::same_as<task &>;
     { t.register_sync_awaiter(task::task_id{}) } -> std::same_as<void>;
     { t.get_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore &>;
     { t.clone_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore *>;
@@ -132,7 +135,7 @@ public:
     void destroy(task::task_id id, bool no_sync_awake = false);
 
     bool task_exists(task::task_id id);
-    task *get_task(task::task_id id);
+    task &get_task(task::task_id id);
 
     void register_sync_awaiter(task::task_id id);
     std::binary_semaphore &get_sync_awaiter(task::task_id id);

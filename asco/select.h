@@ -4,7 +4,9 @@
 #ifndef ASCO_SELECT_H
 #define ASCO_SELECT_H 1
 
+#include <barrier>
 #include <coroutine>
+#include <functional>
 #include <semaphore>
 
 #include <asco/core/taskgroup.h>
@@ -15,22 +17,24 @@
 namespace asco {
 
 template<size_t N>
+    requires(N > 1)
 class select {
 public:
     bool await_ready() { return false; }
 
     bool await_suspend(std::coroutine_handle<> handle) {
-        auto currid = RT::get_runtime()->task_id_from_corohandle(handle);
-        auto runtime = RT::get_runtime();
-        runtime->join_task_to_group(currid, currid);
+        auto &rt = RT::get_runtime();
+        auto currid = rt.task_id_from_corohandle(handle);
+        rt.join_task_to_group(currid, currid, true);
 
         if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_sem__")>())
             del_glocal("__asco_select_sem__");
         std::binary_semaphore decl_glocal(__asco_select_sem__, new std::binary_semaphore{1});
 
-        if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_promise_countdown__")>())
-            del_glocal("__asco_select_promise_countdown__");
-        atomic_size_t decl_glocal(__asco_select_promise_countdown__, new atomic_size_t{N});
+        if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_return_barrier__")>())
+            del_glocal("__asco_select_return_barrier__");
+        std::barrier<std::function<void()>> decl_glocal(
+            __asco_select_return_barrier__, new std::barrier<std::function<void()>>(N, [] {}));
 
         size_t h[N];
         for (size_t i{1}; i < N; i++) {
@@ -40,7 +44,7 @@ public:
         n = 0;
 
         for (size_t i{1}; i < N; i++) {
-            runtime->awake(h[i]);
+            rt.awake(h[i]);
         }
 
         return false;

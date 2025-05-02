@@ -53,7 +53,7 @@ public:
             auto [id, worker] = std::move(guard->front());
             guard->pop();
 
-            RT::get_runtime()->awake(id);
+            RT::get_runtime().awake(id);
         }
     }
 
@@ -64,7 +64,7 @@ public:
             int state{0};
 
             ~re() {
-                if (!futures::aborted<future_void_inline>())
+                if (!futures::aborted())
                     return;
 
                 if (state == 1)
@@ -72,12 +72,12 @@ public:
             }
         } restorer{this};
 
-        if (futures::aborted<future_void_inline>()) {
-            restorer.state = 0;
-            co_return {};
-        }
-
         while (true) {
+            if (futures::aborted()) {
+                restorer.state = 0;
+                co_return {};
+            }
+
             size_t val = counter.load(morder::acquire);
             if (val > 0) {
                 if (counter.compare_exchange_strong(val, val - 1, morder::acq_rel, morder::relaxed))
@@ -92,11 +92,11 @@ public:
                 auto guard = waiting_tasks.lock();
 
                 if (counter.load(morder::acquire) == 0) {
-                    auto worker = RT::__worker::get_worker();
-                    auto id = worker->current_task_id();
-                    worker->sc.suspend(id);
+                    auto &worker = RT::__worker::get_worker();
+                    auto id = worker.current_task_id();
+                    worker.sc.suspend(id);
 
-                    guard->push(std::make_pair(id, worker));
+                    guard->push(std::make_pair(id, &worker));
                 } else {
                     continue;
                 }
@@ -106,7 +106,7 @@ public:
         }
 
         restorer.state = 1;
-        if (futures::aborted<future_void_inline>()) {
+        if (futures::aborted()) {
             restorer.state = 0;
             counter.fetch_add(1, morder::release);
         }

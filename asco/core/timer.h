@@ -9,7 +9,7 @@
 #include <deque>
 #include <semaphore>
 #include <thread>
-#include <vector>
+#include <unordered_set>
 
 #include <asco/core/sched.h>
 #include <asco/sync/spin.h>
@@ -23,7 +23,7 @@ class timer {
 public:
     struct awake_point {
         high_resolution_clock::time_point time;
-        std::vector<sched::task::task_id> id;
+        std::unordered_set<sched::task::task_id> id;
 
         bool operator>(const awake_point &rhs) const { return time > rhs.time; }
     };
@@ -32,9 +32,13 @@ public:
     ~timer();
 
     void attach(sched::task::task_id id, high_resolution_clock::time_point time);
+    void detach(sched::task::task_id id);
+
+    bool task_attaching(sched::task::task_id id);
 
 private:
     spin<std::deque<awake_point>> awake_points;  // Use least heap
+    spin<std::unordered_set<sched::task::task_id>> attaching_tasks;
     atomic_bool running{true};
     atomic_bool init_waiter{false};
     std::jthread timerthr;

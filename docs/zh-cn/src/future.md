@@ -92,8 +92,6 @@ std::string decl_local(str, new std::string("Hello ASCO"));
 int *decl_local_array(arr, new int[10]);
 ```
 
-推荐使用 `new` 运算符而不是 `new []` 运算符构造变量。
-
 ### 使用宏 `coro_local(name)` 获取协程本地变量
 
 ```c++
@@ -104,17 +102,21 @@ for (char c : str) {
 }
 ```
 
+### 注意
+
+若变量类型的模板参数中具有自动推导的模板参数，其自动推导无法传递至开头的类型声明处，需要手动指定。
+
+若在变量构造处变量类型的模板参数中具有可以自动推导的匿名 lambda 表达式，需要显式填入模板参数，否则类型验证会失效。
+
 ---
 
 ## 可打断协程
 
+对 `future` 调用 `.abort()` 递归打断这个任务以及这个任务正在挂起等待的子任务，如果任务正在挂起，立即唤醒。
+
 协程函数需要自己实现被打断时的恢复功能，以将状态恢复到协程开始执行前。
 
 如果你的协程没有实现可打断特性，请谨慎使用于 *asco* 提供的依赖可打断特性的功能。
-
-### 打断任务
-
-对 `future` 调用 `.abort()` 函数将任务设置为已打断状态。
 
 ```c++
 asco::binary_semaphore sem{1};
@@ -126,12 +128,12 @@ assert_eq(sem.get_counter(), 1);
 
 ### 恢复任务状态
 
-在返回类型为 `future<T>` 的协程中调用 `bool futures::aborted<future<T>>()` ，
+在返回类型为 `future<T>` 的协程中调用 `bool futures::aborted()` ，
 返回 `true` 时执行状态恢复逻辑或缓存已得到的结果供下次调用时使用，此处的代码称为**打断判定点**。
 
 `futures::aborted` 函数在编译期计算模板参数的哈希值，用于在运行时验证模板参数与所在函数返回值是否一致。
 
-最佳实践：在每个**协程暂停点**[^3]前设置一个打断判定点，并在 `co_return` 之后使用 `raii` 间接设置一个**打断判定点**。
+最佳实践：在每个**协程暂停点**[^3]前后设置一个打断判定点，并在 `co_return` 之后利用 `raii` 设置一个**打断判定点**。
 
 以本项目的 `channel::reveiver<T>::recv()` 为例：
 
@@ -153,7 +155,7 @@ future_inline<std::optional<T>> recv() {
         int state{0};
 
         ~re() {
-            if (!futures::aborted<future_inline<std::optional<T>>>())
+            if (!futures::aborted())
                 return;
 
             switch (state) {
@@ -175,7 +177,7 @@ future_inline<std::optional<T>> recv() {
     if (moved)
         throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
 
-    if (futures::aborted<future_inline<std::optional<T>>>()) {
+    if (futures::aborted()) {
         restorer.state = 0;
         co_return std::nullopt;
     }
@@ -189,7 +191,7 @@ future_inline<std::optional<T>> recv() {
 
     co_await frame->sem.acquire();
 
-    if (futures::aborted<future_inline<std::optional<T>>>()) {
+    if (futures::aborted()) {
         frame->sem.release();
         restorer.state = 0;
         co_return std::nullopt;
@@ -217,7 +219,7 @@ future_inline<std::optional<T>> recv() {
 
         co_await frame->sem.acquire();
 
-        if (futures::aborted<future_inline<std::optional<T>>>()) {
+        if (futures::aborted()) {
             frame->sem.release();
             restorer.state = 0;
             co_return std::nullopt;
@@ -237,6 +239,39 @@ future_inline<std::optional<T>> recv() {
     co_return std::move(frame->buffer[(*frame->receiver)++]);
 }
 ```
+
+---
+
+## select\<N\>
+
+选择器，选择最先返回的协程继续运行，打断其它未返回或后返回的协程。
+
+```c++
+asco::interval in1s{1s};
+asco::interval in500ms{500ms};
+for (int i{0}; i < 6; i++) {
+    switch (co_await asco::select<2>{}) {
+    case 0: {
+        co_await in1s.tick();
+        std::cout << "1s\n";
+        break;
+    }
+    case 1: {
+        co_await in500ms.tick();
+        std::cout << "500ms\n";
+        break;
+    }
+    }
+}
+```
+
+选择器将当前协程克隆出 `N` 个协程并同时唤醒运行。对构造的 `select<N>` 对象 `co_await` 后按协程被克隆的顺序返回 `size_t` 类型的值。
+
+选择器仅对 `select<N>` 对象返回后的第一个异步任务有效。
+
+最先返回的异步任务会将其它任务打断，因此即使后来的协程的已经返回，也会根据前文规定的**可打断特性**将其影响的状态恢复。
+
+被打断的协程会将其调用者一并销毁；如果正确使用了 `select<N>` ，其调用者总是被克隆的 **N** 个协程中的 **N-1** 个。
 
 [^1]: 见[asco 异步运行时](asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。

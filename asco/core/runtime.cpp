@@ -72,7 +72,7 @@ void worker::insert_task_map(task_id id, worker *self) {
 }
 
 // always promis the id is an exist id.
-worker *worker::get_worker_from_task_id(task_id id) {
+worker &worker::get_worker_from_task_id(task_id id) {
     if (!id)
         throw std::runtime_error(
             "[ASCO] worker::get_worker_from_task_id() Inner error: unexpectedly got a 0 as task id");
@@ -86,7 +86,7 @@ worker *worker::get_worker_from_task_id(task_id id) {
             auto p = it->second;
             if (b)
                 its->release();
-            return p;
+            return *p;
         } else {
             if (b)
                 its->release();
@@ -104,12 +104,12 @@ void worker::set_task_sem(task_id id) {
 
 bool worker::in_worker() { return workers.find(std::this_thread::get_id()) != workers.end(); }
 
-worker *worker::get_worker() {
+worker &worker::get_worker() {
     if (workers.find(std::this_thread::get_id()) == workers.end())
         throw std::runtime_error("[ASCO] worker::get_worker(): Currently not in any asco::worker thread");
     if (!current_worker)
         current_worker = workers[std::this_thread::get_id()];
-    return current_worker;
+    return *current_worker;
 }
 
 /* ---- runtime ---- */
@@ -205,7 +205,7 @@ runtime::runtime(size_t nthread_)
                         try {
                             // The map of inline task might already been destroyed by future::promise_type, so
                             // get_task() throw an exception. Just ignore it.
-                            self.sc.get_task(task->id)->reset_real_time();
+                            self.sc.get_task(task->id).reset_real_time();
                         } catch (...) {
                         }
                     }
@@ -325,7 +325,7 @@ runtime::task_id runtime::spawn(task_instance task_, __coro_local_frame *pframe,
     auto task = to_task(task_, false, pframe);
     auto res = task.id;
     if (gid)
-        join_task_to_group(res, gid);
+        join_task_to_group(res, gid, true);
     send_task(task);
     return res;
 }
@@ -334,21 +334,33 @@ runtime::task_id runtime::spawn_blocking(task_instance task_, __coro_local_frame
     auto task = to_task(task_, true, pframe);
     auto res = task.id;
     if (gid)
-        join_task_to_group(res, gid);
+        join_task_to_group(res, gid, true);
     send_blocking_task(task);
     return res;
 }
 
 void runtime::awake(task_id id) {
-    auto *worker = worker::get_worker_from_task_id(id);
-    worker->sc.awake(id);
-    worker->awake();
+    auto &worker = worker::get_worker_from_task_id(id);
+    worker.sc.awake(id);
+    worker.awake();
 }
 
-void runtime::suspend(task_id id) { worker::get_worker_from_task_id(id)->sc.suspend(id); }
+void runtime::suspend(task_id id) { worker::get_worker_from_task_id(id).sc.suspend(id); }
+
+void runtime::abort(task_id id) {
+    if (timer.task_attaching(id))
+        timer.detach(id);
+    auto &w = worker::get_worker_from_task_id(id);
+    auto &t = w.sc.get_task(id);
+    t.aborted = true;
+    if (t.waiting) {
+        abort(t.waiting);
+        awake(t.waiting);
+    }
+}
 
 void runtime::register_sync_awaiter(task_id id) {
-    worker::get_worker_from_task_id(id)->sc.register_sync_awaiter(id);
+    worker::get_worker_from_task_id(id).sc.register_sync_awaiter(id);
 }
 
 void runtime::remove_task_map(void *addr) {
@@ -379,12 +391,12 @@ void runtime::timer_attach(task_id id, std::chrono::high_resolution_clock::time_
     timer.attach(id, time);
 }
 
-void runtime::join_task_to_group(task_id id, task_id gid) {
+void runtime::join_task_to_group(task_id id, task_id gid, bool origin) {
     auto guard = task_groups.lock();
     if (auto it = guard->find(gid); it == guard->end())
         guard->emplace(gid, new task_group{});
 
-    (*guard)[gid]->add_task(id);
+    (*guard)[gid]->add_task(id, origin);
     guard->emplace(id, (*guard)[gid]);
 }
 

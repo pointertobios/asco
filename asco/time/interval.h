@@ -43,7 +43,7 @@ public:
                     , start(self->start) {}
 
             ~re() {
-                if (!futures::aborted<future_inline<nanoseconds>>())
+                if (!futures::aborted())
                     return;
 
                 switch (state) {
@@ -69,7 +69,7 @@ public:
 
         if (duration < 1us) {
             while (high_resolution_clock::now() < awake_time)
-                if (futures::aborted<future_inline<nanoseconds>>()) {
+                if (futures::aborted()) {
                     start = tmp;
                     restorer.state = 0;
                     co_return 0ns;
@@ -79,14 +79,14 @@ public:
             co_return duration;
         }
 
-        auto worker = RT::__worker::get_worker();
-        auto id = worker->current_task_id();
-        worker->sc.suspend(id);
-        RT::get_runtime()->timer_attach(id, awake_time);
+        auto &worker = RT::__worker::get_worker();
+        auto id = worker.current_task_id();
+        worker.sc.suspend(id);
+        RT::get_runtime().timer_attach(id, awake_time);
 
         co_await std::suspend_always{};
 
-        if (futures::aborted<future_inline<nanoseconds>>()) {
+        if (futures::aborted()) {
             start = tmp;
             restorer.state = 0;
             co_return 0ns;

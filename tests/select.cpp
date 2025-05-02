@@ -15,7 +15,7 @@ future<int> async_main() {
     std::cout << "async_main\n";
     asco::interval in1s{1s};
     asco::interval in500ms{500ms};
-    for (int i{0}; i < 6; i++) {
+    for (int i{0}; i < 9; i++) {
         switch (co_await asco::select<2>{}) {
         case 0: {
             co_await in1s.tick();

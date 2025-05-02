@@ -57,7 +57,7 @@ public:
     __always_inline task_id current_task_id() { return running_task.top()->id; }
 
     static bool in_worker();
-    static worker *get_worker();
+    static worker &get_worker();
 
     int id;
     bool is_calculator;
@@ -78,7 +78,7 @@ private:
     bool moved{false};
 
 public:
-    static worker *get_worker_from_task_id(task_id id);
+    static worker &get_worker_from_task_id(task_id id);
     static void set_task_sem(task_id id);
     static std::map<task_id, std::binary_semaphore *> workers_by_task_id_sem;
     static std::mutex wsem_mutex;
@@ -99,13 +99,13 @@ concept is_runtime = requires(T t) {
     typename T::sys;
     // Exception: runtime error when there is not a worker on the current thread.
     { T::__worker::in_worker() } -> std::same_as<bool>;
-    { T::__worker::get_worker() } -> std::same_as<typename T::__worker *>;
+    { T::__worker::get_worker() } -> std::same_as<typename T::__worker &>;
     { T::__worker::set_task_sem(typename T::task_id{}) } -> std::same_as<void>;
     { T::__worker::remove_task_map(typename T::task_id{}) } -> std::same_as<void>;
     {
         T::__worker::insert_task_map(typename T::task_id{}, std::declval<typename T::__worker *>())
     } -> std::same_as<void>;
-    { T::get_runtime() } -> std::same_as<T *>;
+    { T::get_runtime() } -> std::same_as<T &>;
     { t.send_task(std::declval<typename T::scheduler::task>()) } -> std::same_as<void>;
     { t.send_blocking_task(std::declval<typename T::scheduler::task>()) } -> std::same_as<void>;
     {
@@ -116,6 +116,7 @@ concept is_runtime = requires(T t) {
     } -> std::same_as<typename T::task_id>;
     { t.awake(typename T::task_id{}) } -> std::same_as<void>;
     { t.suspend(typename T::task_id{}) } -> std::same_as<void>;
+    { t.abort(typename T::task_id{}) } -> std::same_as<void>;
     { t.register_sync_awaiter(typename T::task_id{}) } -> std::same_as<void>;
     {
         t.task_id_from_corohandle(std::declval<std::coroutine_handle<>>())
@@ -131,7 +132,7 @@ concept is_runtime = requires(T t) {
     {
         t.timer_attach(typename T::task_id{}, std::declval<std::chrono::high_resolution_clock::time_point>())
     } -> std::same_as<void>;
-    { t.join_task_to_group(typename T::task_id{}, typename T::task_id{}) } -> std::same_as<void>;
+    { t.join_task_to_group(typename T::task_id{}, typename T::task_id{}, bool{}) } -> std::same_as<void>;
     { t.exit_group(typename T::task_id{}) } -> std::same_as<void>;
     { t.in_group(typename T::task_id{}) } -> std::same_as<bool>;
     { t.group(typename T::task_id{}) } -> std::same_as<task_group *>;
@@ -175,6 +176,7 @@ public:
     task_id spawn_blocking(task_instance task, __coro_local_frame *pframe, task_id gid = 0);
     void awake(task_id id);
     void suspend(task_id id);
+    void abort(task_id id);
 
     void register_sync_awaiter(task_id id);
     task_id task_id_from_corohandle(std::coroutine_handle<> handle);
@@ -189,7 +191,8 @@ public:
 
     void timer_attach(task_id id, std::chrono::high_resolution_clock::time_point time);
 
-    void join_task_to_group(task_id id, task_id gid);
+    void join_task_to_group(task_id id, task_id gid, bool orogin = false);
+    // Exit group and if the group has only 1 task, destroy that group.
     void exit_group(task_id id);
     bool in_group(task_id id);
     task_group *group(task_id id);
@@ -216,11 +219,11 @@ private:
     void awake_all();
 
 public:
-    __always_inline static runtime *get_runtime() {
+    __always_inline static runtime &get_runtime() {
         if (!current_runtime)
             throw std::runtime_error(
                 "[ASCO] runtime::get_runtime(): The async function must be called with asco::runtime initialized");
-        return current_runtime;
+        return *current_runtime;
     }
 
 private:

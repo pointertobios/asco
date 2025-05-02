@@ -262,7 +262,7 @@ public:
             int state{0};
 
             ~re() {
-                if (!futures::aborted<future_inline<std::optional<T>>>())
+                if (!futures::aborted())
                     return;
 
                 switch (state) {
@@ -284,7 +284,7 @@ public:
         if (moved)
             throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
 
-        if (futures::aborted<future_inline<std::optional<T>>>()) {
+        if (futures::aborted()) {
             restorer.state = 0;
             co_return std::nullopt;
         }
@@ -298,7 +298,7 @@ public:
 
         co_await frame->sem.acquire();
 
-        if (futures::aborted<future_inline<std::optional<T>>>()) {
+        if (futures::aborted()) {
             frame->sem.release();
             restorer.state = 0;
             co_return std::nullopt;
@@ -326,7 +326,7 @@ public:
 
             co_await frame->sem.acquire();
 
-            if (futures::aborted<future_inline<std::optional<T>>>()) {
+            if (futures::aborted()) {
                 frame->sem.release();
                 restorer.state = 0;
                 co_return std::nullopt;

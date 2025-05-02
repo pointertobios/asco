@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <asco/core/timer.h>
+#include <iostream>
 
 #ifdef __linux__
 #    include <cpuid.h>
@@ -33,17 +34,26 @@ timer::timer()
                 if (auto guard = awake_points.lock(); guard->front().time <= high_resolution_clock::now()) {
                     auto &point = guard->front();
                     for (auto &id : point.id) {
+                        attaching_tasks.lock()->erase(id);
                         try {
-                            runtime::get_runtime()->awake(id);
+                            runtime::get_runtime().awake(id);
                         } catch (...) {
                         }
                     }
-                    guard->pop_front();
+                    std::pop_heap(guard->begin(), guard->end(), std::greater<awake_point>());
+                    guard->pop_back();
+
                     continue;
                 }
 
-                for (auto t{awake_points.lock()->front().time}; t > high_resolution_clock::now();
-                     t = awake_points.lock()->front().time) {
+                if (awake_points.lock()->empty())
+                    continue;
+                for (auto t{awake_points.lock()->front().time}; t > high_resolution_clock::now(); ({
+                         if (auto guard = awake_points.lock(); !guard->empty())
+                             t = guard->front().time;
+                     })) {
+                    if (awake_points.lock()->empty())
+                        break;
                     // Sleep if waiting time longer than `nonsleep_time`.
                     // Don't worry about new awake points attached during sleeping, in attach function will
                     // send SIGALRM to break sleeping.
@@ -56,6 +66,8 @@ timer::timer()
                     } else if (t - high_resolution_clock::now() > nonsleep_time) {
                         std::this_thread::sleep_for(1ms);
                     }
+                    if (awake_points.lock()->empty())
+                        break;
                 }
             }
         }) {
@@ -67,6 +79,8 @@ timer::~timer() {
 }
 
 void timer::attach(sched::task::task_id id, high_resolution_clock::time_point time) {
+    auto g = attaching_tasks.lock();
+    g->insert(id);
     auto guard = awake_points.lock();
     if (auto it = std::find_if(
             guard->begin(), guard->end(),
@@ -74,7 +88,7 @@ void timer::attach(sched::task::task_id id, high_resolution_clock::time_point ti
                 return (point.time > time ? point.time - time : time - point.time) <= approx_time;
             });
         it != guard->end()) {
-        it->id.push_back(id);
+        it->id.insert(id);
     }
 
     guard->push_back({time, {id}});
@@ -84,5 +98,21 @@ void timer::attach(sched::task::task_id id, high_resolution_clock::time_point ti
     ::pthread_kill(ptid, SIGALRM);
 #endif
 }
+
+void timer::detach(sched::task::task_id id) {
+    auto g = attaching_tasks.lock();
+    g->erase(id);
+    auto guard = awake_points.lock();
+    if (auto it = std::find_if(
+            guard->begin(), guard->end(), [id](const auto &point) { return point.id.contains(id); });
+        it != guard->end()) {
+        it->id.erase(id);
+        if (it->id.empty())
+            guard->erase(it);
+    }
+    std::make_heap(guard->begin(), guard->end(), std::greater<awake_point>{});
+}
+
+bool timer::task_attaching(sched::task::task_id id) { return attaching_tasks.lock()->contains(id); }
 
 };  // namespace asco::timer

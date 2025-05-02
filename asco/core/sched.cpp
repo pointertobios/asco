@@ -118,9 +118,9 @@ bool std_scheduler::task_exists(task::task_id id) {
            || suspended_tasks.find(id) != suspended_tasks.end();
 }
 
-task *std_scheduler::get_task(task::task_id id) {
+task &std_scheduler::get_task(task::task_id id) {
     if (auto it = task_map.find(id); it != task_map.end()) {
-        return &it->second->t;
+        return it->second->t;
     } else {
         throw std::runtime_error(
             std::format(
