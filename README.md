@@ -36,11 +36,14 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
   - [ ] Windows full support
   - [ ] MacOS full support
 - [x] Basic tools for parallel programming
-  - [x] Semaphore
+  - [ ] Sync Primitives
+    - [x] Spin
+    - [x] Mutex
+    - [ ] Read-Write Lock
+    - [x] Semaphore
+    - [ ] Condition variable
   - [x] Pipe(Channel)
-  - [ ] Timer
-  - [ ] Condition variable
-  - [ ] Locks
+  - [x] Timer and Interval
 - [ ] Async IO
   - [ ] Async file read/write
   - [ ] Async TCP/UDP stream
