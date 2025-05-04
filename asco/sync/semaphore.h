@@ -12,10 +12,12 @@
 #include <asco/sync/spin.h>
 #include <asco/utils/pubusing.h>
 
-namespace asco {
+namespace asco::sync {
+
+using task_id = core::sched::task::task_id;
 
 template<size_t CounterMax, typename R = RT>
-    requires is_runtime<R>
+    requires core::is_runtime<R>
 class semaphore_base {
 public:
     semaphore_base(size_t count)
@@ -129,13 +131,20 @@ public:
 
 private:
     atomic_size_t counter;
-    spin<std::queue<std::pair<sched::task::task_id, worker *>>> waiting_tasks;
+    spin<std::queue<std::pair<task_id, core::worker *>>> waiting_tasks;
 };
 
 using binary_semaphore = semaphore_base<1>;
 
 template<size_t MaxCount>
 using semaphore = semaphore_base<MaxCount>;
+
+};  // namespace asco::sync
+
+namespace asco {
+
+using sync::binary_semaphore;
+using sync::semaphore;
 
 };  // namespace asco
 

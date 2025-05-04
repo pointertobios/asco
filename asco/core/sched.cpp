@@ -3,7 +3,7 @@
 
 #include <asco/core/sched.h>
 
-namespace asco::sched {
+namespace asco::core::sched {
 
 void std_scheduler::push_task(task t, task_control::__control_state initial_state) {
     std::lock_guard lk{active_tasks_mutex};
@@ -153,4 +153,4 @@ void std_scheduler::emplace_sync_awaiter(task::task_id id, std::binary_semaphore
     sync_awaiters.emplace(id, sem);
 }
 
-};  // namespace asco::sched
+};  // namespace asco::core::sched

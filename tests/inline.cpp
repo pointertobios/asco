@@ -7,7 +7,7 @@
 
 inline asco::runtime_initializer_t runtime_initializer = []() {
     std::cout << "runtime_initializer test" << std::endl;
-    return new asco::runtime;
+    return new asco::core::runtime;
 };
 
 using asco::future, asco::future_void_inline;

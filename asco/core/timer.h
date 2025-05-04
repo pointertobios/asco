@@ -15,15 +15,17 @@
 #include <asco/sync/spin.h>
 #include <asco/utils/pubusing.h>
 
-namespace asco::timer {
+namespace asco::core::timer {
 
 using namespace std::chrono;
+
+using task_id = sched::task::task_id;
 
 class timer {
 public:
     struct awake_point {
         high_resolution_clock::time_point time;
-        std::unordered_set<sched::task::task_id> id;
+        std::unordered_set<task_id> id;
 
         bool operator>(const awake_point &rhs) const { return time > rhs.time; }
     };
@@ -31,14 +33,14 @@ public:
     explicit timer();
     ~timer();
 
-    void attach(sched::task::task_id id, high_resolution_clock::time_point time);
-    void detach(sched::task::task_id id);
+    void attach(task_id id, high_resolution_clock::time_point time);
+    void detach(task_id id);
 
-    bool task_attaching(sched::task::task_id id);
+    bool task_attaching(task_id id);
 
 private:
     spin<std::deque<awake_point>> awake_points;  // Use least heap
-    spin<std::unordered_set<sched::task::task_id>> attaching_tasks;
+    spin<std::unordered_set<task_id>> attaching_tasks;
     atomic_bool running{true};
     atomic_bool init_waiter{false};
     std::jthread timerthr;
@@ -52,6 +54,6 @@ private:
     constexpr static microseconds nonsleep_time = 1ms;
 };
 
-};  // namespace asco::timer
+};  // namespace asco::core::timer
 
 #endif

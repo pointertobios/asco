@@ -21,7 +21,9 @@
 #    error "[ASCO] Compile with clang-cl instead of MSVC"
 #endif
 
-namespace asco {
+namespace asco::base {
+
+using core::is_runtime;
 
 struct __future_void {};
 
@@ -73,10 +75,10 @@ struct future_base {
 
         template<size_t Hash>
         static bool group_local_exists() {
-            if (!RT::__worker::in_worker())
+            if (!worker::in_worker())
                 return false;
             auto &rt = RT::get_runtime();
-            auto curid = RT::__worker::get_worker().current_task_id();
+            auto curid = worker::get_worker().current_task_id();
             if (!rt.in_group(curid))
                 return false;
             return rt.group(curid)->var_exists<Hash>();
@@ -114,7 +116,7 @@ struct future_base {
 
                 worker::insert_task_map(task_id, &worker);
             }
-            if (RT::__worker::in_worker()) {
+            if (worker::in_worker()) {
                 auto &worker = worker::get_worker();
                 auto currid = worker.current_task_id();
                 if (rt.in_group(currid) && rt.group(currid)->is_origin(currid)
@@ -128,8 +130,8 @@ struct future_base {
 
         future_base<T, Inline, Blocking> get_return_object() {
             __coro_local_frame *curr_clframe = nullptr;
-            if (RT::__worker::in_worker()) {
-                curr_clframe = RT::__worker::get_worker().current_task().coro_local_frame;
+            if (worker::in_worker()) {
+                curr_clframe = worker::get_worker().current_task().coro_local_frame;
             }
             auto coro = spawn(curr_clframe);
             return future_base<T, Inline, Blocking>(coro, task_id);
@@ -176,9 +178,10 @@ struct future_base {
                 if (caller_task_id)
                     rt.exit_group(caller_task_id);
 
-                auto &w = RT::__worker::get_worker_from_task_id(caller_task_id);
-                if (w.sc.get_task(task_id).aborted) {
+                auto &worker = worker::get_worker_from_task_id(task_id);
+                if (worker.sc.get_task(task_id).aborted) {
                     if (caller_task_id) {
+                        auto &w = worker::get_worker_from_task_id(caller_task_id);
                         rt.remove_task_map(caller_task.address());
                         w.remove_task_map(caller_task_id);
                         if (w.is_calculator)
@@ -220,7 +223,7 @@ struct future_base {
                 rt.remove_task_map(corohandle::from_promise(*this).address());
                 worker.remove_task_map(task_id);
                 rt.awake(caller_task_id);
-                RT::__worker::get_worker_from_task_id(caller_task_id).sc.get_task(caller_task_id).waiting = 0;
+                worker::get_worker_from_task_id(caller_task_id).sc.get_task(caller_task_id).waiting = 0;
 
                 return std::suspend_always{};
             }
@@ -249,7 +252,7 @@ struct future_base {
                 auto id = rt.task_id_from_corohandle(handle);
                 task.promise().caller_task = handle;
                 task.promise().caller_task_id = id;
-                RT::__worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
+                worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
                 rt.suspend(id);
                 return true;
             } else {
@@ -262,7 +265,7 @@ struct future_base {
             auto id = rt.task_id_from_corohandle(handle);
             task.promise().caller_task = handle;
             task.promise().caller_task_id = id;
-            RT::__worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
+            worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
             rt.suspend(id);
 
             worker.running_task.push(&worker.sc.get_task(task_id));
@@ -277,7 +280,7 @@ struct future_base {
     }
 
     T await() {
-        if (RT::__worker::in_worker())
+        if (worker::in_worker())
             throw std::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime");
 
         if constexpr (!Inline) {
@@ -285,7 +288,7 @@ struct future_base {
                 return std::move(task.promise().retval);
 
             RT::get_runtime().register_sync_awaiter(task_id);
-            RT::__worker::get_worker_from_task_id(task_id).sc.get_sync_awaiter(task_id).acquire();
+            worker::get_worker_from_task_id(task_id).sc.get_sync_awaiter(task_id).acquire();
 
             if (task.promise().e)
                 std::rethrow_exception(task.promise().e);
@@ -299,7 +302,7 @@ struct future_base {
 
     void abort() {
         RT::get_runtime().abort(task_id);
-        auto t = RT::__worker::get_worker_from_task_id(task_id).sc.get_task(task_id);
+        auto t = worker::get_worker_from_task_id(task_id).sc.get_task(task_id);
         if (!t.is_inline)
             RT::get_runtime().awake(task_id);
     }
@@ -337,7 +340,16 @@ using future_void = future<__future_void>;
 using future_void_inline = future_inline<__future_void>;
 using future_void_core = future_core<__future_void>;
 
-using runtime_initializer_t = std::optional<std::function<runtime *()>>;
+using runtime_initializer_t = std::optional<std::function<RT *()>>;
+
+};  // namespace asco::base
+
+namespace asco {
+
+using base::future, base::future_inline, base::future_core;
+using base::future_void, base::future_void_inline, base::future_void_core;
+
+using base::runtime_initializer_t;
 
 };  // namespace asco
 

@@ -6,7 +6,7 @@
 
 #include <asco/utils/pubusing.h>
 
-namespace asco {
+namespace asco::sync {
 
 template<typename T>
 class spin : private T {
@@ -36,10 +36,20 @@ public:
 
     guard lock() { return guard{*this}; }
 
+    ~spin() {
+        for (bool b{false}; !locked.compare_exchange_strong(b, true, morder::acquire, morder::relaxed););
+    }
+
 private:
     atomic_bool locked{false};
 };
 
-};  // namespace asco
+};  // namespace asco::sync
+
+namespace asco {
+
+using sync::spin;
+
+}
 
 #endif

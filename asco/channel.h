@@ -14,7 +14,7 @@
 #include <asco/sync/semaphore.h>
 #include <asco/utils/pubusing.h>
 
-namespace asco {
+namespace asco::base {
 
 template<typename T, size_t Size>
 struct channel_frame {
@@ -286,7 +286,7 @@ public:
 
         if (futures::aborted()) {
             restorer.state = 0;
-            co_return std::nullopt;
+            co_return futures::aborted_value<std::optional<T>>;
         }
 
         if (!buffer.empty()) {
@@ -301,7 +301,7 @@ public:
         if (futures::aborted()) {
             frame->sem.release();
             restorer.state = 0;
-            co_return std::nullopt;
+            co_return futures::aborted_value<std::optional<T>>;
         }
 
         if (frame->sender.has_value()) {
@@ -329,7 +329,7 @@ public:
             if (futures::aborted()) {
                 frame->sem.release();
                 restorer.state = 0;
-                co_return std::nullopt;
+                co_return futures::aborted_value<std::optional<T>>;
             }
 
             if (is_stopped()) {
@@ -364,6 +364,18 @@ std::tuple<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
 }
 
 };  // namespace ss
+
+};  // namespace asco::base
+
+namespace asco {
+
+using base::sender, base::receiver;
+
+namespace ss {
+
+using namespace base::ss;
+
+};
 
 };  // namespace asco
 

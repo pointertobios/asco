@@ -17,7 +17,9 @@
 
 #include <asco/coro_local.h>
 
-namespace asco::sched {
+namespace asco::core::sched {
+
+using base::__coro_local_frame;
 
 struct task {
     using task_id = size_t;
@@ -153,6 +155,6 @@ private:
     std::unordered_map<task::task_id, std::binary_semaphore *> sync_awaiters;
 };
 
-};  // namespace asco::sched
+};  // namespace asco::core::sched
 
 #endif

@@ -10,7 +10,7 @@
 #include <asco/utils/pubusing.h>
 #include <asco/utils/type_hash.h>
 
-namespace asco {
+namespace asco::base {
 
 struct __coro_local_frame {
     __coro_local_frame *prev{nullptr};
@@ -95,7 +95,7 @@ struct __coro_local_frame {
     }
 };
 
-};  // namespace asco
+};  // namespace asco::base
 
 #define coro_local(name)               \
     &name = RT::__worker::get_worker() \

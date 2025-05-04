@@ -129,9 +129,8 @@ assert_eq(sem.get_counter(), 1);
 ### 恢复任务状态
 
 在返回类型为 `future<T>` 的协程中调用 `bool futures::aborted()` ，
-返回 `true` 时执行状态恢复逻辑或缓存已得到的结果供下次调用时使用，此处的代码称为**打断判定点**。
-
-`futures::aborted` 函数在编译期计算模板参数的哈希值，用于在运行时验证模板参数与所在函数返回值是否一致。
+返回 `true` 时执行状态恢复逻辑或缓存已得到的结果供下次调用时使用，
+然后立即 `co_return futures::aborted_value<T>` 返回已打断值，此处的代码称为**打断判定点**。
 
 最佳实践：在每个**协程暂停点**[^3]前后设置一个打断判定点，并在 `co_return` 之后利用 `raii` 设置一个**打断判定点**。
 
@@ -179,7 +178,7 @@ future_inline<std::optional<T>> recv() {
 
     if (futures::aborted()) {
         restorer.state = 0;
-        co_return std::nullopt;
+        co_return futures::aborted_value<std::optional<T>>;
     }
 
     if (!buffer.empty()) {
@@ -194,7 +193,7 @@ future_inline<std::optional<T>> recv() {
     if (futures::aborted()) {
         frame->sem.release();
         restorer.state = 0;
-        co_return std::nullopt;
+        co_return futures::aborted_value<std::optional<T>>;
     }
 
     if (frame->sender.has_value()) {
@@ -222,7 +221,7 @@ future_inline<std::optional<T>> recv() {
         if (futures::aborted()) {
             frame->sem.release();
             restorer.state = 0;
-            co_return std::nullopt;
+            co_return futures::aborted_value<std::optional<T>>;
         }
 
         if (is_stopped()) {
@@ -273,6 +272,6 @@ for (int i{0}; i < 6; i++) {
 
 被打断的协程会将其调用者一并销毁；如果正确使用了 `select<N>` ，其调用者总是被克隆的 **N** 个协程中的 **N-1** 个。
 
-[^1]: 见[asco 异步运行时](asco异步运行时.md)
+[^1]: 见[asco 异步运行时](进阶/asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。
 [^3]: C++20 coroutine 使用的术语，指 `co_await` 、 `co_yield` 、 `co_return` 。

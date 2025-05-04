@@ -5,9 +5,10 @@
 #define ASCO_SYNC_MUTEX_H 1
 
 #include <asco/future.h>
+#include <asco/futures.h>
 #include <asco/sync/semaphore.h>
 
-namespace asco {
+namespace asco::sync {
 
 template<typename T>
 class mutex {
@@ -18,6 +19,7 @@ public:
         guard(mutex *self)
                 : self(self) {}
 
+        // Just for passing future_inline's movable check.
         guard(const guard &&rhs)
                 : self(rhs.self) {
             rhs.moved = true;
@@ -80,7 +82,31 @@ public:
             : value{std::move(val)} {}
 
     future_inline<guard> lock() {
+        struct re {
+            mutex *self;
+            int state{0};
+
+            ~re() {
+                if (!futures::aborted())
+                    return;
+
+                if (state == 1)
+                    self->sem.release();
+            }
+        } restorer{this};
+
+        if (futures::aborted()) {
+            co_return std::move(futures::aborted_value<guard>);
+        }
+
         co_await sem.acquire();
+
+        if (futures::aborted()) {
+            sem.release();
+            co_return std::move(futures::aborted_value<guard>);
+        }
+
+        restorer.state = 1;
         co_return std::move(guard(this));
     }
 
@@ -89,6 +115,12 @@ private:
     binary_semaphore sem{1};
 };
 
-};  // namespace asco
+};  // namespace asco::sync
+
+namespace asco {
+
+using sync::mutex;
+
+};
 
 #endif

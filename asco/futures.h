@@ -12,13 +12,26 @@
 #include <asco/future.h>
 #include <asco/utils/type_hash.h>
 
-namespace asco::futures {
+namespace asco::base::futures {
+
+using core::is_runtime;
 
 template<typename R = RT>
     requires is_runtime<R>
 bool aborted() {
     return RT::__worker::get_worker().current_task().aborted;
 }
+
+template<typename T>
+struct aborted_value_t {
+    std::byte null[sizeof(T)];
+};
+
+template<typename T>
+inline static auto aborted_value_v = aborted_value_t<T>{};
+
+template<typename T>
+inline static T aborted_value = std::move(*(T *)(&aborted_value_v<T>.null));
 
 template<typename F, typename T, typename R = RT>
     requires is_future<F> && is_runtime<R>
@@ -56,6 +69,23 @@ bool group_local_exists() {
 
 // Do **NOT** let all the cloned coroutines co_return!!!!!
 size_t clone(std::coroutine_handle<> h);
+
+};  // namespace inner
+
+};  // namespace asco::base::futures
+
+namespace asco::futures {
+
+using base::futures::aborted, base::futures::move_back_return_value;
+using base::futures::coro_local_exists;
+using base::futures::get_task_id;
+
+using base::futures::aborted_value;
+
+namespace inner {
+
+using base::futures::inner::clone;
+using base::futures::inner::group_local_exists;
 
 };  // namespace inner
 

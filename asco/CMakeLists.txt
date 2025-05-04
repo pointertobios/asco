@@ -22,4 +22,3 @@ target_include_directories(asco-shared PUBLIC ../)
 if (NOT WIN32)
     set_target_properties(asco-shared PROPERTIES OUTPUT_NAME asco)
 endif()
-

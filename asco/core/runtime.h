@@ -24,7 +24,9 @@
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 
-namespace asco {
+namespace asco::core {
+
+using base::__coro_local_frame;
 
 class worker;
 using worker_fn = std::function<void(worker *)>;
@@ -230,19 +232,14 @@ private:
     static runtime *current_runtime;
 };
 
-class caller_destroyed : std::exception {
-public:
-    const char *what() const noexcept override { return "Caller destroyed"; }
-};
-
 // Define macro `SET_RUNTIME` with set_runtime(rt)
 // And use this before include future.h
 #define set_runtime(rt) using RT = rt
 
-};  // namespace asco
+};  // namespace asco::core
 
 #ifndef SET_RUNTIME
-using RT = asco::runtime;
+using RT = asco::core::runtime;
 #endif
 
 #endif

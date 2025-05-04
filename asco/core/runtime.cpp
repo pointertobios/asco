@@ -20,7 +20,8 @@
 
 #include <asco/core/sched.h>
 
-namespace asco {
+namespace asco::core {
+
 std::map<worker::task_id, std::binary_semaphore *> worker::workers_by_task_id_sem;
 std::mutex worker::wsem_mutex;
 std::map<worker::task_id, worker *> worker::workers_by_task_id;
@@ -177,7 +178,6 @@ runtime::runtime(size_t nthread_)
                 try {
                     if (!(*task)->done())
                         (*task)->resume();
-                } catch (caller_destroyed &) {
                 } catch (std::exception &e) {
                     std::cerr << std::format(
                         "[ASCO] worker thread: Inner error at task {}: {}\n", (*task)->id, e.what());
@@ -427,4 +427,4 @@ task_group *runtime::group(task_id id) {
     throw std::runtime_error(std::format("[ASCO] runtime::group(): task_group {} unexists", id));
 }
 
-};  // namespace asco
+};  // namespace asco::core

@@ -8,7 +8,7 @@
 #include <asco/lazy_delete.h>
 
 using asco::future, asco::lazy_delete;
-using asco::runtime;
+using asco::core::runtime;
 
 extern future<int> async_main();
 

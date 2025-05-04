@@ -72,7 +72,7 @@ public:
                 if (futures::aborted()) {
                     start = tmp;
                     restorer.state = 0;
-                    co_return 0ns;
+                    co_return futures::aborted_value<nanoseconds>;
                 }
 
             restorer.state = 1;
@@ -89,7 +89,7 @@ public:
         if (futures::aborted()) {
             start = tmp;
             restorer.state = 0;
-            co_return 0ns;
+            co_return futures::aborted_value<nanoseconds>;
         }
 
         auto now = high_resolution_clock::now();

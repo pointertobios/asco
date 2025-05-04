@@ -15,7 +15,9 @@
 #include <asco/utils/pubusing.h>
 #include <asco/utils/type_hash.h>
 
-namespace asco {
+namespace asco::core {
+
+using task_id = sched::task::task_id;
 
 class task_group {
 public:
@@ -27,15 +29,15 @@ public:
         }
     }
 
-    inline void add_task(sched::task::task_id id, bool origin = false) {
+    inline void add_task(task_id id, bool origin = false) {
         tasks.insert(id);
         if (origin)
             origin_tasks.insert(id);
     }
 
-    inline bool is_origin(sched::task::task_id id) { return origin_tasks.contains(id); }
+    inline bool is_origin(task_id id) { return origin_tasks.contains(id); }
 
-    inline std::optional<sched::task::task_id> remove_task(sched::task::task_id id) {
+    inline std::optional<task_id> remove_task(task_id id) {
         tasks.erase(id);
         if (tasks.size() == 1)
             return *tasks.begin();
@@ -43,7 +45,7 @@ public:
             return std::nullopt;
     }
 
-    inline std::vector<sched::task::task_id> non_origin_tasks() {
+    inline std::vector<task_id> non_origin_tasks() {
         auto view = tasks | std::views::filter([this](auto id) { return !origin_tasks.contains(id); });
         return view | std::ranges::to<std::vector>();
     }
@@ -93,13 +95,13 @@ public:
     }
 
 private:
-    std::unordered_set<sched::task::task_id> tasks;
-    std::unordered_set<sched::task::task_id> origin_tasks;
+    std::unordered_set<task_id> tasks;
+    std::unordered_set<task_id> origin_tasks;
 
     std::unordered_map<size_t, dynvar> vars;
 };
 
-};  // namespace asco
+};  // namespace asco::core
 
 #define group_local(name)                                            \
     &name = RT::get_runtime()                                        \

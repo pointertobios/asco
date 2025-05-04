@@ -12,7 +12,7 @@
 
 #include <asco/core/runtime.h>
 
-namespace asco::timer {
+namespace asco::core::timer {
 
 timer::timer()
         : timerthr([this] {
@@ -36,7 +36,7 @@ timer::timer()
                     for (auto &id : point.id) {
                         attaching_tasks.lock()->erase(id);
                         try {
-                            runtime::get_runtime().awake(id);
+                            RT::get_runtime().awake(id);
                         } catch (...) {
                         }
                     }
@@ -78,7 +78,7 @@ timer::~timer() {
     timerthr.join();
 }
 
-void timer::attach(sched::task::task_id id, high_resolution_clock::time_point time) {
+void timer::attach(task_id id, high_resolution_clock::time_point time) {
     auto g = attaching_tasks.lock();
     g->insert(id);
     auto guard = awake_points.lock();
@@ -99,7 +99,7 @@ void timer::attach(sched::task::task_id id, high_resolution_clock::time_point ti
 #endif
 }
 
-void timer::detach(sched::task::task_id id) {
+void timer::detach(task_id id) {
     auto g = attaching_tasks.lock();
     g->erase(id);
     auto guard = awake_points.lock();
@@ -113,6 +113,6 @@ void timer::detach(sched::task::task_id id) {
     std::make_heap(guard->begin(), guard->end(), std::greater<awake_point>{});
 }
 
-bool timer::task_attaching(sched::task::task_id id) { return attaching_tasks.lock()->contains(id); }
+bool timer::task_attaching(task_id id) { return attaching_tasks.lock()->contains(id); }
 
-};  // namespace asco::timer
+};  // namespace asco::core::timer
