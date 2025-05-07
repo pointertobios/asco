@@ -2,7 +2,7 @@
 
 [![GPLv3 License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-C++20 coroutine based async framework.
+C++20 coroutine based async framework (***C++23*** needed).
 
 ## Getting Started
 

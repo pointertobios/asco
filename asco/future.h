@@ -5,7 +5,6 @@
 #define ASCO_FUTURE_H
 
 #include <atomic>
-#include <barrier>
 #include <coroutine>
 #include <functional>
 #include <optional>
@@ -143,22 +142,19 @@ struct future_base {
             auto &rt = RT::get_runtime();
             // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
             // `__asco_select_sem__` for continue running
-            if (group_local_exists<__consteval_str_hash("__asco_select_sem__")>()) {
+            if (group_local_exists<__consteval_str_hash("__asco_select_sem__")>()
+                && !rt.group(task_id)->is_origin(task_id)) {
                 std::binary_semaphore group_local(__asco_select_sem__);
                 bool aborting = !__asco_select_sem__.try_acquire();
-                std::barrier<std::function<void()>> group_local(__asco_select_return_barrier__);
                 if (aborting) {
-                    __asco_select_return_barrier__.arrive_and_wait();
                     return;
                 } else {
-                    auto tk = __asco_select_return_barrier__.arrive();
                     for (auto id : rt.group(task_id)->non_origin_tasks()) {
                         if (id == task_id)
                             continue;
                         RT::get_runtime().abort(id);
                         rt.awake(id);
                     }
-                    __asco_select_return_barrier__.wait(std::move(tk));
                 }
             }
 
@@ -178,8 +174,8 @@ struct future_base {
                 if (caller_task_id)
                     rt.exit_group(caller_task_id);
 
-                auto &worker = worker::get_worker_from_task_id(task_id);
-                if (worker.sc.get_task(task_id).aborted) {
+                if (auto &worker = worker::get_worker_from_task_id(task_id);
+                    worker.sc.get_task(task_id).aborted) {
                     if (caller_task_id) {
                         auto &w = worker::get_worker_from_task_id(caller_task_id);
                         rt.remove_task_map(caller_task.address());

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <asco/core/timer.h>
-#include <iostream>
 
 #ifdef __linux__
 #    include <cpuid.h>

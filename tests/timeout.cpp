@@ -7,13 +7,13 @@
 #include <asco/futures.h>
 #include <asco/time/timeout.h>
 
-using asco::future, asco::future_void_inline;
+using asco::future, asco::future_void;
 using asco::timeout, asco::interval;
 
 using namespace std::chrono_literals;
 
 future<int> async_main() {
-    auto res = co_await timeout(1s, [] -> future_void_inline {
+    auto res = co_await timeout(1s, [] -> future_void {
         interval in{2s};
         std::cout << "interval start\n";
         co_await in.tick();

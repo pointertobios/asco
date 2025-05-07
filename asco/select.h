@@ -4,7 +4,6 @@
 #ifndef ASCO_SELECT_H
 #define ASCO_SELECT_H 1
 
-#include <barrier>
 #include <coroutine>
 #include <functional>
 #include <semaphore>
@@ -30,11 +29,6 @@ public:
         if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_sem__")>())
             del_glocal("__asco_select_sem__");
         std::binary_semaphore decl_glocal(__asco_select_sem__, new std::binary_semaphore{1});
-
-        if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_return_barrier__")>())
-            del_glocal("__asco_select_return_barrier__");
-        std::barrier<std::function<void()>> decl_glocal(
-            __asco_select_return_barrier__, new std::barrier<std::function<void()>>(N, [] {}));
 
         size_t h[N];
         for (size_t i{1}; i < N; i++) {
