@@ -10,7 +10,6 @@
 #include <vector>
 
 #include <asco/future.h>
-#include <asco/futures.h>
 #include <asco/sync/semaphore.h>
 #include <asco/utils/pubusing.h>
 
@@ -262,13 +261,14 @@ public:
             int state{0};
 
             ~re() {
-                if (!futures::aborted())
+                if (!this_coro::aborted())
                     return;
 
                 switch (state) {
                 case 2:
                     self->buffer.push_back(
-                        futures::move_back_return_value<future_inline<std::optional<T>>, std::optional<T>>());
+                        this_coro::move_back_return_value<
+                            future_inline<std::optional<T>>, std::optional<T>>());
                 case 1:
                     self->frame->sem.release();
                     break;
@@ -284,9 +284,9 @@ public:
         if (moved)
             throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
 
-        if (futures::aborted()) {
+        if (this_coro::aborted()) {
             restorer.state = 0;
-            co_return futures::aborted_value<std::optional<T>>;
+            co_return this_coro::aborted_value<std::optional<T>>;
         }
 
         if (!buffer.empty()) {
@@ -298,10 +298,10 @@ public:
 
         co_await frame->sem.acquire();
 
-        if (futures::aborted()) {
+        if (this_coro::aborted()) {
             frame->sem.release();
             restorer.state = 0;
-            co_return futures::aborted_value<std::optional<T>>;
+            co_return this_coro::aborted_value<std::optional<T>>;
         }
 
         if (frame->sender.has_value()) {
@@ -326,10 +326,10 @@ public:
 
             co_await frame->sem.acquire();
 
-            if (futures::aborted()) {
+            if (this_coro::aborted()) {
                 frame->sem.release();
                 restorer.state = 0;
-                co_return futures::aborted_value<std::optional<T>>;
+                co_return this_coro::aborted_value<std::optional<T>>;
             }
 
             if (is_stopped()) {

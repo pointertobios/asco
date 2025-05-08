@@ -8,7 +8,6 @@
 #include <coroutine>
 
 #include <asco/future.h>
-#include <asco/futures.h>
 
 namespace asco::time {
 
@@ -43,7 +42,7 @@ public:
                     , start(self->start) {}
 
             ~re() {
-                if (!futures::aborted())
+                if (!this_coro::aborted())
                     return;
 
                 switch (state) {
@@ -69,10 +68,10 @@ public:
 
         if (duration < 1us) {
             while (high_resolution_clock::now() < awake_time)
-                if (futures::aborted()) {
+                if (this_coro::aborted()) {
                     start = tmp;
                     restorer.state = 0;
-                    co_return futures::aborted_value<nanoseconds>;
+                    co_return this_coro::aborted_value<nanoseconds>;
                 }
 
             restorer.state = 1;
@@ -86,10 +85,10 @@ public:
 
         co_await std::suspend_always{};
 
-        if (futures::aborted()) {
+        if (this_coro::aborted()) {
             start = tmp;
             restorer.state = 0;
-            co_return futures::aborted_value<nanoseconds>;
+            co_return this_coro::aborted_value<nanoseconds>;
         }
 
         auto now = high_resolution_clock::now();

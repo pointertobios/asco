@@ -128,9 +128,9 @@ assert_eq(sem.get_counter(), 1);
 
 ### 恢复任务状态
 
-在返回类型为 `future<T>` 的协程中调用 `bool futures::aborted()` ，
+在返回类型为 `future<T>` 的协程中调用 `bool this_coro::aborted()` ，
 返回 `true` 时执行状态恢复逻辑或缓存已得到的结果供下次调用时使用，
-然后立即 `co_return futures::aborted_value<T>` 返回已打断值，此处的代码称为**打断判定点**。
+然后立即 `co_return this_coro::aborted_value<T>` 返回已打断值，此处的代码称为**打断判定点**。
 
 最佳实践：在每个**协程暂停点**[^3]前后设置一个打断判定点，并在 `co_return` 之后利用 `raii` 设置一个**打断判定点**。
 
@@ -144,7 +144,7 @@ assert_eq(sem.get_counter(), 1);
 在每个 `co_return` 前，都设置 `restorer.state` 的值，因此，
 `restorer` 的析构函数可以在不同的 `co_return` 返回后执行不同的恢复操作。
 
-在此期间，可以使用 `T &&futures::move_back_return_value<future<T>, T>()` 将返回值移动回当前上下文以避免其被丢弃。
+在此期间，可以使用 `T &&this_coro::move_back_return_value<future<T>, T>()` 将返回值移动回当前上下文以避免其被丢弃。
 
 ```c++
 [[nodiscard("[ASCO] receiver::recv(): You must deal with the case of channel closed.")]]
@@ -154,13 +154,13 @@ future_inline<std::optional<T>> recv() {
         int state{0};
 
         ~re() {
-            if (!futures::aborted())
+            if (!this_coro::aborted())
                 return;
 
             switch (state) {
             case 2:
                 self->buffer.push_back(
-                    futures::move_back_return_value<future_inline<std::optional<T>>, std::optional<T>>());
+                    this_coro::move_back_return_value<future_inline<std::optional<T>>, std::optional<T>>());
             case 1:
                 self->frame->sem.release();
                 break;
@@ -176,9 +176,9 @@ future_inline<std::optional<T>> recv() {
     if (moved)
         throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
 
-    if (futures::aborted()) {
+    if (this_coro::aborted()) {
         restorer.state = 0;
-        co_return futures::aborted_value<std::optional<T>>;
+        co_return this_coro::aborted_value<std::optional<T>>;
     }
 
     if (!buffer.empty()) {
@@ -190,10 +190,10 @@ future_inline<std::optional<T>> recv() {
 
     co_await frame->sem.acquire();
 
-    if (futures::aborted()) {
+    if (this_coro::aborted()) {
         frame->sem.release();
         restorer.state = 0;
-        co_return futures::aborted_value<std::optional<T>>;
+        co_return this_coro::aborted_value<std::optional<T>>;
     }
 
     if (frame->sender.has_value()) {
@@ -218,10 +218,10 @@ future_inline<std::optional<T>> recv() {
 
         co_await frame->sem.acquire();
 
-        if (futures::aborted()) {
+        if (this_coro::aborted()) {
             frame->sem.release();
             restorer.state = 0;
-            co_return futures::aborted_value<std::optional<T>>;
+            co_return this_coro::aborted_value<std::optional<T>>;
         }
 
         if (is_stopped()) {

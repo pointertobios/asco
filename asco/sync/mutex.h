@@ -5,7 +5,6 @@
 #define ASCO_SYNC_MUTEX_H 1
 
 #include <asco/future.h>
-#include <asco/futures.h>
 #include <asco/sync/semaphore.h>
 
 namespace asco::sync {
@@ -87,7 +86,7 @@ public:
             int state{0};
 
             ~re() {
-                if (!futures::aborted())
+                if (!this_coro::aborted())
                     return;
 
                 if (state == 1)
@@ -95,15 +94,15 @@ public:
             }
         } restorer{this};
 
-        if (futures::aborted()) {
-            co_return std::move(futures::aborted_value<guard>);
+        if (this_coro::aborted()) {
+            co_return std::move(this_coro::aborted_value<guard>);
         }
 
         co_await sem.acquire();
 
-        if (futures::aborted()) {
+        if (this_coro::aborted()) {
             sem.release();
-            co_return std::move(futures::aborted_value<guard>);
+            co_return std::move(this_coro::aborted_value<guard>);
         }
 
         restorer.state = 1;

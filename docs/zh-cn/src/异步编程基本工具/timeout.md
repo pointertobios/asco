@@ -16,7 +16,6 @@
 #include <iostream>
 
 #include <asco/future.h>
-#include <asco/futures.h>
 #include <asco/time/timeout.h>
 
 using asco::future, asco::future_void_inline;
@@ -29,7 +28,7 @@ future<int> async_main() {
         interval in{2s};
         std::cout << "interval start\n";
         co_await in.tick();
-        if (asco::futures::aborted()) {
+        if (asco::this_coro::aborted()) {
             std::cout << "timeout aborted\n";
         } else {
             std::cout << "interval 2s\n";

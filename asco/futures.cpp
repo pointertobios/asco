@@ -7,7 +7,7 @@
 
 #include <asco/utils/pubusing.h>
 
-namespace asco::base::futures::inner {
+namespace asco::base::this_coro::inner {
 
 size_t clone(std::coroutine_handle<> h) {
     auto &rt = RT::get_runtime();
@@ -41,4 +41,4 @@ size_t clone(std::coroutine_handle<> h) {
     return dst_id;
 }
 
-};  // namespace asco::base::futures::inner
+};  // namespace asco::base::this_coro::inner

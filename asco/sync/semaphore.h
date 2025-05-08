@@ -8,7 +8,6 @@
 #include <queue>
 
 #include <asco/future.h>
-#include <asco/futures.h>
 #include <asco/sync/spin.h>
 #include <asco/utils/pubusing.h>
 
@@ -66,7 +65,7 @@ public:
             int state{0};
 
             ~re() {
-                if (!futures::aborted())
+                if (!this_coro::aborted())
                     return;
 
                 if (state == 1)
@@ -75,7 +74,7 @@ public:
         } restorer{this};
 
         while (true) {
-            if (futures::aborted()) {
+            if (this_coro::aborted()) {
                 restorer.state = 0;
                 co_return {};
             }
@@ -108,7 +107,7 @@ public:
         }
 
         restorer.state = 1;
-        if (futures::aborted()) {
+        if (this_coro::aborted()) {
             restorer.state = 0;
             counter.fetch_add(1, morder::release);
         }

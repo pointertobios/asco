@@ -10,7 +10,6 @@
 
 #include <asco/core/taskgroup.h>
 #include <asco/future.h>
-#include <asco/futures.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco {
@@ -26,14 +25,14 @@ public:
         auto currid = rt.task_id_from_corohandle(handle);
         rt.join_task_to_group(currid, currid, true);
 
-        if (futures::inner::group_local_exists<__consteval_str_hash("__asco_select_sem__")>())
+        if (base::this_coro::inner::group_local_exists<__consteval_str_hash("__asco_select_sem__")>())
             del_glocal("__asco_select_sem__");
         std::binary_semaphore decl_glocal(__asco_select_sem__, new std::binary_semaphore{1});
 
         size_t h[N];
         for (size_t i{1}; i < N; i++) {
             n = i;
-            h[i] = futures::inner::clone(handle);
+            h[i] = base::this_coro::inner::clone(handle);
         }
         n = 0;
 
