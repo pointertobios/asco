@@ -58,8 +58,7 @@ public:
 
     __always_inline task_id current_task_id() { return running_task.top()->id; }
 
-    static bool in_worker();
-    static worker &get_worker();
+    __always_inline bool task_schedulable(task_id id) { return sc.task_exists(id); }
 
     int id;
     bool is_calculator;
@@ -80,6 +79,9 @@ private:
     bool moved{false};
 
 public:
+    static bool in_worker();
+    static worker &get_worker();
+    static bool task_available(task_id id);
     static worker &get_worker_from_task_id(task_id id);
     static void set_task_sem(task_id id);
     static std::map<task_id, std::binary_semaphore *> workers_by_task_id_sem;
@@ -102,6 +104,10 @@ concept is_runtime = requires(T t) {
     // Exception: runtime error when there is not a worker on the current thread.
     { T::__worker::in_worker() } -> std::same_as<bool>;
     { T::__worker::get_worker() } -> std::same_as<typename T::__worker &>;
+    // If the task never been control by runtime, return false.
+    { T::__worker::task_available(typename T::task_id{}) } -> std::same_as<bool>;
+    // Exception: runtime error when the task fits !task_available(id).
+    { T::__worker::get_worker_from_task_id(typename T::task_id{}) } -> std::same_as<typename T::__worker &>;
     { T::__worker::set_task_sem(typename T::task_id{}) } -> std::same_as<void>;
     { T::__worker::remove_task_map(typename T::task_id{}) } -> std::same_as<void>;
     {
@@ -142,6 +148,8 @@ concept is_runtime = requires(T t) {
     { w.conditional_suspend() } -> std::same_as<void>;
     { w.current_task() } -> std::same_as<typename T::scheduler::task &>;
     { w.current_task_id() } -> std::same_as<typename T::task_id>;
+    // If the task had destroyed by scheduler, return false.
+    { w.task_schedulable(typename T::task_id{}) } -> std::same_as<bool>;
     { w.is_calculator } -> std::same_as<bool &>;
     { w.running_task } -> std::same_as<std::stack<typename T::scheduler::task *> &>;
     { w.sc } -> std::same_as<typename T::scheduler &>;

@@ -72,25 +72,36 @@ void worker::insert_task_map(task_id id, worker *self) {
     workers_by_task_id_sem.at(id)->release();
 }
 
+bool worker::task_available(task_id id) {
+    if (auto its_ = workers_by_task_id_sem.find(id); its_ != workers_by_task_id_sem.end()) {
+        auto its = its_->second;
+        its->acquire();
+        if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
+            its->release();
+            return true;
+        } else {
+            its->release();
+            return false;
+        }
+    }
+    return false;
+}
+
 // always promis the id is an exist id.
 worker &worker::get_worker_from_task_id(task_id id) {
     if (!id)
         throw std::runtime_error(
             "[ASCO] worker::get_worker_from_task_id() Inner error: unexpectedly got a 0 as task id");
 
-    bool b = false;
     if (auto its_ = workers_by_task_id_sem.find(id); its_ != workers_by_task_id_sem.end()) {
         auto its = its_->second;
-        b = true;
         its->acquire();
         if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
             auto p = it->second;
-            if (b)
-                its->release();
+            its->release();
             return *p;
         } else {
-            if (b)
-                its->release();
+            its->release();
             throw std::runtime_error("[ASCO] Inner error: task id does not exist");
         }
     }
@@ -199,11 +210,8 @@ runtime::runtime(size_t nthread_)
                         self.sc.destroy(task->id);
 
                     } else {
-                        try {
-                            // The map of inline task might already been destroyed by future::promise_type, so
-                            // get_task() throw an exception. Just ignore it.
+                        if (self.task_schedulable(task->id))
                             self.sc.get_task(task->id).reset_real_time();
-                        } catch (...) {}
                     }
                 }
             } else if (self.sc.has_buffered_awakes()) {

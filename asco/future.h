@@ -173,21 +173,20 @@ struct future_base {
                 if (caller_task_id)
                     rt.exit_group(caller_task_id);
 
+                if (!worker::task_available(task_id))
+                    return std::suspend_always{};
+
                 if (auto &worker = worker::get_worker_from_task_id(task_id);
                     worker.sc.get_task(task_id).aborted) {
-                    if (caller_task_id) {
-                        try {
-                            auto &w = worker::get_worker_from_task_id(caller_task_id);
-                            w.sc.destroy(caller_task_id, true);
-                            if (w.is_calculator)
-                                rt.dec_calcu_load();
-                            else
-                                rt.dec_io_load();
-                            rt.remove_task_map(caller_task.address());
-                            worker::remove_task_map(caller_task_id);
-                        } catch (...) {
-                            //
-                        }
+                    if (worker::task_available(caller_task_id)) {
+                        auto &w = worker::get_worker_from_task_id(caller_task_id);
+                        w.sc.destroy(caller_task_id, true);
+                        if (w.is_calculator)
+                            rt.dec_calcu_load();
+                        else
+                            rt.dec_io_load();
+                        rt.remove_task_map(caller_task.address());
+                        worker::remove_task_map(caller_task_id);
                     }
                     return std::suspend_always{};
                 }
@@ -203,19 +202,16 @@ struct future_base {
                         .waiting = 0;
                 }
 
-                // When catch an exception, it means the task successfully destroyed.
-                // Just ignore.
-                try {
+                if (worker::task_available(task_id))
                     rt.suspend(task_id);
-                } catch (...) {}
 
                 return std::suspend_always{};
             } else {
                 auto &rt = RT::get_runtime();
 
-                try {
+                if (worker::task_available(task_id))
                     rt.suspend(task_id);
-                } catch (...) {}
+
                 rt.remove_task_map(corohandle::from_promise(*this).address());
                 asco::core::worker::remove_task_map(task_id);
                 rt.awake(caller_task_id);
