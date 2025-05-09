@@ -79,6 +79,24 @@ future<int> async_main() {
 
 ---
 
+## 协程睡眠
+
+睡眠指定的时间间隔：
+
+```c++
+future_void_inline sleep_for(std::chrono::duration<Rep, Period>)
+```
+
+`duration` 类型包括标准库中任意的时间间隔类型如 `nanoseconds` 、 `miliseconds` 等，以及它们对应的字面值字符串运算符。
+
+睡眠至指定的时间点：
+
+```c++
+future_void_inline sleep_until(std::chrono::time_point<Clock, Duration>)
+```
+
+---
+
 ## 协程本地变量
 
 **协程本地变量**沿调用链传播。使用基于编译期计算哈希值的类型检查和变量名查找，查找变量名时沿调用链一路向上搜索。

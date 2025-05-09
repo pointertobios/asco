@@ -16,7 +16,7 @@ namespace asco::time {
 
 template<typename Ti, typename F>
     requires std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>
-             && is_async_function<F, std::invoke_result_t<F>>
+             && is_async_task<F>
 future_inline<std::optional<typename std::invoke_result_t<F>::return_type>> timeout(Ti time, F f) {
     interval in{time};
     switch (co_await select<2>{}) {

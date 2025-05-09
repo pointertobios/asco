@@ -4,7 +4,6 @@
 #ifndef ASCO_FUTURES_H
 #define ASCO_FUTURES_H 1
 
-#include <concepts>
 #include <coroutine>
 
 #include <asco/core/taskgroup.h>
@@ -44,7 +43,8 @@ T &&move_back_return_value() {
     if (std::is_same_v<typename F::return_type, T>)
         throw std::runtime_error(
             "[ASCO] move_back_return_value<F, T>(): T is not matched with your current coroutine.");
-    return std::move(h.promise().retval);
+    // If a task aborted and must move back return value, its awaiter will always exists.
+    return h.promise().awaiter->retval_move_out();
 }
 
 template<typename R = RT>

@@ -16,17 +16,10 @@ using namespace std::chrono;
 template<typename R = RT>
 class interval {
 public:
-    interval(nanoseconds ns)
-            : duration(ns) {}
-
-    interval(microseconds us)
-            : duration(duration_cast<nanoseconds>(us)) {}
-
-    interval(milliseconds ms)
-            : duration(duration_cast<nanoseconds>(ms)) {}
-
-    interval(seconds s)
-            : duration(duration_cast<nanoseconds>(s)) {}
+    template<typename Ti>
+        requires std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>
+    explicit interval(Ti t)
+            : duration(duration_cast<nanoseconds>(t)) {}
 
     future_inline<nanoseconds> tick() {
         // restorer to restore if aboreted after co_return

@@ -94,8 +94,7 @@ worker &worker::get_worker_from_task_id(task_id id) {
             throw std::runtime_error("[ASCO] Inner error: task id does not exist");
         }
     }
-    throw std::runtime_error(
-        "[ASCO] worker::get_worker_from_task_id() Inner error: task id does not exist in sems");
+    throw std::runtime_error("[ASCO] worker::get_worker_from_task_id() Inner error: task id does not exist");
 }
 
 void worker::set_task_sem(task_id id) {
@@ -120,9 +119,7 @@ std::unordered_map<std::string, std::string> runtime::sys::__env;
 
 void runtime::sys::set_args(int argc, const char **argv) {
     __args.clear();
-    for (int i = 0; i < argc; i++) {
-        __args.push_back(argv[i]);
-    }
+    for (int i = 0; i < argc; i++) { __args.push_back(argv[i]); }
 }
 
 void runtime::sys::set_env(char **env) {
@@ -206,8 +203,7 @@ runtime::runtime(size_t nthread_)
                             // The map of inline task might already been destroyed by future::promise_type, so
                             // get_task() throw an exception. Just ignore it.
                             self.sc.get_task(task->id).reset_real_time();
-                        } catch (...) {
-                        }
+                        } catch (...) {}
                     }
                 }
             } else if (self.sc.has_buffered_awakes()) {
@@ -244,9 +240,7 @@ runtime::runtime(size_t nthread_)
             throw std::runtime_error("[ASCO] runtime::runtime(): Failed to detect CPU hyperthreading");
         std::string buf;
         std::vector<int> siblings;
-        while (std::getline(f, buf, '-')) {
-            siblings.push_back(std::atoi(buf.c_str()));
-        }
+        while (std::getline(f, buf, '-')) { siblings.push_back(std::atoi(buf.c_str())); }
         f.close();
         if (siblings.size() > 1) {
             is_calculator = true;
@@ -287,16 +281,12 @@ runtime::~runtime() {
     io_task_tx->stop();
     calcu_task_tx->stop();
     awake_all();
-    for (auto thread : pool) {
-        thread->join();
-    }
+    for (auto thread : pool) { thread->join(); }
     current_runtime = nullptr;
 }
 
 void runtime::awake_all() {
-    for (auto worker : pool) {
-        worker->awake();
-    }
+    for (auto worker : pool) { worker->awake(); }
 }
 
 void runtime::send_task(sched::task task) {

@@ -13,27 +13,26 @@ template<typename T>
 class mutex {
 public:
     struct guard {
-        guard() {}
+        guard() = default;
 
-        guard(mutex *self)
+        explicit guard(mutex *self)
                 : self(self) {}
 
-        // Just for passing future_inline's movable check.
-        guard(const guard &&rhs)
+        guard(guard &&rhs) noexcept
                 : self(rhs.self) {
             rhs.moved = true;
         }
 
-        // Just for passing future_inline's movable check.
-        void operator=(const guard &&rhs) {
+        guard &operator=(guard &&rhs) noexcept {
             self = rhs.self;
             rhs.moved = true;
+            return *this;
         }
 
         ~guard() {
-            if (self && !moved) {
-                self->sem.release();
-            }
+            if (!self || moved)
+                return;
+            self->sem.release();
         }
 
         T &operator*() {
@@ -68,17 +67,21 @@ public:
 
     private:
         mutex *self;
-        bool mutable moved{false};
+        bool moved{false};
     };
 
     mutex()
             : value{} {}
 
-    mutex(const T &val)
+    explicit mutex(const T &val)
             : value{val} {}
 
-    mutex(T &&val)
+    explicit mutex(T &&val)
             : value{std::move(val)} {}
+
+    template<typename... Args>
+    explicit mutex(Args &&...args)
+            : value(std::forward<Args>(args)...) {}
 
     future_inline<guard> lock() {
         struct re {
@@ -106,7 +109,7 @@ public:
         }
 
         restorer.state = 1;
-        co_return std::move(guard(this));
+        co_return guard(this);
     }
 
 private:

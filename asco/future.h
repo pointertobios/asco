@@ -4,7 +4,6 @@
 #ifndef ASCO_FUTURE_H
 #define ASCO_FUTURE_H
 
-#include <atomic>
 #include <coroutine>
 #include <functional>
 #include <optional>
@@ -24,7 +23,7 @@ namespace asco::base {
 
 using core::is_runtime;
 
-struct __future_void {};
+struct _future_void {};
 
 template<typename R = RT>
     requires is_runtime<R>
@@ -45,30 +44,29 @@ struct future_base {
     using return_type = T;
 
     struct promise_type {
-        // Alway put this at the first, so that we can authenticate the coroutine_handle type when we
+        // Always put this at the first, so that we can authenticate the coroutine_handle type when we
         // reinterpret it from raw pointer.
         size_t future_type_hash{type_hash<future_base<T, Inline, Blocking>>()};
 
         std::binary_semaphore returned{0};
 
-        size_t task_id;
+        size_t task_id{};
         future_base *awaiter{nullptr};
         std::binary_semaphore awaiter_sem{0};
 
         std::coroutine_handle<> caller_task;
         size_t caller_task_id{0};
 
-        T retval;
         std::exception_ptr e;
 
         void *operator new(size_t n) noexcept {
-            size_t *p = reinterpret_cast<size_t *>(::operator new(n + sizeof(size_t)));
+            auto *p = static_cast<size_t *>(::operator new(n + sizeof(size_t)));
             *p = n;
             return p + 1;
         }
 
         void operator delete(void *p) noexcept {
-            size_t *q = reinterpret_cast<size_t *>(p) - 1;
+            size_t *q = static_cast<size_t *>(p) - 1;
             ::operator delete(q);
         }
 
@@ -144,22 +142,23 @@ struct future_base {
             // `__asco_select_sem__` for continue running
             if (group_local_exists<__consteval_str_hash("__asco_select_sem__")>()
                 && !rt.group(task_id)->is_origin(task_id)) {
+                task_id = worker::get_worker().current_task_id();
                 std::binary_semaphore group_local(__asco_select_sem__);
-                bool aborting = !__asco_select_sem__.try_acquire();
-                if (aborting) {
-                    return;
-                } else {
+                if (__asco_select_sem__.try_acquire()) {
                     for (auto id : rt.group(task_id)->non_origin_tasks()) {
-                        if (id == task_id)
-                            continue;
-                        RT::get_runtime().abort(id);
-                        rt.awake(id);
+                        if (id != task_id) {
+                            RT::get_runtime().abort(id);
+                            rt.awake(id);
+                        }
                     }
+                } else {
+                    return;
                 }
             }
 
             awaiter_sem.acquire();
-            retval = std::move(val);
+            if (awaiter)
+                awaiter->retval = std::move(val);
             awaiter_sem.release();
             returned.release();
         }
@@ -177,14 +176,18 @@ struct future_base {
                 if (auto &worker = worker::get_worker_from_task_id(task_id);
                     worker.sc.get_task(task_id).aborted) {
                     if (caller_task_id) {
-                        auto &w = worker::get_worker_from_task_id(caller_task_id);
-                        rt.remove_task_map(caller_task.address());
-                        w.remove_task_map(caller_task_id);
-                        if (w.is_calculator)
-                            rt.dec_calcu_load();
-                        else
-                            rt.dec_io_load();
-                        w.sc.destroy(caller_task_id, true);
+                        try {
+                            auto &w = worker::get_worker_from_task_id(caller_task_id);
+                            w.sc.destroy(caller_task_id, true);
+                            if (w.is_calculator)
+                                rt.dec_calcu_load();
+                            else
+                                rt.dec_io_load();
+                            rt.remove_task_map(caller_task.address());
+                            worker::remove_task_map(caller_task_id);
+                        } catch (...) {
+                            //
+                        }
                     }
                     return std::suspend_always{};
                 }
@@ -192,7 +195,7 @@ struct future_base {
 
             if constexpr (!Inline) {
                 auto &rt = RT::get_runtime();
-                while (!task_id);
+                while (!task_id) {}
                 if (caller_task_id) {
                     rt.awake(caller_task_id);
                     RT::__worker::get_worker_from_task_id(caller_task_id)
@@ -204,20 +207,17 @@ struct future_base {
                 // Just ignore.
                 try {
                     rt.suspend(task_id);
-                } catch (...) {
-                }
+                } catch (...) {}
 
                 return std::suspend_always{};
             } else {
                 auto &rt = RT::get_runtime();
-                auto &worker = worker::get_worker();
 
                 try {
                     rt.suspend(task_id);
-                } catch (...) {
-                }
+                } catch (...) {}
                 rt.remove_task_map(corohandle::from_promise(*this).address());
-                worker.remove_task_map(task_id);
+                asco::core::worker::remove_task_map(task_id);
                 rt.awake(caller_task_id);
                 worker::get_worker_from_task_id(caller_task_id).sc.get_task(caller_task_id).waiting = 0;
 
@@ -272,7 +272,7 @@ struct future_base {
     T await_resume() {
         if (task.promise().e)
             std::rethrow_exception(task.promise().e);
-        return std::move(task.promise().retval);
+        return std::move(retval);
     }
 
     T await() {
@@ -281,7 +281,7 @@ struct future_base {
 
         if constexpr (!Inline) {
             if (task.promise().returned.try_acquire())
-                return std::move(task.promise().retval);
+                return std::move(retval);
 
             RT::get_runtime().register_sync_awaiter(task_id);
             worker::get_worker_from_task_id(task_id).sc.get_sync_awaiter(task_id).acquire();
@@ -289,11 +289,11 @@ struct future_base {
             if (task.promise().e)
                 std::rethrow_exception(task.promise().e);
 
-            return std::move(task.promise().retval);
-
+            return std::move(retval);
         } else {
             static_assert(false, "[ASCO] future_inline<T> cannot be awaited in synchronized context.");
         }
+        std::unreachable();
     }
 
     void abort() {
@@ -303,7 +303,7 @@ struct future_base {
             RT::get_runtime().awake(task_id);
     }
 
-    future_base() {}
+    future_base() = default;
 
     future_base(corohandle task, size_t task_id)
             : task(task)
@@ -314,9 +314,20 @@ struct future_base {
         RT::get_runtime().awake(task_id);
     }
 
+    T &&retval_move_out() {
+        if (none)
+            throw std::runtime_error("[ASCO] retval_move_out(): from a none future object.");
+
+        none = true;
+        return std::move(retval);
+    }
+
 private:
     corohandle task;
     size_t task_id;
+
+    T retval;
+
     bool none{true};
 };
 
@@ -332,9 +343,9 @@ template<typename T, typename R = RT>
     requires is_move_secure_v<T> && is_runtime<R>
 using future_core = future_base<T, false, true, R>;
 
-using future_void = future<__future_void>;
-using future_void_inline = future_inline<__future_void>;
-using future_void_core = future_core<__future_void>;
+using future_void = future<_future_void>;
+using future_void_inline = future_inline<_future_void>;
+using future_void_core = future_core<_future_void>;
 
 using runtime_initializer_t = std::optional<std::function<RT *()>>;
 
