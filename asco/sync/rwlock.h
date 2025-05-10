@@ -4,8 +4,11 @@
 #ifndef ASCO_SYNC_RWLOCK_H
 #define ASCO_SYNC_RWLOCK_H 1
 
-#include <asco/sync/semaphore.h>
 #include <forward_list>
+#include <optional>
+
+#include <asco/sync/semaphore.h>
+#include <asco/utils/concepts.h>
 
 namespace asco::sync {
 
@@ -118,6 +121,9 @@ public:
 
     rwlock() = default;
 
+    rwlock(const rwlock &) = delete;
+    rwlock(rwlock &&) = delete;
+
     explicit rwlock(const T &rhs)
             : value(rhs) {}
 
@@ -127,6 +133,12 @@ public:
     template<typename... Args>
     explicit rwlock(Args &&...args)
             : value(std::forward<Args>(args)...) {}
+
+    std::optional<write_guard> try_write() {
+        if (write_sem.try_acquire())
+            return write_guard(this);
+        return std::nullopt;
+    }
 
     future_inline<write_guard> write() {
         struct re {
@@ -157,6 +169,17 @@ public:
         co_return write_guard(this);
     }
 
+    std::optional<read_guard> try_read() {
+        if (read_count.fetch_add(1, morder::acquire) == 0
+            || (!write_sem.try_acquire() && read_count.load(morder::acquire) == 1)) {
+            if (write_sem.try_acquire())
+                return write_guard(this);
+            else
+                return std::nullopt;
+        }
+        return read_guard(this);
+    }
+
     future_inline<read_guard> read() {
         struct re {
             rwlock *self;
@@ -178,9 +201,8 @@ public:
             co_return std::move(this_coro::aborted_value<read_guard>);
         }
 
-        if (read_count.fetch_add(1, morder::acquire) == 0)
-            co_await write_sem.acquire();
-        else if (!write_sem.try_acquire() && read_count.load(morder::acquire) == 1)
+        if (read_count.fetch_add(1, morder::acquire) == 0
+            || (!write_sem.try_acquire() && read_count.load(morder::acquire) == 1))
             co_await write_sem.acquire();
 
         if (this_coro::aborted()) {

@@ -4,6 +4,8 @@
 #ifndef ASCO_SYNC_MUTEX_H
 #define ASCO_SYNC_MUTEX_H 1
 
+#include <functional>
+
 #include <asco/future.h>
 #include <asco/sync/semaphore.h>
 
@@ -72,6 +74,9 @@ public:
 
     mutex()
             : value{} {}
+    
+    mutex(const mutex &) = delete;
+    mutex(mutex &&) = delete;
 
     explicit mutex(const T &val)
             : value{val} {}
@@ -82,6 +87,12 @@ public:
     template<typename... Args>
     explicit mutex(Args &&...args)
             : value(std::forward<Args>(args)...) {}
+
+    std::optional<guard> try_lock() {
+        if (sem.try_acquire())
+            return guard(this);
+        return std::nullopt;
+    }
 
     future_inline<guard> lock() {
         struct re {
@@ -97,9 +108,8 @@ public:
             }
         } restorer{this};
 
-        if (this_coro::aborted()) {
+        if (this_coro::aborted())
             co_return std::move(this_coro::aborted_value<guard>);
-        }
 
         co_await sem.acquire();
 

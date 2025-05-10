@@ -13,6 +13,9 @@ class spin : private T {
 public:
     using T::T;
 
+    spin(const spin &) = delete;
+    spin(spin &&) = delete;
+
     class guard {
         spin &s;
 

@@ -39,7 +39,7 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
   - [ ] Sync Primitives
     - [x] Spin
     - [x] Mutex
-    - [ ] Read-Write Lock
+    - [x] Read-Write Lock
     - [x] Semaphore
     - [ ] Condition variable
   - [x] Pipe(Channel)

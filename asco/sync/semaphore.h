@@ -22,6 +22,9 @@ public:
     semaphore_base(size_t count)
             : counter(std::min(count, CounterMax)) {}
 
+    semaphore_base(const semaphore_base &) = delete;
+    semaphore_base(semaphore_base &&) = delete;
+
     size_t get_counter() { return counter.load(morder::relaxed); }
 
     void release(size_t update = 1) {
