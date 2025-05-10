@@ -9,7 +9,7 @@
 
 ## 异步主函数
 
-名为 `async_main` 、没有形参、返回值为 `asco::future<int>` 的函数是异步主函数：
+在全局命名空间中、名为 `async_main` 、没有形参、返回值为 `asco::future<int>` 的函数是异步主函数：
 
 ```c++
 #include <asco/future.h>
@@ -76,6 +76,18 @@ future<int> async_main() {
 > 在开启了超线程的 Intel 混合架构处理器（“大小核架构”）的 CPU 上， **calculating worker** 工作线程将运行在高性能核心（“大核”）上，
 > 高能效核心（“小核”）均为 **io worker** 工作线程。
 > 在未来，对于ARM big.LITTLE异构架构处理器（“大小核架构”）的安卓设备， **calculating worker** 工作线程将运行在大核上。
+
+---
+
+## 错误处理
+
+支持使用 `try-catch` 捕获异常。
+
+未捕获的异常将传递给调用方，在调用方 `co_await` 或 `.await()` 时抛出。
+
+`noexcept` 会被忽略，以相同的方式传递异常。
+
+本框架**不限制**其它错误处理方式的使用，也不提供其它错误处理方式的基础设施。
 
 ---
 

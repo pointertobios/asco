@@ -48,16 +48,12 @@ struct future_base {
         // reinterpret it from raw pointer.
         size_t future_type_hash{type_hash<future_base<T, Inline, Blocking>>()};
 
-        std::binary_semaphore returned{0};
-
         size_t task_id{};
         future_base *awaiter{nullptr};
         std::binary_semaphore awaiter_sem{0};
 
         std::coroutine_handle<> caller_task;
         size_t caller_task_id{0};
-
-        std::exception_ptr e;
 
         void *operator new(size_t n) noexcept {
             auto *p = static_cast<size_t *>(::operator new(n + sizeof(size_t)));
@@ -157,10 +153,11 @@ struct future_base {
             }
 
             awaiter_sem.acquire();
-            if (awaiter)
+            if (awaiter) {
                 awaiter->retval = std::move(val);
+                awaiter->promise_returned = true;
+            }
             awaiter_sem.release();
-            returned.release();
         }
 
         // The inline future will return the caller_resumer to symmatrical transform to the caller task.
@@ -222,24 +219,22 @@ struct future_base {
         }
 
         void unhandled_exception() {
+            if (!awaiter)
+                std::rethrow_exception(std::current_exception());
             awaiter_sem.acquire();
-            e = std::current_exception();
+            awaiter->e = std::current_exception();
+            awaiter->promise_returned = true;
             awaiter_sem.release();
         }
     };
 
-    bool await_ready() {
-        auto res = task.promise().returned.try_acquire();
-        if (res)
-            task.promise().returned.release();
-        return res;
-    }
+    bool await_ready() { return promise_returned; }
 
     // The inline future will return current task corohandle to symmatrical transform
     // to the callee task.
     auto await_suspend(std::coroutine_handle<> handle) {
         if constexpr (!Inline) {
-            if (!task.promise().returned.try_acquire()) {
+            if (!promise_returned) {
                 auto &rt = RT::get_runtime();
                 auto id = rt.task_id_from_corohandle(handle);
                 task.promise().caller_task = handle;
@@ -247,10 +242,8 @@ struct future_base {
                 worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
                 rt.suspend(id);
                 return true;
-            } else {
-                task.promise().returned.release();
-                return false;
             }
+            return false;
         } else {
             auto &rt = RT::get_runtime();
             auto &worker = worker::get_worker();
@@ -266,8 +259,8 @@ struct future_base {
     }
 
     T await_resume() {
-        if (task.promise().e)
-            std::rethrow_exception(task.promise().e);
+        if (e)
+            std::rethrow_exception(e);
         return std::move(retval);
     }
 
@@ -276,15 +269,14 @@ struct future_base {
             throw std::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime");
 
         if constexpr (!Inline) {
-            if (task.promise().returned.try_acquire())
+            if (promise_returned)
                 return std::move(retval);
 
             RT::get_runtime().register_sync_awaiter(task_id);
             worker::get_worker_from_task_id(task_id).sc.get_sync_awaiter(task_id).acquire();
 
-            if (task.promise().e)
-                std::rethrow_exception(task.promise().e);
-
+            if (e)
+                std::rethrow_exception(e);
             return std::move(retval);
         } else {
             static_assert(false, "[ASCO] future_inline<T> cannot be awaited in synchronized context.");
@@ -310,6 +302,14 @@ struct future_base {
         RT::get_runtime().awake(task_id);
     }
 
+    ~future_base() {
+        if (none)
+            return;
+
+        if (!promise_returned)
+            task.promise().awaiter = nullptr;
+    }
+
     T &&retval_move_out() {
         if (none)
             throw std::runtime_error("[ASCO] retval_move_out(): from a none future object.");
@@ -323,6 +323,8 @@ private:
     size_t task_id;
 
     T retval;
+    std::exception_ptr e;
+    bool promise_returned{false};
 
     bool none{true};
 };

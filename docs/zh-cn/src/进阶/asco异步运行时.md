@@ -22,7 +22,7 @@ CMake 工程中提供的目标 `asco-main` 中提供了 `main` 函数，其中�
 ### 自定义运行时对象配置
 
 在 `asco` 命名空间下提供了 `runtime_initializer_t`类型，
-在你的代码中不属于任何命名空间的位置声明一个 `inline runtime_initializer_t runtime_initializer` 对象以使用自定义的配置：
+全局命名空间中声明一个 `inline runtime_initializer_t runtime_initializer` 对象以使用自定义的配置：
 
 ```c++
 inline asco::runtime_initializer_t runtime_initializer = [] () {
