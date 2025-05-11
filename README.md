@@ -54,6 +54,10 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
 - GCC: Not complete.
 - MSVC: Not supported.
 
+## Development & Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+
 ## License
 
 This project is licensed under the **GNU General Public License v3.0** (GPLv3).
