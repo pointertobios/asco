@@ -16,6 +16,11 @@ public:
     spin(const spin &) = delete;
     spin(spin &&) = delete;
 
+    spin &operator=(T &&rhs) {
+        *this = std::move(rhs);
+        return *this;
+    }
+
     class guard {
         spin &s;
 
