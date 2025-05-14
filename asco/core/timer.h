@@ -45,7 +45,9 @@ private:
     atomic_bool init_waiter{false};
     std::jthread timerthr;
 
+#ifdef __linux__
     ::pthread_t ptid;
+#endif
 
     // Too short for both sleep or spin wait under this duration, merge two awake_point into one.
     constexpr static nanoseconds approx_time = 30ns;
