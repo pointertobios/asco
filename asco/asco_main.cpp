@@ -1,4 +1,7 @@
-#include <cxxabi.h>
+#ifdef __linux__
+#    include <cxxabi.h>
+#endif
+
 #include <functional>
 #include <iostream>
 #include <optional>
@@ -26,6 +29,7 @@ int main(int argc, const char **argv, const char **env) {
     })};
     runtime::sys::set_args(argc, argv);
     runtime::sys::set_env(const_cast<char **>(env));
+#ifdef __linux__
     try {
         return async_main().await();
     } catch (std::exception &e) {
@@ -36,4 +40,7 @@ int main(int argc, const char **argv, const char **env) {
                   << std::format("  what():  {}", e.what()) << std::endl;
         return -1;
     }
+#else
+    return async_main().await();
+#endif
 }

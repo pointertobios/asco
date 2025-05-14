@@ -9,12 +9,13 @@
 namespace asco::sync {
 
 template<typename T>
-class spin : private T {
+class spin {
 public:
-    using T::T;
-
     spin(const spin &) = delete;
     spin(spin &&) = delete;
+    template<typename... Args>
+    explicit spin(Args &&...args)
+            : value(std::forward<Args>(args)...) {}
 
     class guard {
         spin &s;
@@ -28,13 +29,13 @@ public:
 
         ~guard() { s.locked.store(false, morder::release); }
 
-        T &operator*() { return s; }
+        T &operator*() { return s.value; }
 
-        const T &operator*() const { return s; }
+        const T &operator*() const { return s.value; }
 
-        T *operator->() { return &s; }
+        T *operator->() { return &s.value; }
 
-        const T *operator->() const { return &s; }
+        const T *operator->() const { return &s.value; }
     };
 
     guard lock() { return guard{*this}; }
@@ -45,6 +46,7 @@ public:
 
 private:
     atomic_bool locked{false};
+    T value;
 };
 
 };  // namespace asco::sync

@@ -14,6 +14,7 @@
 #include <asco/coro_local.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
+#include <asco/core/object_pool.h>
 
 #if defined(_MSC_VER) && !defined(__clang__)
 #    error "[ASCO] Compile with clang-cl instead of MSVC"
@@ -56,14 +57,16 @@ struct future_base {
         size_t caller_task_id{0};
 
         void *operator new(size_t n) noexcept {
-            auto *p = static_cast<size_t *>(::operator new(n + sizeof(size_t)));
+            // auto *p = static_cast<size_t *>(::operator new(n + sizeof(size_t)));
+            size_t *p = static_cast<size_t *>(object_pool<promise_type>::get_pool().alloc(n + sizeof(size_t)));
             *p = n;
             return p + 1;
         }
 
         void operator delete(void *p) noexcept {
             size_t *q = static_cast<size_t *>(p) - 1;
-            ::operator delete(q);
+            object_pool<promise_type>::get_pool().dealloc(q, *q + sizeof(size_t));
+            // ::operator delete(q);
         }
 
         template<size_t Hash>
