@@ -56,13 +56,13 @@ struct future_base {
         size_t caller_task_id{0};
 
         void *operator new(size_t n) noexcept {
-            auto *p = static_cast<size_t *>(::operator new(n + sizeof(size_t)));
+            auto *p = static_cast<size_t *>(::operator new(n + 2 * sizeof(size_t)));
             *p = n;
-            return p + 1;
+            return p + 2;
         }
 
         void operator delete(void *p) noexcept {
-            size_t *q = static_cast<size_t *>(p) - 1;
+            size_t *q = static_cast<size_t *>(p) - 2;
             ::operator delete(q);
         }
 

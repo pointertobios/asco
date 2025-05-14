@@ -140,6 +140,7 @@ concept is_runtime = requires(T t) {
     {
         t.timer_attach(typename T::task_id{}, std::declval<std::chrono::high_resolution_clock::time_point>())
     } -> std::same_as<void>;
+    { t.timer_detach(typename T::task_id{}) } -> std::same_as<void>;
     { t.join_task_to_group(typename T::task_id{}, typename T::task_id{}, bool{}) } -> std::same_as<void>;
     { t.exit_group(typename T::task_id{}) } -> std::same_as<void>;
     { t.in_group(typename T::task_id{}) } -> std::same_as<bool>;
@@ -200,6 +201,7 @@ public:
     __always_inline void dec_calcu_load() { calcu_worker_load--; }
 
     void timer_attach(task_id id, std::chrono::high_resolution_clock::time_point time);
+    void timer_detach(task_id id);
 
     void join_task_to_group(task_id id, task_id gid, bool orogin = false);
     // Exit group and if the group has only 1 task, destroy that group.

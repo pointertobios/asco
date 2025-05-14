@@ -13,11 +13,11 @@ size_t clone(std::coroutine_handle<> h) {
     auto &rt = RT::get_runtime();
 
     // Clone coroutine state structure
-    size_t *src = reinterpret_cast<size_t *>(h.address()) - 1;
+    size_t *src = reinterpret_cast<size_t *>(h.address()) - 2;
     size_t n = *src;
-    size_t *dst = reinterpret_cast<size_t *>(::operator new(n + sizeof(size_t)));
-    std::memcpy(dst, src, n + sizeof(size_t));
-    auto coh = std::coroutine_handle<>::from_address(dst + 1);
+    size_t *dst = reinterpret_cast<size_t *>(::operator new(n + 2 * sizeof(size_t)));
+    std::memcpy(dst, src, n + 2 * sizeof(size_t));
+    auto coh = std::coroutine_handle<>::from_address(dst + 2);
 
     // Spawn coroutine and clone coroutine local frame
     size_t src_id = rt.task_id_from_corohandle(h);

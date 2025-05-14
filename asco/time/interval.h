@@ -38,6 +38,8 @@ public:
                 if (!this_coro::aborted())
                     return;
 
+                RT::get_runtime().timer_detach(this_coro::get_id());
+
                 switch (state) {
                 case 2:
                     self->last = last;
@@ -71,8 +73,8 @@ public:
             co_return duration;
         }
 
-        auto &worker = RT::__worker::get_worker();
-        auto id = worker.current_task_id();
+        auto &worker = this_coro::get_worker();
+        auto id = this_coro::get_id();
         worker.sc.suspend(id);
         RT::get_runtime().timer_attach(id, awake_time);
 

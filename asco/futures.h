@@ -49,8 +49,14 @@ T &&move_back_return_value() {
 
 template<typename R = RT>
     requires is_runtime<R>
-size_t get_task_id() {
+size_t get_id() {
     return RT::__worker::get_worker().current_task_id();
+}
+
+template<typename R = RT>
+    requires is_runtime<R>
+RT::__worker &get_worker() {
+    return RT::__worker::get_worker();
 }
 
 template<size_t Hash, typename R = RT>
@@ -78,7 +84,8 @@ namespace asco::this_coro {
 
 using base::this_coro::aborted, base::this_coro::move_back_return_value;
 using base::this_coro::coro_local_exists;
-using base::this_coro::get_task_id;
+using base::this_coro::get_id;
+using base::this_coro::get_worker;
 
 using base::this_coro::aborted_value;
 

@@ -346,8 +346,6 @@ void runtime::awake(task_id id) {
 void runtime::suspend(task_id id) { worker::get_worker_from_task_id(id).sc.suspend(id); }
 
 void runtime::abort(task_id id) {
-    if (timer.task_attaching(id))
-        timer.detach(id);
     auto &w = worker::get_worker_from_task_id(id);
     auto &t = w.sc.get_task(id);
     t.aborted = true;
@@ -387,6 +385,11 @@ sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_
 
 void runtime::timer_attach(task_id id, std::chrono::high_resolution_clock::time_point time) {
     timer.attach(id, time);
+}
+
+void runtime::timer_detach(task_id id) {
+    if (timer.task_attaching(id))
+        timer.detach(id);
 }
 
 void runtime::join_task_to_group(task_id id, task_id gid, bool origin) {

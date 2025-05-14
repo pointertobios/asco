@@ -5,7 +5,7 @@
 #define ASCO_SYNC_SEMAPHORE_H 1
 
 #include <coroutine>
-#include <queue>
+#include <deque>
 
 #include <asco/future.h>
 #include <asco/sync/spin.h>
@@ -54,8 +54,8 @@ public:
 
         auto guard = waiting_tasks.lock();
         for (size_t i = 0; i < awake_x && !guard->empty(); ++i) {
-            auto [id, worker] = std::move(guard->front());
-            guard->pop();
+            auto id = std::move(guard->front());
+            guard->pop_front();
 
             RT::get_runtime().awake(id);
         }
@@ -71,10 +71,18 @@ public:
                 if (!this_coro::aborted())
                     return;
 
+                {
+                    auto guard = self->waiting_tasks.lock();
+                    auto id = this_coro::get_id();
+                    std::erase_if(*guard, [id](auto &_id) { return _id == id; });
+                }
+
                 if (state == 1)
                     self->counter.fetch_add(1, morder::release);
             }
         } restorer{this};
+
+        auto this_id = this_coro::get_id();
 
         while (true) {
             if (this_coro::aborted()) {
@@ -96,11 +104,9 @@ public:
                 auto guard = waiting_tasks.lock();
 
                 if (counter.load(morder::acquire) == 0) {
-                    auto &worker = RT::__worker::get_worker();
-                    auto id = worker.current_task_id();
-                    worker.sc.suspend(id);
-
-                    guard->push(std::make_pair(id, &worker));
+                    auto &worker = this_coro::get_worker();
+                    worker.sc.suspend(this_id);
+                    guard->push_back(this_id);
                 } else {
                     continue;
                 }
@@ -133,7 +139,7 @@ public:
 
 private:
     atomic_size_t counter;
-    spin<std::queue<std::pair<task_id, core::worker *>>> waiting_tasks;
+    spin<std::deque<task_id>> waiting_tasks;
 };
 
 using binary_semaphore = semaphore_base<1>;
