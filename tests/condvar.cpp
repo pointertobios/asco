@@ -6,8 +6,10 @@
 
 #include <asco/future.h>
 #include <asco/sync/condition_variable.h>
+#include <asco/time/sleep.h>
 
 using asco::future, asco::future_void, asco::condition_variable;
+using namespace std::chrono_literals;
 
 future_void one_shoot() {
     std::cout << "one shoot test started\n";
@@ -69,8 +71,7 @@ future_void broadcast_test() {
     }();
 
     flag.store(true, std::memory_order::seq_cst);
-    cv.notify_all();
-    cv.notify_all();
+    co_await asco::this_coro::sleep_for(1s);
     cv.notify_all();
     std::cout << "broadcast notify all on cv\n";
 
