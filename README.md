@@ -41,7 +41,7 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
     - [x] Mutex
     - [x] Read-Write Lock
     - [x] Semaphore
-    - [ ] Condition variable
+    - [x] Condition variable
   - [x] Pipe(Channel)
   - [x] Timer and Interval
 - [ ] Async IO

@@ -55,7 +55,7 @@ struct future_base {
         std::coroutine_handle<> caller_task;
         size_t caller_task_id{0};
 
-        void *operator new(size_t n) noexcept {
+        void *operator new(std::size_t n) noexcept {
             auto *p = static_cast<size_t *>(::operator new(n + 2 * sizeof(size_t)));
             *p = n;
             return p + 2;

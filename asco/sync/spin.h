@@ -9,12 +9,23 @@
 namespace asco::sync {
 
 template<typename T>
-class spin : private T {
+class spin {
 public:
-    using T::T;
+    spin()
+            : value{} {}
 
     spin(const spin &) = delete;
     spin(spin &&) = delete;
+
+    explicit spin(const T &val)
+            : value{val} {}
+
+    explicit spin(T &&val)
+            : value{std::move(val)} {}
+
+    template<typename... Args>
+    explicit spin(Args &&...args)
+            : value(std::forward<Args>(args)...) {}
 
     class guard {
         spin &s;
@@ -22,28 +33,25 @@ public:
     public:
         guard(spin &s)
                 : s{s} {
-            for (bool b{false};
-                 !s.locked.compare_exchange_strong(b, true, morder::acquire, morder::relaxed););
+            for (bool b{false}; !s.locked.compare_exchange_weak(b, true, morder::acquire, morder::relaxed);
+                 b = false);
         }
 
         ~guard() { s.locked.store(false, morder::release); }
 
-        T &operator*() { return s; }
+        T &operator*() { return s.value; }
 
-        const T &operator*() const { return s; }
+        const T &operator*() const { return s.value; }
 
-        T *operator->() { return &s; }
+        T *operator->() { return &s.value; }
 
-        const T *operator->() const { return &s; }
+        const T *operator->() const { return &s.value; }
     };
 
     guard lock() { return guard{*this}; }
 
-    ~spin() {
-        for (bool b{false}; !locked.compare_exchange_strong(b, true, morder::acquire, morder::relaxed););
-    }
-
 private:
+    T value;
     atomic_bool locked{false};
 };
 

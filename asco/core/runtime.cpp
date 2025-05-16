@@ -22,8 +22,7 @@
 
 namespace asco::core {
 
-std::map<worker::task_id, std::binary_semaphore *> worker::workers_by_task_id_sem;
-std::mutex worker::wsem_mutex;
+rwspin<std::map<worker::task_id, std::binary_semaphore *>> worker::workers_by_task_id_sem;
 std::map<worker::task_id, worker *> worker::workers_by_task_id;
 std::unordered_map<std::thread::id, worker *> worker::workers;
 thread_local worker *worker::current_worker{nullptr};
@@ -56,24 +55,25 @@ void worker::conditional_suspend() {
 void worker::awake() { worker_await_sem.release(); }
 
 void worker::remove_task_map(task_id id) {
-    std::lock_guard lk{wsem_mutex};
-    if (workers_by_task_id_sem.find(id) == workers_by_task_id_sem.end())
+    auto guard = workers_by_task_id_sem.write();
+    if (guard->find(id) == guard->end())
         return;
-    workers_by_task_id_sem.at(id)->acquire();
+    guard->at(id)->acquire();
     workers_by_task_id.erase(id);
-    workers_by_task_id_sem.at(id)->release();
-    delete workers_by_task_id_sem.at(id);
-    workers_by_task_id_sem.erase(id);
+    guard->at(id)->release();
+    delete guard->at(id);
+    guard->erase(id);
 }
 
 void worker::insert_task_map(task_id id, worker *self) {
-    std::lock_guard lk{wsem_mutex};
+    auto guard = workers_by_task_id_sem.read();
     workers_by_task_id.emplace(id, self);
-    workers_by_task_id_sem.at(id)->release();
+    guard->at(id)->release();
 }
 
 bool worker::task_available(task_id id) {
-    if (auto its_ = workers_by_task_id_sem.find(id); its_ != workers_by_task_id_sem.end()) {
+    auto guard = workers_by_task_id_sem.read();
+    if (auto its_ = guard->find(id); its_ != guard->end()) {
         auto its = its_->second;
         its->acquire();
         if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
@@ -93,7 +93,8 @@ worker &worker::get_worker_from_task_id(task_id id) {
         throw std::runtime_error(
             "[ASCO] worker::get_worker_from_task_id() Inner error: unexpectedly got a 0 as task id");
 
-    if (auto its_ = workers_by_task_id_sem.find(id); its_ != workers_by_task_id_sem.end()) {
+    auto guard = workers_by_task_id_sem.read();
+    if (auto its_ = guard->find(id); its_ != guard->end()) {
         auto its = its_->second;
         its->acquire();
         if (auto it = workers_by_task_id.find(id); it != workers_by_task_id.end()) {
@@ -102,15 +103,13 @@ worker &worker::get_worker_from_task_id(task_id id) {
             return *p;
         } else {
             its->release();
-            throw std::runtime_error("[ASCO] Inner error: task id does not exist");
         }
     }
     throw std::runtime_error("[ASCO] worker::get_worker_from_task_id() Inner error: task id does not exist");
 }
 
 void worker::set_task_sem(task_id id) {
-    std::lock_guard<std::mutex> lock{wsem_mutex};
-    workers_by_task_id_sem.emplace(std::make_pair(id, new std::binary_semaphore{0}));
+    workers_by_task_id_sem.write()->emplace(std::make_pair(id, new std::binary_semaphore{0}));
 }
 
 bool worker::in_worker() { return workers.find(std::this_thread::get_id()) != workers.end(); }
@@ -359,26 +358,23 @@ void runtime::register_sync_awaiter(task_id id) {
     worker::get_worker_from_task_id(id).sc.register_sync_awaiter(id);
 }
 
-void runtime::remove_task_map(void *addr) {
-    std::lock_guard lk{coro_to_task_id_mutex};
-    coro_to_task_id.erase(addr);
-}
+void runtime::remove_task_map(void *addr) { coro_to_task_id.lock()->erase(addr); }
 
 runtime::task_id runtime::task_id_from_corohandle(std::coroutine_handle<> handle) {
-    std::lock_guard lk{coro_to_task_id_mutex};
-    if (coro_to_task_id.find(handle.address()) == coro_to_task_id.end())
+    auto guard = coro_to_task_id.lock();
+    if (guard->find(handle.address()) == guard->end())
         throw std::runtime_error(
             std::format(
                 "[ASCO] runtime::task_id_from_corohandle() Inner error: coro_to_task_id[{}] unexists",
                 handle.address()));
-    return coro_to_task_id[handle.address()];
+    return guard->at(handle.address());
 }
 
 sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe) {
-    std::lock_guard lk{coro_to_task_id_mutex};
+    auto guard = coro_to_task_id.lock();
     auto id = task_counter.fetch_add(1, morder::relaxed);
     worker::set_task_sem(id);
-    coro_to_task_id.insert(std::make_pair(task.address(), id));
+    guard->insert(std::make_pair(task.address(), id));
     auto res = sched::task{id, task, new __coro_local_frame(pframe), is_blocking};
     return res;
 }

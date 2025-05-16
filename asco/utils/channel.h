@@ -6,7 +6,6 @@
 
 #include <condition_variable>
 #include <expected>
-#include <mutex>
 #include <optional>
 #include <semaphore>
 #include <tuple>

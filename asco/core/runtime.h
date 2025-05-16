@@ -9,7 +9,6 @@
 #include <coroutine>
 #include <functional>
 #include <map>
-#include <mutex>
 #include <optional>
 #include <semaphore>
 #include <stack>
@@ -21,6 +20,8 @@
 #include <asco/core/sched.h>
 #include <asco/core/taskgroup.h>
 #include <asco/core/timer.h>
+#include <asco/sync/rwspin.h>
+#include <asco/sync/spin.h>
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 
@@ -84,8 +85,7 @@ public:
     static bool task_available(task_id id);
     static worker &get_worker_from_task_id(task_id id);
     static void set_task_sem(task_id id);
-    static std::map<task_id, std::binary_semaphore *> workers_by_task_id_sem;
-    static std::mutex wsem_mutex;
+    static rwspin<std::map<task_id, std::binary_semaphore *>> workers_by_task_id_sem;
     static std::map<task_id, worker *> workers_by_task_id;
 
 private:
@@ -222,8 +222,7 @@ private:
     atomic_size_t calcu_worker_count{0};
     atomic_size_t calcu_worker_load{0};
 
-    std::map<void *, task_id> coro_to_task_id;
-    std::mutex coro_to_task_id_mutex;
+    spin<std::map<void *, task_id>> coro_to_task_id;
     atomic<task_id> task_counter{1};
 
     timer::timer timer;

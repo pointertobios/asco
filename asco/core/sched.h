@@ -8,7 +8,6 @@
 #include <chrono>
 #include <concepts>
 #include <coroutine>
-#include <mutex>
 #include <optional>
 #include <semaphore>
 #include <set>
@@ -16,6 +15,7 @@
 #include <vector>
 
 #include <asco/coro_local.h>
+#include <asco/sync/spin.h>
 
 namespace asco::core::sched {
 
@@ -145,9 +145,8 @@ public:
     void emplace_sync_awaiter(task::task_id id, std::binary_semaphore *sem);
 
 private:
-    std::vector<task_control *> active_tasks;
-    std::mutex active_tasks_mutex;
-    std::unordered_map<task::task_id, task_control *> suspended_tasks;
+    spin<std::vector<task_control *>> active_tasks;
+    spin<std::unordered_map<task::task_id, task_control *>> suspended_tasks;
 
     std::set<task::task_id> not_in_suspended_but_awake_tasks;
 
