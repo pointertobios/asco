@@ -57,6 +57,10 @@ bool std_scheduler::currently_finished_all() {
 bool std_scheduler::has_buffered_awakes() { return !not_in_suspended_but_awake_tasks.empty(); }
 
 void std_scheduler::awake(task::task_id id) {
+#ifdef ASCO_PERF_RECORD
+    get_task(id).perf_recorder->record_once();
+#endif
+
     auto guard = active_tasks.lock();
     auto susg = suspended_tasks.lock();
     if (auto it = susg->find(id); it != susg->end()) {
@@ -69,6 +73,10 @@ void std_scheduler::awake(task::task_id id) {
 }
 
 void std_scheduler::suspend(task::task_id id) {
+#ifdef ASCO_PERF_RECORD
+    get_task(id).perf_recorder->record_once();
+#endif
+
     if (not_in_suspended_but_awake_tasks.find(id) != not_in_suspended_but_awake_tasks.end()) {
         not_in_suspended_but_awake_tasks.erase(id);
         return;

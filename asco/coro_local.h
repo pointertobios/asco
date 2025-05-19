@@ -6,6 +6,7 @@
 
 #include <unordered_map>
 
+#include <asco/perf.h>
 #include <asco/utils/dynvar.h>
 #include <asco/utils/pubusing.h>
 #include <asco/utils/type_hash.h>
@@ -28,9 +29,7 @@ struct __coro_local_frame {
             delete prev;
         }
 
-        for (auto &[_, v] : vars) {
-            v.deconstruct(v.p);
-        }
+        for (auto &[_, v] : vars) { v.deconstruct(v.p); }
     }
 
     inline size_t get_ref_count() { return ref_count.load(morder::acquire); }

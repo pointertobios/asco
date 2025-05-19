@@ -8,6 +8,7 @@
 
 #include <asco/future.h>
 #include <asco/sync/spin.h>
+#include <asco/utils/pubusing.h>
 
 namespace asco::sync {
 
@@ -40,8 +41,7 @@ public:
     future_void_inline wait(F predicator) {
         auto this_id = this_coro::get_id();
         while (true) {
-            {
-                auto guard = waiting_tasks.lock();
+            with(auto guard = waiting_tasks.lock()) {
                 if (predicator())
                     break;
                 if (this_coro::aborted())

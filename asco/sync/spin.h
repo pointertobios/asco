@@ -50,6 +50,8 @@ public:
 
     guard lock() { return guard{*this}; }
 
+    T &&get() { return std::move(value); }
+
 private:
     T value;
     atomic_bool locked{false};

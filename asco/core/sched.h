@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <asco/coro_local.h>
+#include <asco/perf.h>
 #include <asco/sync/spin.h>
 
 namespace asco::core::sched {
@@ -32,6 +33,10 @@ struct task {
     // A sort of task that blocking worker thread and don't be stolen to other workers.
     bool is_blocking;
     bool is_inline{false};
+
+#ifdef ASCO_PERF_RECORD
+    perf::coro_recorder *perf_recorder{nullptr};
+#endif
 
     // Use for timers. After related timer clocked, coroutine must start to run as fast as possible.
     // Set this to true to let this worker schedule this task earlier or let other worker thread steal this
@@ -61,15 +66,15 @@ struct task {
         if (destroyed)
             return true;
         bool b = handle.done();
-        if (b) {
-            handle.destroy();
-            destroyed = true;
-        }
         return b;
     }
 
     __always_inline void destroy() {
         if (!destroyed) {
+#ifdef ASCO_PERF_RECORD
+            if (perf_recorder)
+                delete perf_recorder;
+#endif
             coro_frame_exit();
             handle.destroy();
             destroyed = true;

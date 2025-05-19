@@ -12,6 +12,7 @@
 #include <asco/core/runtime.h>
 #include <asco/core/taskgroup.h>
 #include <asco/coro_local.h>
+#include <asco/perf.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
 
@@ -24,12 +25,6 @@ namespace asco::base {
 using core::is_runtime;
 
 struct _future_void {};
-
-template<typename R = RT>
-    requires is_runtime<R>
-R *get_runtime() {
-    return R::get_runtime();
-}
 
 template<typename T, bool Inline, bool Blocking, typename R = RT>
     requires is_move_secure_v<T> && is_runtime<R>
@@ -44,8 +39,6 @@ struct future_base {
     using return_type = T;
 
     struct promise_type {
-        // Always put this at the first, so that we can authenticate the coroutine_handle type when we
-        // reinterpret it from raw pointer.
         size_t future_type_hash{type_hash<future_base<T, Inline, Blocking>>()};
 
         size_t task_id{};
@@ -109,6 +102,7 @@ struct future_base {
 
                 worker::insert_task_map(task_id, &worker);
             }
+
             if (worker::in_worker()) {
                 auto &worker = worker::get_worker();
                 auto currid = worker.current_task_id();
@@ -230,8 +224,7 @@ struct future_base {
 
     bool await_ready() { return promise_returned; }
 
-    // The inline future will return current task corohandle to symmatrical transform
-    // to the callee task.
+    // The inline future will return current task corohandle to symmatrical transform to the callee task.
     auto await_suspend(std::coroutine_handle<> handle) {
         if constexpr (!Inline) {
             if (!promise_returned) {
@@ -253,7 +246,13 @@ struct future_base {
             worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
             rt.suspend(id);
 
-            worker.running_task.push(&worker.sc.get_task(task_id));
+            // There are special processing because this task will be awaked by symmatical transform but not
+            // awake()
+            auto &task_ = worker.sc.get_task(task_id);
+#ifdef ASCO_PERF_RECORD
+            task_.perf_recorder->record_once();
+#endif
+            worker.running_task.push(&task_);
             return task;
         }
     }

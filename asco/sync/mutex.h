@@ -74,7 +74,7 @@ public:
 
     mutex()
             : value{} {}
-    
+
     mutex(const mutex &) = delete;
     mutex(mutex &&) = delete;
 

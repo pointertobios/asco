@@ -13,6 +13,7 @@ endif()
 
 enable_testing()
 
-add_subdirectory(asco)
+option(ASCO_PERF_RECORD "ASCO Performance Recording" OFF)
 
+add_subdirectory(asco)
 add_subdirectory(tests)

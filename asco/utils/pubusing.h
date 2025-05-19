@@ -32,4 +32,6 @@ using __u8 = unsigned char;
 
 #define __dispatch(_1, _2, _3, NAME, ...) NAME
 
+#define with(decl) if (decl; true)
+
 #endif

@@ -288,8 +288,25 @@ runtime::~runtime() {
     io_task_tx->stop();
     calcu_task_tx->stop();
     awake_all();
-    for (auto thread : pool) { thread->join(); }
+    for (auto thread : pool) thread->join();
     current_runtime = nullptr;
+
+#ifdef ASCO_PERF_RECORD
+    std::cout << std::format(
+        "[ASCO] Flag 'ASCO_PERF_RECORD' is enabled, please disable it if you are building your program for releasing.\n");
+
+    std::cout << "\nactive\ttotal\tcounter\tname\n";
+    auto record = perf::record::collect();
+    std::vector<perf::record> res;
+    for (auto &[id, rec] : record) { res.push_back(rec); }
+    std::sort(res.begin(), res.end());
+    for (auto rec : res) {
+        auto &[name, total, active, counter] = rec;
+        std::cout << std::format(
+            "{}\t{}\t{}\t{}\n", std::chrono::duration_cast<std::chrono::milliseconds>(active),
+            std::chrono::duration_cast<std::chrono::milliseconds>(total), counter, name);
+    }
+#endif
 }
 
 void runtime::awake_all() {
@@ -376,6 +393,9 @@ sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_
     worker::set_task_sem(id);
     guard->insert(std::make_pair(task.address(), id));
     auto res = sched::task{id, task, new __coro_local_frame(pframe), is_blocking};
+#ifdef ASCO_PERF_RECORD
+    res.perf_recorder = new perf::coro_recorder;
+#endif
     return res;
 }
 
