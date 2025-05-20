@@ -55,6 +55,7 @@ public:
         auto guard = waiting_tasks.lock();
         for (size_t i = 0; i < awake_x && !guard->empty(); ++i) {
             auto id = std::move(guard->front());
+            std::cout << std::format("awake {}\n", id);
             guard->pop_front();
 
             RT::get_runtime().awake(id);
@@ -100,9 +101,7 @@ public:
             if (counter.load(morder::acquire) > 0)
                 continue;
 
-            {
-                auto guard = waiting_tasks.lock();
-
+            with(auto guard = waiting_tasks.lock()) {
                 if (counter.load(morder::acquire) == 0) {
                     auto &worker = this_coro::get_worker();
                     worker.sc.suspend(this_id);
@@ -113,6 +112,7 @@ public:
             }
 
             co_await std::suspend_always{};
+            break;
         }
 
         restorer.state = 1;

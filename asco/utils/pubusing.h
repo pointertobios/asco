@@ -5,14 +5,19 @@
 #define ASCO_UTILS_PUBUSING_H 1
 
 #include <atomic>
+#include <concepts>
 #include <cstddef>
+
+#ifdef _WIN32
+#    define __always_inline __forceinline
+#endif
 
 namespace asco {
 
 using size_t = unsigned long long;
 
 using atomic_size_t = std::atomic<size_t>;
-using atomic_in64_t = std::atomic_int64_t;
+using atomic_int64_t = std::atomic_int64_t;
 using atomic_bool = std::atomic_bool;
 
 template<typename T>
@@ -24,11 +29,14 @@ using morder = std::memory_order;
 using __u8 = unsigned char;
 #endif
 
-};  // namespace asco
+template<typename T>
+__always_inline void blackbox(T) noexcept {}
 
-#ifdef _WIN32
-#    define __always_inline __forceinline
-#endif
+template<typename T>
+    requires(!(std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>))
+__always_inline void blackbox(T &) noexcept {}
+
+};  // namespace asco
 
 #define __dispatch(_1, _2, _3, NAME, ...) NAME
 
