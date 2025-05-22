@@ -125,6 +125,22 @@ co_await t;
 
 本框架**不限制**其它错误处理方式的使用，也不提供其它错误处理方式的基础设施。
 
+## asco::exception
+
+`<asco/exception.h>`
+
+自带堆栈追踪和异步函数调用链追踪的异常类，若需要在 *asco 异步运行时*中抛出带有堆栈追踪的异常，请直接使用或派生此类。
+
+此类的构造函数接收一个 `std::string` 参数作为异常的 `what()` 信息，派生类无需自己重载 `const char *what() noexcept` 函数。
+
+* 注：异步函数调用链追踪需要关闭 ***-O0*** 优化才能获取正确的地址、函数签名和源代码位置。
+
+## asco::runtime_error
+
+`<asco/rterror.h>`
+
+自带堆栈追踪的异常类，用于运行时内部的异常处理。
+
 ---
 
 ## 协程睡眠
@@ -237,10 +253,10 @@ future_inline<std::optional<T>> recv() {
     } restorer{this};
 
     if (none)
-        throw std::runtime_error(
+        throw asco::runtime_error(
             "[ASCO] receiver::recv(): Cannot do any action on a NONE receiver object.");
     if (moved)
-        throw std::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
+        throw asco::runtime_error("[ASCO] receiver::recv(): Cannot do any action after receiver moved.");
 
     if (this_coro::aborted()) {
         restorer.state = 0;
@@ -269,14 +285,14 @@ future_inline<std::optional<T>> recv() {
         }
 
         if (*frame->sender == *frame->receiver)
-            throw std::runtime_error(
+            throw asco::runtime_error(
                 "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
 
     } else if (*frame->receiver == FrameSize) {
         // go to next frame.
         auto *f = frame;
         if (!f->next)
-            throw std::runtime_error(
+            throw asco::runtime_error(
                 "[ASCO] receiver::recv(): Sender went to next frame, but next frame is nullptr.");
         frame = f->next;
         delete f;
@@ -296,7 +312,7 @@ future_inline<std::optional<T>> recv() {
         }
 
         if (frame->sender && *frame->sender == *frame->receiver)
-            throw std::runtime_error(
+            throw asco::runtime_error(
                 "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
     }
 

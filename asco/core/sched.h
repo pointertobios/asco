@@ -16,6 +16,7 @@
 
 #include <asco/coro_local.h>
 #include <asco/perf.h>
+#include <asco/rterror.h>
 #include <asco/sync/spin.h>
 
 namespace asco::core::sched {
@@ -29,6 +30,8 @@ struct task {
     std::coroutine_handle<> handle;
 
     __coro_local_frame *coro_local_frame;
+
+    unwind::coro_trace tracing_stack;
 
     // A sort of task that blocking worker thread and don't be stolen to other workers.
     bool is_blocking;
@@ -58,7 +61,7 @@ struct task {
 
     __always_inline void resume() const {
         if (handle.done())
-            throw std::runtime_error("[ASCO] task::resume() Inner error: task is done but not destroyed.");
+            throw asco::runtime_error("[ASCO] task::resume() Inner error: task is done but not destroyed.");
         handle.resume();
     }
 

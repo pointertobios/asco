@@ -20,6 +20,7 @@
 #include <asco/core/sched.h>
 #include <asco/core/taskgroup.h>
 #include <asco/core/timer.h>
+#include <asco/rterror.h>
 #include <asco/sync/rwspin.h>
 #include <asco/sync/spin.h>
 #include <asco/utils/channel.h>
@@ -93,6 +94,8 @@ private:
     thread_local static worker *current_worker;
 };
 
+using std::declval, std::same_as;
+
 template<typename T>
 concept is_runtime = requires(T t) {
     typename T::__worker;
@@ -102,58 +105,61 @@ concept is_runtime = requires(T t) {
     typename T::task_id;
     typename T::sys;
     // Exception: runtime error when there is not a worker on the current thread.
-    { T::__worker::in_worker() } -> std::same_as<bool>;
-    { T::__worker::get_worker() } -> std::same_as<typename T::__worker &>;
+    { T::__worker::in_worker() } -> same_as<bool>;
+    { T::__worker::get_worker() } -> same_as<typename T::__worker &>;
     // If the task never been control by runtime, return false.
-    { T::__worker::task_available(typename T::task_id{}) } -> std::same_as<bool>;
+    { T::__worker::task_available(typename T::task_id{}) } -> same_as<bool>;
     // Exception: runtime error when the task fits !task_available(id).
-    { T::__worker::get_worker_from_task_id(typename T::task_id{}) } -> std::same_as<typename T::__worker &>;
-    { T::__worker::set_task_sem(typename T::task_id{}) } -> std::same_as<void>;
-    { T::__worker::remove_task_map(typename T::task_id{}) } -> std::same_as<void>;
+    { T::__worker::get_worker_from_task_id(typename T::task_id{}) } -> same_as<typename T::__worker &>;
+    { T::__worker::set_task_sem(typename T::task_id{}) } -> same_as<void>;
+    { T::__worker::remove_task_map(typename T::task_id{}) } -> same_as<void>;
     {
-        T::__worker::insert_task_map(typename T::task_id{}, std::declval<typename T::__worker *>())
-    } -> std::same_as<void>;
-    { T::get_runtime() } -> std::same_as<T &>;
-    { t.send_task(std::declval<typename T::scheduler::task>()) } -> std::same_as<void>;
-    { t.send_blocking_task(std::declval<typename T::scheduler::task>()) } -> std::same_as<void>;
+        T::__worker::insert_task_map(typename T::task_id{}, declval<typename T::__worker *>())
+    } -> same_as<void>;
+    { T::get_runtime() } -> same_as<T &>;
+    { t.send_task(declval<typename T::scheduler::task>()) } -> same_as<void>;
+    { t.send_blocking_task(declval<typename T::scheduler::task>()) } -> same_as<void>;
     {
-        t.spawn(task_instance{}, std::declval<__coro_local_frame *>(), typename T::task_id{})
-    } -> std::same_as<typename T::task_id>;
+        t.spawn(
+            task_instance{}, declval<__coro_local_frame *>(), declval<unwind::coro_trace>(),
+            typename T::task_id{})
+    } -> same_as<typename T::task_id>;
     {
-        t.spawn_blocking(task_instance{}, std::declval<__coro_local_frame *>(), typename T::task_id{})
-    } -> std::same_as<typename T::task_id>;
-    { t.awake(typename T::task_id{}) } -> std::same_as<void>;
-    { t.suspend(typename T::task_id{}) } -> std::same_as<void>;
-    { t.abort(typename T::task_id{}) } -> std::same_as<void>;
-    { t.register_sync_awaiter(typename T::task_id{}) } -> std::same_as<void>;
+        t.spawn_blocking(
+            task_instance{}, declval<__coro_local_frame *>(), declval<unwind::coro_trace>(),
+            typename T::task_id{})
+    } -> same_as<typename T::task_id>;
+    { t.awake(typename T::task_id{}) } -> same_as<void>;
+    { t.suspend(typename T::task_id{}) } -> same_as<void>;
+    { t.abort(typename T::task_id{}) } -> same_as<void>;
+    { t.register_sync_awaiter(typename T::task_id{}) } -> same_as<void>;
+    { t.task_id_from_corohandle(declval<std::coroutine_handle<>>()) } -> same_as<typename T::task_id>;
     {
-        t.task_id_from_corohandle(std::declval<std::coroutine_handle<>>())
-    } -> std::same_as<typename T::task_id>;
+        t.to_task(
+            declval<task_instance>(), bool{}, declval<__coro_local_frame *>(), declval<unwind::coro_trace>())
+    } -> same_as<sched::task>;
+    { t.remove_task_map(nullptr) } -> same_as<void>;
+    { t.inc_io_load() } -> same_as<void>;
+    { t.dec_io_load() } -> same_as<void>;
+    { t.inc_calcu_load() } -> same_as<void>;
+    { t.dec_calcu_load() } -> same_as<void>;
     {
-        t.to_task(std::declval<task_instance>(), bool{}, std::declval<__coro_local_frame *>())
-    } -> std::same_as<sched::task>;
-    { t.remove_task_map(nullptr) } -> std::same_as<void>;
-    { t.inc_io_load() } -> std::same_as<void>;
-    { t.dec_io_load() } -> std::same_as<void>;
-    { t.inc_calcu_load() } -> std::same_as<void>;
-    { t.dec_calcu_load() } -> std::same_as<void>;
-    {
-        t.timer_attach(typename T::task_id{}, std::declval<std::chrono::high_resolution_clock::time_point>())
-    } -> std::same_as<void>;
-    { t.timer_detach(typename T::task_id{}) } -> std::same_as<void>;
-    { t.join_task_to_group(typename T::task_id{}, typename T::task_id{}, bool{}) } -> std::same_as<void>;
-    { t.exit_group(typename T::task_id{}) } -> std::same_as<void>;
-    { t.in_group(typename T::task_id{}) } -> std::same_as<bool>;
-    { t.group(typename T::task_id{}) } -> std::same_as<task_group *>;
+        t.timer_attach(typename T::task_id{}, declval<std::chrono::high_resolution_clock::time_point>())
+    } -> same_as<void>;
+    { t.timer_detach(typename T::task_id{}) } -> same_as<void>;
+    { t.join_task_to_group(typename T::task_id{}, typename T::task_id{}, bool{}) } -> same_as<void>;
+    { t.exit_group(typename T::task_id{}) } -> same_as<void>;
+    { t.in_group(typename T::task_id{}) } -> same_as<bool>;
+    { t.group(typename T::task_id{}) } -> same_as<task_group *>;
 } && requires(T::__worker w) {
-    { w.conditional_suspend() } -> std::same_as<void>;
-    { w.current_task() } -> std::same_as<typename T::scheduler::task &>;
-    { w.current_task_id() } -> std::same_as<typename T::task_id>;
+    { w.conditional_suspend() } -> same_as<void>;
+    { w.current_task() } -> same_as<typename T::scheduler::task &>;
+    { w.current_task_id() } -> same_as<typename T::task_id>;
     // If the task had destroyed by scheduler, return false.
-    { w.task_schedulable(typename T::task_id{}) } -> std::same_as<bool>;
-    { w.is_calculator } -> std::same_as<bool &>;
-    { w.running_task } -> std::same_as<std::stack<typename T::scheduler::task *> &>;
-    { w.sc } -> std::same_as<typename T::scheduler &>;
+    { w.task_schedulable(typename T::task_id{}) } -> same_as<bool>;
+    { w.is_calculator } -> same_as<bool &>;
+    { w.running_task } -> same_as<std::stack<typename T::scheduler::task *> &>;
+    { w.sc } -> same_as<typename T::scheduler &>;
 } && sched::is_scheduler<typename T::scheduler>;
 
 class runtime {
@@ -183,15 +189,17 @@ public:
 
     void send_task(sched::task task);
     void send_blocking_task(sched::task task);
-    task_id spawn(task_instance task, __coro_local_frame *pframe, task_id gid = 0);
-    task_id spawn_blocking(task_instance task, __coro_local_frame *pframe, task_id gid = 0);
+    task_id spawn(task_instance task, __coro_local_frame *pframe, unwind::coro_trace trace, task_id gid = 0);
+    task_id
+    spawn_blocking(task_instance task, __coro_local_frame *pframe, unwind::coro_trace trace, task_id gid = 0);
     void awake(task_id id);
     void suspend(task_id id);
     void abort(task_id id);
 
     void register_sync_awaiter(task_id id);
     task_id task_id_from_corohandle(std::coroutine_handle<> handle);
-    sched::task to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe);
+    sched::task
+    to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe, unwind::coro_trace trace);
 
     void remove_task_map(void *addr);
 
@@ -232,7 +240,7 @@ private:
 public:
     __always_inline static runtime &get_runtime() {
         if (!current_runtime)
-            throw std::runtime_error(
+            throw asco::runtime_error(
                 "[ASCO] runtime::get_runtime(): The async function must be called with asco::runtime initialized");
         return *current_runtime;
     }

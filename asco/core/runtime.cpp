@@ -18,8 +18,6 @@
 #    include <sched.h>
 #endif
 
-#include <asco/core/sched.h>
-
 namespace asco::core {
 
 rwspin<std::map<worker::task_id, std::binary_semaphore *>> worker::workers_by_task_id_sem;
@@ -90,7 +88,7 @@ bool worker::task_available(task_id id) {
 // always promis the id is an exist id.
 worker &worker::get_worker_from_task_id(task_id id) {
     if (!id)
-        throw std::runtime_error(
+        throw asco::runtime_error(
             "[ASCO] worker::get_worker_from_task_id() Inner error: unexpectedly got a 0 as task id");
 
     auto guard = workers_by_task_id_sem.read();
@@ -105,7 +103,7 @@ worker &worker::get_worker_from_task_id(task_id id) {
             its->release();
         }
     }
-    throw std::runtime_error("[ASCO] worker::get_worker_from_task_id() Inner error: task id does not exist");
+    throw asco::runtime_error("[ASCO] worker::get_worker_from_task_id() Inner error: task id does not exist");
 }
 
 void worker::set_task_sem(task_id id) {
@@ -116,7 +114,7 @@ bool worker::in_worker() { return workers.find(std::this_thread::get_id()) != wo
 
 worker &worker::get_worker() {
     if (workers.find(std::this_thread::get_id()) == workers.end())
-        throw std::runtime_error("[ASCO] worker::get_worker(): Currently not in any asco::worker thread");
+        throw asco::runtime_error("[ASCO] worker::get_worker(): Currently not in any asco::worker thread");
     if (!current_worker)
         current_worker = workers[std::this_thread::get_id()];
     return *current_worker;
@@ -161,7 +159,7 @@ runtime::runtime(size_t nthread_)
                   ? nthread_
                   : std::thread::hardware_concurrency()) {
     if (current_runtime)
-        throw std::runtime_error("[ASCO] runtime::runtime(): Cannot create multiple runtimes in a process");
+        throw asco::runtime_error("[ASCO] runtime::runtime(): Cannot create multiple runtimes in a process");
     current_runtime = this;
 
     auto worker_lambda = [this](worker *self_) {
@@ -169,7 +167,7 @@ runtime::runtime(size_t nthread_)
 
 #ifdef __linux__
         ::pthread_setname_np(::pthread_self(), std::format("asco::worker{}", self.id).c_str());
-        self.pid = gettid();
+        self.pid = ::gettid();
 #endif
 
         while (!(self.task_rx->is_stopped() && self.sc.currently_finished_all())) {
@@ -244,7 +242,7 @@ runtime::runtime(size_t nthread_)
             std::format("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list", i % cpus.size());
         std::ifstream f(path);
         if (!f.is_open())
-            throw std::runtime_error("[ASCO] runtime::runtime(): Failed to detect CPU hyperthreading");
+            throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to detect CPU hyperthreading");
         std::string buf;
         std::vector<int> siblings;
         while (std::getline(f, buf, '-')) { siblings.push_back(std::atoi(buf.c_str())); }
@@ -268,7 +266,7 @@ runtime::runtime(size_t nthread_)
         }
         auto *p = new worker(i, worker_lambda, rx);
         if (!p)
-            throw std::runtime_error("[ASCO] runtime::runtime(): Failed to create worker");
+            throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to create worker");
         pool.push_back(p);
         auto &workeri = pool[i];
 
@@ -276,7 +274,7 @@ runtime::runtime(size_t nthread_)
         auto &cpu = cpus[i % cpus.size()];
         while (!workeri->pid);
         if (::sched_setaffinity(workeri->pid, sizeof(decltype(cpu)), &cpu) == -1) {
-            throw std::runtime_error("[ASCO] runtime::runtime(): Failed to set affinity");
+            throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to set affinity");
         }
 #endif
 
@@ -335,8 +333,9 @@ void runtime::send_blocking_task(sched::task task) {
     awake_all();
 }
 
-runtime::task_id runtime::spawn(task_instance task_, __coro_local_frame *pframe, task_id gid) {
-    auto task = to_task(task_, false, pframe);
+runtime::task_id
+runtime::spawn(task_instance task_, __coro_local_frame *pframe, unwind::coro_trace trace, task_id gid) {
+    auto task = to_task(task_, false, pframe, trace);
     auto res = task.id;
     if (gid)
         join_task_to_group(res, gid, true);
@@ -344,8 +343,9 @@ runtime::task_id runtime::spawn(task_instance task_, __coro_local_frame *pframe,
     return res;
 }
 
-runtime::task_id runtime::spawn_blocking(task_instance task_, __coro_local_frame *pframe, task_id gid) {
-    auto task = to_task(task_, true, pframe);
+runtime::task_id runtime::spawn_blocking(
+    task_instance task_, __coro_local_frame *pframe, unwind::coro_trace trace, task_id gid) {
+    auto task = to_task(task_, true, pframe, trace);
     auto res = task.id;
     if (gid)
         join_task_to_group(res, gid, true);
@@ -380,19 +380,20 @@ void runtime::remove_task_map(void *addr) { coro_to_task_id.lock()->erase(addr);
 runtime::task_id runtime::task_id_from_corohandle(std::coroutine_handle<> handle) {
     auto guard = coro_to_task_id.lock();
     if (guard->find(handle.address()) == guard->end())
-        throw std::runtime_error(
+        throw asco::runtime_error(
             std::format(
                 "[ASCO] runtime::task_id_from_corohandle() Inner error: coro_to_task_id[{}] unexists",
                 handle.address()));
     return guard->at(handle.address());
 }
 
-sched::task runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe) {
+sched::task
+runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe, unwind::coro_trace trace) {
     auto guard = coro_to_task_id.lock();
     auto id = task_counter.fetch_add(1, morder::relaxed);
     worker::set_task_sem(id);
     guard->insert(std::make_pair(task.address(), id));
-    auto res = sched::task{id, task, new __coro_local_frame(pframe), is_blocking};
+    auto res = sched::task{id, task, new __coro_local_frame(pframe), trace, is_blocking};
 #ifdef ASCO_PERF_RECORD
     res.perf_recorder = new perf::coro_recorder;
 #endif
@@ -441,7 +442,7 @@ task_group *runtime::group(task_id id) {
     auto guard = task_groups.lock();
     if (auto it = guard->find(id); it != guard->end())
         return it->second;
-    throw std::runtime_error(std::format("[ASCO] runtime::group(): task_group {} unexists", id));
+    throw asco::runtime_error(std::format("[ASCO] runtime::group(): task_group {} unexists", id));
 }
 
 };  // namespace asco::core

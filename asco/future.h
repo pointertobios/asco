@@ -13,6 +13,7 @@
 #include <asco/core/taskgroup.h>
 #include <asco/coro_local.h>
 #include <asco/perf.h>
+#include <asco/rterror.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
 
@@ -42,9 +43,9 @@ struct future_base {
         size_t future_type_hash{type_hash<future_base<T, Inline, Blocking>>()};
 
         size_t task_id{};
-        future_base *awaiter{nullptr};
         std::binary_semaphore awaiter_sem{0};
 
+        future_base *awaiter{nullptr};
         std::coroutine_handle<> caller_task;
         size_t caller_task_id{0};
 
@@ -70,26 +71,26 @@ struct future_base {
             return rt.group(curid)->var_exists<Hash>();
         }
 
-        corohandle spawn(__coro_local_frame *curr_clframe) {
+        corohandle spawn(__coro_local_frame *curr_clframe, unwind::coro_trace trace) {
             auto &rt = RT::get_runtime();
             auto coro = corohandle::from_promise(*this);
 
             if constexpr (!Inline) {
                 if constexpr (Blocking)
-                    task_id = rt.spawn_blocking(coro, curr_clframe);
+                    task_id = rt.spawn_blocking(coro, curr_clframe, trace);
                 else
-                    task_id = rt.spawn(coro, curr_clframe);
+                    task_id = rt.spawn(coro, curr_clframe, trace);
             } else {
                 using state = worker::scheduler::task_control::__control_state;
                 auto &worker = worker::get_worker();
 
                 if constexpr (Blocking) {
-                    auto t = rt.to_task(coro, Blocking, curr_clframe);
+                    auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
                     t.is_inline = true;
                     task_id = t.id;
                     worker.sc.push_task(t, state::suspending);
                 } else {
-                    auto t = rt.to_task(coro, Blocking, curr_clframe);
+                    auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
                     t.is_inline = true;
                     task_id = t.id;
                     worker.sc.push_task(t, state::suspending);
@@ -116,11 +117,15 @@ struct future_base {
         }
 
         future_base<T, Inline, Blocking> get_return_object() {
+            void *trace_addr = unwind::unwind_index(2);  // This addr is only correct when compile with -O0
+            unwind::coro_trace *trace_prev_addr = nullptr;
             __coro_local_frame *curr_clframe = nullptr;
             if (worker::in_worker()) {
-                curr_clframe = worker::get_worker().current_task().coro_local_frame;
+                auto &currtask = worker::get_worker().current_task();
+                curr_clframe = currtask.coro_local_frame;
+                trace_prev_addr = &currtask.tracing_stack;
             }
-            auto coro = spawn(curr_clframe);
+            auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
             return future_base<T, Inline, Blocking>(coro, task_id);
         }
 
@@ -265,7 +270,7 @@ struct future_base {
 
     T await() {
         if (worker::in_worker())
-            throw std::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime");
+            throw asco::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime workers");
 
         if constexpr (!Inline) {
             if (promise_returned)
@@ -311,7 +316,7 @@ struct future_base {
 
     T &&retval_move_out() {
         if (none)
-            throw std::runtime_error("[ASCO] retval_move_out(): from a none future object.");
+            throw asco::runtime_error("[ASCO] retval_move_out(): from a none future object.");
 
         none = true;
         return std::move(retval);

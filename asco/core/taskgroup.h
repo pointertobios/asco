@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <asco/core/sched.h>
+#include <asco/rterror.h>
 #include <asco/utils/dynvar.h>
 #include <asco/utils/pubusing.h>
 #include <asco/utils/type_hash.h>
@@ -24,9 +25,7 @@ public:
     inline task_group() {}
 
     inline ~task_group() {
-        for (auto &[_, var] : vars) {
-            var.deconstruct(var.p);
-        }
+        for (auto &[_, var] : vars) { var.deconstruct(var.p); }
     }
 
     inline void add_task(task_id id, bool origin = false) {
@@ -58,10 +57,10 @@ public:
     template<typename T, size_t Hash>
     T &get_var(const char *name) {
         if (auto it = vars.find(Hash); it == vars.end())
-            throw std::runtime_error(std::format("[ASCO] Task group local variable \'{}\' not found", name));
+            throw asco::runtime_error(std::format("[ASCO] Task group local variable \'{}\' not found", name));
 
         if (vars[Hash].type != type_hash<T>())
-            throw std::runtime_error(
+            throw asco::runtime_error(
                 std::format("[ASCO] Task group local variable \'{}\' type mismatch", name));
         return *reinterpret_cast<T *>(vars[Hash].p);
     }
@@ -69,7 +68,7 @@ public:
     template<typename T, size_t Hash>
     T &decl_var(const char *name, T *pt, dynvar::destructor destructor) {
         if (auto it = vars.find(Hash); it != vars.end())
-            throw std::runtime_error(
+            throw asco::runtime_error(
                 std::format("[ASCO] Task group local variable \'{}\' already declared", name));
 
         vars[Hash] = dynvar{type_hash<T>(), pt, destructor};

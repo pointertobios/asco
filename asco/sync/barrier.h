@@ -48,7 +48,7 @@ public:
         if (index == N - 1) {
             sem.release(N - 1);
             if (auto res = std::get<0>(channel).send((*generation.write())++))
-                throw std::runtime_error("[ASCO] barrier::arrive() inner: channel closed unexpedtedly.");
+                throw asco::runtime_error("[ASCO] barrier::arrive() inner: channel closed unexpedtedly.");
             last_arriver = true;
             count.store(0);
         }
@@ -59,7 +59,7 @@ public:
         if (auto res = co_await std::get<1>(channel).recv())
             co_return *res;
 
-        throw std::runtime_error("[ASCO] barrier::all_arrived() inner: channel closed unexpedtedly.");
+        throw asco::runtime_error("[ASCO] barrier::all_arrived() inner: channel closed unexpedtedly.");
     }
 
 private:

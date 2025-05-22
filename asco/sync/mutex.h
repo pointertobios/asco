@@ -39,31 +39,31 @@ public:
 
         T &operator*() {
             if (!self)
-                throw std::runtime_error("mutex::guard::operator*() called on nullptr");
+                throw asco::runtime_error("mutex::guard::operator*() called on nullptr");
             if (moved)
-                throw std::runtime_error("mutex::guard::operator*() called on moved");
+                throw asco::runtime_error("mutex::guard::operator*() called on moved");
             return self->value;
         }
         const T &operator*() const {
             if (!self)
-                throw std::runtime_error("mutex::guard::operator*() called on nullptr");
+                throw asco::runtime_error("mutex::guard::operator*() called on nullptr");
             if (moved)
-                throw std::runtime_error("mutex::guard::operator*() called on moved");
+                throw asco::runtime_error("mutex::guard::operator*() called on moved");
             return self->value;
         }
 
         T *operator->() {
             if (!self)
-                throw std::runtime_error("mutex::guard::operator->() called on nullptr");
+                throw asco::runtime_error("mutex::guard::operator->() called on nullptr");
             if (moved)
-                throw std::runtime_error("mutex::guard::operator->() called on moved");
+                throw asco::runtime_error("mutex::guard::operator->() called on moved");
             return &self->value;
         }
         const T *operator->() const {
             if (!self)
-                throw std::runtime_error("mutex::guard::operator->() called on nullptr");
+                throw asco::runtime_error("mutex::guard::operator->() called on nullptr");
             if (moved)
-                throw std::runtime_error("mutex::guard::operator->() called on moved");
+                throw asco::runtime_error("mutex::guard::operator->() called on moved");
             return &self->value;
         }
 

@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include <asco/perf.h>
+#include <asco/rterror.h>
 #include <asco/utils/dynvar.h>
 #include <asco/utils/pubusing.h>
 #include <asco/utils/type_hash.h>
@@ -61,13 +62,13 @@ struct __coro_local_frame {
     T &get_var(const char *name) {
         if (auto it = vars.find(Hash); it != vars.end()) {
             if (it->second.type != type_hash<T>())
-                throw std::runtime_error(
+                throw asco::runtime_error(
                     "[ASCO] __coro_local_frame::get_var(): Coroutine local variable type mismatch");
             return *reinterpret_cast<T *>(it->second.p);
         } else if (prev) {
             return prev->get_var<T, Hash>(name);
         } else {
-            throw std::runtime_error(
+            throw asco::runtime_error(
                 std::format(
                     "[ASCO] __coro_local_frame::get_var(): Coroutine local variable \'{}\' not found", name));
         }
@@ -76,7 +77,7 @@ struct __coro_local_frame {
     template<typename T, size_t Hash>
     T &decl_var(const char *name, T *pt, dynvar::destructor destructor) {
         if (auto it = vars.find(Hash); it != vars.end())
-            throw std::runtime_error(
+            throw asco::runtime_error(
                 std::format("[ASCO] Coroutine local variable \'{}\' already declared", name));
 
         vars[Hash] = dynvar{type_hash<T>(), pt, destructor};

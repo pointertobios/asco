@@ -9,6 +9,7 @@
 #include <asco/core/taskgroup.h>
 #include <asco/coro_local.h>
 #include <asco/future.h>
+#include <asco/rterror.h>
 #include <asco/utils/type_hash.h>
 
 namespace asco::base::this_coro {
@@ -38,10 +39,10 @@ T &&move_back_return_value() {
     auto h_ = RT::__worker::get_worker().current_task().handle;
     typename F::corohandle h = *(typename F::corohandle *)(&h_);
     if (h.promise().future_type_hash != type_hash<F>())
-        throw std::runtime_error(
+        throw asco::runtime_error(
             "[ASCO] move_back_return_value<F, T>(): F is not matched with your current coroutine.");
     if (std::is_same_v<typename F::return_type, T>)
-        throw std::runtime_error(
+        throw asco::runtime_error(
             "[ASCO] move_back_return_value<F, T>(): T is not matched with your current coroutine.");
     // If a task aborted and must move back return value, its awaiter will always exists.
     return h.promise().awaiter->retval_move_out();

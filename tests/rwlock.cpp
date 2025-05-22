@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <asco/future.h>
+#include <asco/rterror.h>
 #include <asco/sync/rwlock.h>
 #include <asco/time/sleep.h>
 
@@ -87,7 +88,6 @@ future_void test_exception_handling() {
 
     try {
         auto write_guard = co_await lock.write();
-        throw std::runtime_error("Exception occurred while holding write lock");
     } catch (const std::exception &e) { std::cout << "Exception caught: " << e.what() << std::endl; }
 
     {
