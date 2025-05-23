@@ -1,8 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#ifndef ASCO_SUSPEND_H
-#define ASCO_SUSPEND_H 1
+#ifndef ASCO_YIELD_H
+#define ASCO_YIELD_H 1
 
 #include <cstddef>
 
@@ -11,7 +11,7 @@
 namespace asco {
 
 template<typename R = RT>
-struct suspend {
+struct yield {
     __always_inline bool await_ready() { return false; }
 
     __always_inline bool await_suspend(std::coroutine_handle<> handle) { return true; }

@@ -14,6 +14,8 @@
 
 namespace asco::base {
 
+using namespace asco::types;
+
 struct __coro_local_frame {
     __coro_local_frame *prev{nullptr};
     std::unordered_map<size_t, dynvar> vars;

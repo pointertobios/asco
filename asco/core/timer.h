@@ -18,6 +18,7 @@
 namespace asco::core::timer {
 
 using namespace std::chrono;
+using namespace asco::types;
 
 using task_id = sched::task::task_id;
 

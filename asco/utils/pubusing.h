@@ -12,7 +12,7 @@
 #    define __always_inline __forceinline
 #endif
 
-namespace asco {
+namespace asco::types {
 
 using size_t = unsigned long long;
 
@@ -36,7 +36,7 @@ template<typename T>
     requires(!(std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>))
 __always_inline void blackbox(T &) noexcept {}
 
-};  // namespace asco
+};  // namespace asco::types
 
 #define __dispatch(_1, _2, _3, NAME, ...) NAME
 

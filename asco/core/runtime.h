@@ -28,6 +28,8 @@
 
 namespace asco::core {
 
+using namespace asco::types;
+
 using base::__coro_local_frame;
 
 class worker;
@@ -168,7 +170,7 @@ public:
         static void set_args(int argc, const char **argv);
         __always_inline static std::vector<std::string> &args() { return __args; }
 
-        static void set_env(char **env);
+        static void set_env(const char **env);
         __always_inline static std::unordered_map<std::string, std::string> &env() { return __env; }
 
     private:

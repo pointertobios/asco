@@ -4,6 +4,7 @@
 #include <optional>
 #include <typeinfo>
 
+#include <asco/exception.h>
 #include <asco/future.h>
 #include <asco/lazy_delete.h>
 
@@ -25,7 +26,7 @@ int main(int argc, const char **argv, const char **env) {
         rt;
     })};
     runtime::sys::set_args(argc, argv);
-    runtime::sys::set_env(const_cast<char **>(env));
+    runtime::sys::set_env(env);
     try {
         return async_main().await();
     } catch (std::exception &e) {

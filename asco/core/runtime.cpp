@@ -130,7 +130,7 @@ void runtime::sys::set_args(int argc, const char **argv) {
     for (int i = 0; i < argc; i++) { __args.push_back(argv[i]); }
 }
 
-void runtime::sys::set_env(char **env) {
+void runtime::sys::set_env(const char **env) {
     for (; *env; env++) {
         std::string_view env_str = *env;
         auto i = env_str.find_first_of('=');

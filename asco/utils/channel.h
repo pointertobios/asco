@@ -15,6 +15,8 @@
 
 namespace asco::inner {
 
+using namespace asco::types;
+
 template<typename T, size_t Size>
 struct channel_frame {
     T buffer[Size];
