@@ -123,7 +123,7 @@ struct future_base {
             if (worker::in_worker()) {
                 auto &currtask = worker::get_worker().current_task();
                 curr_clframe = currtask.coro_local_frame;
-                trace_prev_addr = &currtask.tracing_stack;
+                trace_prev_addr = &currtask.coro_local_frame->tracing_stack;
             }
             auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
             return future_base<T, Inline, Blocking>(coro, task_id);

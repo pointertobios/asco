@@ -28,7 +28,7 @@ public:
 
         if (unwinder.stacks.size() < 128) {
             auto &task = RT::__worker::get_worker().current_task();
-            for (coro_trace *trace = &task.tracing_stack; trace; trace = trace->prev)
+            for (coro_trace *trace = &task.coro_local_frame->tracing_stack; trace; trace = trace->prev)
                 unwinder.stacks.push_back(unwinder.resolve_address((size_t)trace->current));
         }
 

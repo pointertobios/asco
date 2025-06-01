@@ -81,7 +81,7 @@ future<int> async_main() {
 
 ## 有关协程之间引用的传递
 
-协程的自动储存器变量根据不同情况有不同的储存位置：
+协程的自动储存期变量根据不同情况有不同的储存位置：
 
 * 变量的所有访问行为没有跨过任何协程暂停点，变量会被分配到当前工作线程的线程栈中。
 * 变量的所有访问行为跨过了协程暂停点，变量会存在于协程状态对象中，随着协程的创建和销毁而构造和析构。
@@ -212,9 +212,10 @@ assert_eq(sem.get_counter(), 1);
 
 ### 恢复任务状态
 
-在返回类型为 `future<T>` 的协程中调用 `bool this_coro::aborted()` ，
+在 *asco 异步函数*中调用 `bool this_coro::aborted()` ，
 返回 `true` 时执行状态恢复逻辑或缓存已得到的结果供下次调用时使用，
-然后立即 `co_return this_coro::aborted_value<T>` 返回已打断值，此处的代码称为**打断判定点**。
+然后立即 `co_return this_coro::aborted_value<T>` 返回已打断值，若 `T` 不能拷贝构造，使用 `std::move()` 移动（因为 `future<T>` 要求返回类型必须可以移动），
+此处的代码称为**打断判定点**。
 
 最佳实践：在每个**协程暂停点**[^3]前后设置一个打断判定点，并在 `co_return` 之后利用 `raii` 设置一个**打断判定点**。
 
@@ -262,7 +263,7 @@ future_inline<std::optional<T>> recv() {
 
     if (this_coro::aborted()) {
         restorer.state = 0;
-        co_return this_coro::aborted_value<std::optional<T>>;
+        co_return std::move(this_coro::aborted_value<std::optional<T>>);
     }
 
     if (!buffer.empty()) {
@@ -277,7 +278,7 @@ future_inline<std::optional<T>> recv() {
     if (this_coro::aborted()) {
         frame->sem.release();
         restorer.state = 0;
-        co_return this_coro::aborted_value<std::optional<T>>;
+        co_return std::move(this_coro::aborted_value<std::optional<T>>);
     }
 
     if (frame->sender.has_value()) {
@@ -305,7 +306,7 @@ future_inline<std::optional<T>> recv() {
         if (this_coro::aborted()) {
             frame->sem.release();
             restorer.state = 0;
-            co_return this_coro::aborted_value<std::optional<T>>;
+            co_return std::move(this_coro::aborted_value<std::optional<T>>);
         }
 
         if (is_stopped()) {

@@ -36,9 +36,7 @@ public:
         }
         n = 0;
 
-        for (size_t i{1}; i < N; i++) {
-            rt.awake(h[i]);
-        }
+        for (size_t i{1}; i < N; i++) { rt.awake(h[i]); }
 
         return false;
     }
@@ -46,6 +44,9 @@ public:
     size_t await_resume() { return n; }
 
 private:
+    // For a `switch (co_await select<N>{})`, this select object's lifecycle is crossing this `co_await`. So
+    // this object will always in the coroutine object. The modify of `n` will be visible with the coroutine
+    // clone option.
     size_t n{0};
 };
 

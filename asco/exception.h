@@ -29,6 +29,12 @@ public:
                   + std::format("\n\033[1mStack trace\033[0m:\n{:c}", unwind::coro_unwinder::unwind())) {}
 };
 
+class inner_exception : public exception {
+public:
+    inner_exception(const std::string &what)
+            : exception(what) {}
+};
+
 };  // namespace asco
 
 #endif

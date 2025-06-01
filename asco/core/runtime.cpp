@@ -393,7 +393,7 @@ runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pfram
     auto id = task_counter.fetch_add(1, morder::relaxed);
     worker::set_task_sem(id);
     guard->insert(std::make_pair(task.address(), id));
-    auto res = sched::task{id, task, new __coro_local_frame(pframe), trace, is_blocking};
+    auto res = sched::task{id, task, new __coro_local_frame(pframe, trace), is_blocking};
 #ifdef ASCO_PERF_RECORD
     res.perf_recorder = new perf::coro_recorder;
 #endif

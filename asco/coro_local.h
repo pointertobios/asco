@@ -8,6 +8,7 @@
 
 #include <asco/perf.h>
 #include <asco/rterror.h>
+#include <asco/unwind/unwind.h>
 #include <asco/utils/dynvar.h>
 #include <asco/utils/pubusing.h>
 #include <asco/utils/type_hash.h>
@@ -19,10 +20,15 @@ using namespace asco::types;
 struct __coro_local_frame {
     __coro_local_frame *prev{nullptr};
     std::unordered_map<size_t, dynvar> vars;
+
+    // Just like other corolocal variables, tracing stack must be destroyed after all sub coroutine exited.
+    unwind::coro_trace tracing_stack;
+
     atomic_size_t ref_count{1};
 
-    inline __coro_local_frame(__coro_local_frame *prev)
-            : prev(prev) {
+    inline __coro_local_frame(__coro_local_frame *prev, unwind::coro_trace trace)
+            : prev(prev)
+            , tracing_stack(trace) {
         if (prev)
             prev->subframe_enter();
     }

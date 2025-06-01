@@ -31,8 +31,6 @@ struct task {
 
     __coro_local_frame *coro_local_frame;
 
-    unwind::coro_trace tracing_stack;
-
     // A sort of task that blocking worker thread and don't be stolen to other workers.
     bool is_blocking;
     bool is_inline{false};
