@@ -7,7 +7,7 @@ target_link_libraries(test_futurets PRIVATE asco asco-main)
 add_executable(test_inline inline.cpp)
 target_link_libraries(test_inline PRIVATE asco asco-main)
 
-add_executable(test_sems sems.cpp)
+add_executable(test_sems sync/sems.cpp)
 target_link_libraries(test_sems PRIVATE asco asco-main)
 
 add_executable(test_clf_lazyde clf_lazyde.cpp)
@@ -16,29 +16,32 @@ target_link_libraries(test_clf_lazyde PRIVATE asco asco-main)
 add_executable(test_channel channel.cpp)
 target_link_libraries(test_channel PRIVATE asco asco-main)
 
-add_executable(test_interval interval.cpp)
+add_executable(test_interval time/interval.cpp)
 target_link_libraries(test_interval PRIVATE asco asco-main)
 
 add_executable(test_select select.cpp)
 target_link_libraries(test_select PRIVATE asco asco-main)
 
-add_executable(test_timeout timeout.cpp)
+add_executable(test_timeout time/timeout.cpp)
 target_link_libraries(test_timeout PRIVATE asco asco-main)
 
-add_executable(test_sleep sleep.cpp)
+add_executable(test_sleep time/sleep.cpp)
 target_link_libraries(test_sleep PRIVATE asco asco-main)
 
-add_executable(test_rwlock rwlock.cpp)
+add_executable(test_rwlock sync/rwlock.cpp)
 target_link_libraries(test_rwlock PRIVATE asco asco-main)
 
-add_executable(test_condvar condvar.cpp)
+add_executable(test_condvar sync/condvar.cpp)
 target_link_libraries(test_condvar PRIVATE asco asco-main)
 
-add_executable(test_barrier barrier.cpp)
+add_executable(test_barrier sync/barrier.cpp)
 target_link_libraries(test_barrier PRIVATE asco asco-main)
 
 add_executable(test_unwi unwi.cpp)
 target_link_libraries(test_unwi PRIVATE asco asco-main)
+
+add_executable(test_zcbuffer io/zcbuffer.cpp)
+target_link_libraries(test_zcbuffer PRIVATE asco asco-main)
 
 add_test(NAME futurets COMMAND test_futurets)
 add_test(NAME inline COMMAND test_inline)
@@ -53,3 +56,4 @@ add_test(NAME rwlock COMMAND test_rwlock)
 add_test(NAME condvar COMMAND test_condvar)
 add_test(NAME barrier COMMAND test_barrier)
 add_test(NAME unwi COMMAND test_unwi)
+add_test(NAME zcbuffer COMMAND test_zcbuffer)
