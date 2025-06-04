@@ -1,5 +1,5 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 // Test for lazy delete of coroutine local frame
 
@@ -12,9 +12,7 @@ using asco::future, asco::future_void;
 
 future_void foo() {
     int *coro_local(arr);
-    for (int i = 0; i < 1000; i++) {
-        arr[i] = i;
-    }
+    for (int i = 0; i < 1000; i++) { arr[i] = i; }
     std::cout << "foo exited" << std::endl;
     co_return {};
 }

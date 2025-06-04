@@ -1,6 +1,6 @@
 # ASCO
 
-[![GPLv3 License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 
 C++20 coroutine based async framework (***C++23*** needed).
 
@@ -36,7 +36,7 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
   - [ ] Windows full support
   - [ ] MacOS full support
 - [x] Basic tools for parallel programming
-  - [ ] Sync Primitives
+  - [x] Sync Primitives
     - [x] Spin
     - [x] Mutex
     - [x] Read-Write Lock
@@ -61,7 +61,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0** (GPLv3).
+This project is licensed under the **MIT License**.
 
 Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 

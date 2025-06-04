@@ -1,5 +1,5 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 #ifndef ASCO_TIMER_H
 #define ASCO_TIMER_H 1

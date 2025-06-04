@@ -1,5 +1,5 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 #include <asco/utils/channel.h>
 #include <iostream>
@@ -17,9 +17,7 @@ int main() {
                 break;
             }
     });
-    for (int i = 0; i < 30000; ++i) {
-        tx.send(i);
-    }
+    for (int i = 0; i < 30000; ++i) { tx.send(i); }
     tx.stop();
     return 0;
 }
