@@ -5,7 +5,9 @@
 #define ASCO_FUTURE_H
 
 #include <coroutine>
+#include <cstring>
 #include <functional>
+#include <iostream>
 #include <optional>
 #include <semaphore>
 
@@ -14,6 +16,7 @@
 #include <asco/coro_local.h>
 #include <asco/perf.h>
 #include <asco/rterror.h>
+#include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
 
@@ -48,6 +51,8 @@ struct future_base {
         future_base *awaiter{nullptr};
         std::coroutine_handle<> caller_task;
         size_t caller_task_id{0};
+
+        inner::sender<T, 1> return_sender;
 
         void *operator new(std::size_t n) noexcept {
             auto *p = static_cast<size_t *>(::operator new(n + 2 * sizeof(size_t)));
@@ -126,18 +131,20 @@ struct future_base {
                 trace_prev_addr = &currtask.coro_local_frame->tracing_stack;
             }
             auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
-            return future_base<T, Inline, Blocking>(coro, task_id);
+            auto [tx, rx] = inner::channel<T, 1>();
+            return_sender = std::move(tx);
+            return future_base<T, Inline, Blocking>(coro, task_id, std::move(rx));
         }
 
         std::suspend_always initial_suspend() { return {}; }
 
         void return_value(T val) {
             auto &rt = RT::get_runtime();
+            task_id = worker::get_worker().current_task_id();
             // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
             // `__asco_select_sem__` for continue running
             if (group_local_exists<__consteval_str_hash("__asco_select_sem__")>()
                 && !rt.group(task_id)->is_origin(task_id)) {
-                task_id = worker::get_worker().current_task_id();
                 std::binary_semaphore group_local(__asco_select_sem__);
                 if (__asco_select_sem__.try_acquire()) {
                     for (auto id : rt.group(task_id)->non_origin_tasks()) {
@@ -151,12 +158,10 @@ struct future_base {
                 }
             }
 
-            awaiter_sem.acquire();
-            if (awaiter) {
-                awaiter->retval = std::move(val);
+            return_sender.send(std::move(val));
+
+            if (awaiter)
                 awaiter->promise_returned = true;
-            }
-            awaiter_sem.release();
         }
 
         // The inline future will return the caller_resumer to symmatrical transform to the caller task.
@@ -227,7 +232,11 @@ struct future_base {
         }
     };
 
-    bool await_ready() { return promise_returned; }
+    bool await_ready() {
+        if (none)
+            throw asco::runtime_error("[ASCO] future didn't bind to a task");
+        return promise_returned;
+    }
 
     // The inline future will return current task corohandle to symmatrical transform to the callee task.
     auto await_suspend(std::coroutine_handle<> handle) {
@@ -263,25 +272,35 @@ struct future_base {
     }
 
     T await_resume() {
-        if (e)
+        if (none)
+            throw asco::runtime_error("[ASCO] future didn't bind to a task");
+
+        if (e) {
             std::rethrow_exception(e);
-        return std::move(retval);
+            e = nullptr;
+        }
+        return std::move(*return_receiver.recv());
     }
 
     T await() {
+        if (none)
+            throw asco::runtime_error("[ASCO] future didn't bind to a task");
+
         if (worker::in_worker())
             throw asco::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime workers");
 
         if constexpr (!Inline) {
             if (promise_returned)
-                return std::move(retval);
+                return std::move(*return_receiver.recv());
 
             RT::get_runtime().register_sync_awaiter(task_id);
             worker::get_worker_from_task_id(task_id).sc.get_sync_awaiter(task_id).acquire();
 
-            if (e)
+            if (e) {
                 std::rethrow_exception(e);
-            return std::move(retval);
+                e = nullptr;
+            }
+            return std::move(*return_receiver.recv());
         } else {
             static_assert(false, "[ASCO] future_inline<T> cannot be awaited in synchronized context.");
         }
@@ -289,6 +308,9 @@ struct future_base {
     }
 
     void abort() {
+        if (none)
+            return;
+
         RT::get_runtime().abort(task_id);
         auto t = worker::get_worker_from_task_id(task_id).sc.get_task(task_id);
         if (!t.is_inline)
@@ -297,13 +319,31 @@ struct future_base {
 
     future_base() = default;
 
-    future_base(corohandle task, size_t task_id)
+    future_base(const future_base &) = delete;
+
+    future_base(future_base &&rhs) {
+        if (rhs.none)
+            return;
+
+        std::swap(task, rhs.task);
+        task.promise().awaiter = this;
+        std::swap(task_id, rhs.task_id);
+        return_receiver = std::move(rhs.return_receiver);
+        std::swap(e, rhs.e);
+        std::swap(promise_returned, rhs.promise_returned);
+        none = false;
+        rhs.none = true;
+    }
+
+    future_base(corohandle task, size_t task_id, inner::receiver<T, 1> &&rx)
             : task(task)
             , task_id(task_id)
+            , return_receiver(std::move(rx))
             , none(false) {
         task.promise().awaiter = this;
         task.promise().awaiter_sem.release();
-        RT::get_runtime().awake(task_id);
+        if (!Inline)
+            RT::get_runtime().awake(task_id);
     }
 
     ~future_base() {
@@ -312,6 +352,31 @@ struct future_base {
 
         if (!promise_returned)
             task.promise().awaiter = nullptr;
+
+        if (e)
+            std::rethrow_exception(e);
+    }
+
+    future_base &operator=(future_base &&rhs) {
+        if (!none) {
+            if (!promise_returned)
+                task.promise().awaiter = nullptr;
+            if (e)
+                std::rethrow_exception(e);
+            none = true;
+        }
+
+        if (!rhs.none) {
+            std::swap(task, rhs.task);
+            task.promise().awaiter = this;
+            std::swap(task_id, rhs.task_id);
+            return_receiver = std::move(rhs.return_receiver);
+            std::swap(e, rhs.e);
+            std::swap(promise_returned, rhs.promise_returned);
+            none = false;
+            rhs.none = true;
+        }
+        return *this;
     }
 
     T &&retval_move_out() {
@@ -319,16 +384,30 @@ struct future_base {
             throw asco::runtime_error("[ASCO] retval_move_out(): from a none future object.");
 
         none = true;
-        return std::move(retval);
+        return std::move(*return_receiver.recv());
+    }
+
+    template<typename F>
+        requires is_async_function<F, return_type>
+    future_base<typename std::invoke_result_t<F, return_type>::return_type, false, Blocking, R>
+    then(this future_base self, F f) {
+        if (Inline) {
+            auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
+            auto &w = worker::get_worker();
+            w.modify_task_map(self.task_id, &w);
+            w.sc.steal_from(task, awaiter);
+        }
+        co_return co_await f(std::move(co_await self));
     }
 
 private:
     corohandle task;
     size_t task_id;
 
-    T retval;
     std::exception_ptr e;
     bool promise_returned{false};
+
+    inner::receiver<T, 1> return_receiver;
 
     bool none{true};
 };

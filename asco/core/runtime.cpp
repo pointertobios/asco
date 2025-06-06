@@ -69,6 +69,15 @@ void worker::insert_task_map(task_id id, worker *self) {
     guard->at(id)->release();
 }
 
+void worker::modify_task_map(task_id id, worker *self) {
+    auto guard = workers_by_task_id_sem.read();
+    if (!guard->contains(id))
+        return;
+    guard->at(id)->acquire();
+    workers_by_task_id[id] = self;
+    guard->at(id)->release();
+}
+
 bool worker::task_available(task_id id) {
     auto guard = workers_by_task_id_sem.read();
     if (auto its_ = guard->find(id); its_ != guard->end()) {

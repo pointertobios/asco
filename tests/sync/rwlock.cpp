@@ -1,9 +1,11 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include <cassert>
 #include <iostream>
 #include <vector>
 
+#include <asco/exception.h>
 #include <asco/future.h>
 #include <asco/rterror.h>
 #include <asco/sync/rwlock.h>
@@ -62,22 +64,24 @@ future_void test_nested_locks() {
 }
 
 future_void test_mutex_locks() {
-    rwlock<int> lock(10);
+    rwlock<int> decl_local(lock, new rwlock<int>(10));
 
-    asco::future_void task;
-    {
-        auto write_guard = co_await lock.write();
+    auto task = co_await lock.write().then([](rwlock<int>::write_guard write_guard) -> future<future_void> {
         std::cout << "Write lock acquired: " << *write_guard << std::endl;
 
-        task = [&]() -> future_void {
+        rwlock<int> coro_local(lock);
+
+        auto task = [&]() -> future_void {
             auto read_guard = co_await lock.read();
             std::cout << "Read lock acquired after write lock released: " << *read_guard << std::endl;
+            assert(*read_guard == 10);
             co_return {};
         }();
-
         co_await asco::this_coro::sleep_for(1s);
-    }
-    std::cout << "Write lock released" << std::endl;
+        std::cout << "Write lock released" << std::endl;
+        co_return task;
+    });
+
     co_await task;
 
     co_return {};

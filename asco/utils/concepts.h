@@ -32,9 +32,9 @@ concept is_future = requires(F f) {
     { p.unhandled_exception() } -> std::same_as<void>;
 };
 
-template<typename F>
-concept is_async_task = is_future<std::invoke_result_t<F>> && requires(F f) {
-    { f() } -> std::same_as<std::invoke_result_t<F>>;
+template<typename F, typename... Args>
+concept is_async_function = is_future<std::invoke_result_t<F, Args...>> && requires(F f) {
+    { f(std::declval<Args>()...) } -> std::same_as<std::invoke_result_t<F, Args...>>;
 };
 
 };  // namespace asco

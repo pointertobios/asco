@@ -55,7 +55,6 @@ public:
         auto guard = waiting_tasks.lock();
         for (size_t i = 0; i < awake_x && !guard->empty(); ++i) {
             auto id = std::move(guard->front());
-            std::cout << std::format("awake {}\n", id);
             guard->pop_front();
 
             RT::get_runtime().awake(id);

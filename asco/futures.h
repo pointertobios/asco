@@ -35,7 +35,7 @@ inline static T aborted_value = std::move(*(T *)(&aborted_value_v<T>.null));
 
 template<typename F, typename T, typename R = RT>
     requires is_future<F> && is_runtime<R>
-T &&move_back_return_value() {
+T move_back_return_value() {
     auto h_ = RT::__worker::get_worker().current_task().handle;
     typename F::corohandle h = *(typename F::corohandle *)(&h_);
     if (h.promise().future_type_hash != type_hash<F>())

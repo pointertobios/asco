@@ -6,12 +6,11 @@
 namespace asco::core::sched {
 
 void std_scheduler::push_task(task t, task_control::__control_state initial_state) {
-    auto guard = active_tasks.lock();
     auto p = new task_control{t};
     task_map.emplace(t.id, p);
     p->state = initial_state;
     if (initial_state == task_control::__control_state::running)
-        guard->push_back(p);
+        active_tasks.lock()->push_back(p);
     else
         suspended_tasks.lock()->emplace(t.id, p);
 }
@@ -24,10 +23,15 @@ std::optional<task *> std_scheduler::sched() {
     while (!guard->empty()) {
         auto task = *guard->begin();
         guard->erase(guard->begin());
+
+        if (stealed_but_active_tasks.contains(task->t.id))
+            continue;
+
         if (task->state == task_control::__control_state::suspending) {
             (*suspended_tasks.lock())[task->t.id] = task;
             continue;
         }
+
         guard->push_back(task);
         return &task->t;
     }
@@ -48,6 +52,38 @@ void std_scheduler::try_reawake_buffered() {
     }
 }
 
+std::optional<std::tuple<std_scheduler::task_control *, std::binary_semaphore *>>
+std_scheduler::steal(task::task_id id) {
+    if (!task_map.contains(id))
+        return std::nullopt;
+
+    auto *task = task_map[id];
+    task_map.erase(id);
+    std::binary_semaphore *awaiter{nullptr};
+    if (auto it = sync_awaiters.find(id); it != sync_awaiters.end()) {
+        awaiter = it->second;
+        sync_awaiters.erase(it);
+    }
+
+    if (auto guard = suspended_tasks.lock(); guard->contains(id))
+        guard->erase(id);
+    else
+        stealed_but_active_tasks.insert(id);
+
+    return std::make_tuple(task, awaiter);
+}
+
+void std_scheduler::steal_from(task_control *task, std::binary_semaphore *awaiter) {
+    task_map[task->t.id] = task;
+    if (awaiter)
+        sync_awaiters[task->t.id] = awaiter;
+
+    if (task->state == task_control::__control_state::running)
+        active_tasks.lock()->push_back(task);
+    else
+        suspended_tasks.lock()->emplace(task->t.id, task);
+}
+
 bool std_scheduler::currently_finished_all() {
     auto guard = suspended_tasks.lock();
     std::erase_if(*guard, [](auto &p) { return p.second->t.done(); });
@@ -57,10 +93,6 @@ bool std_scheduler::currently_finished_all() {
 bool std_scheduler::has_buffered_awakes() { return !not_in_suspended_but_awake_tasks.empty(); }
 
 void std_scheduler::awake(task::task_id id) {
-#ifdef ASCO_PERF_RECORD
-    get_task(id).perf_recorder->record_once();
-#endif
-
     auto guard = active_tasks.lock();
     auto susg = suspended_tasks.lock();
     if (auto it = susg->find(id); it != susg->end()) {
@@ -73,10 +105,6 @@ void std_scheduler::awake(task::task_id id) {
 }
 
 void std_scheduler::suspend(task::task_id id) {
-#ifdef ASCO_PERF_RECORD
-    get_task(id).perf_recorder->record_once();
-#endif
-
     if (not_in_suspended_but_awake_tasks.find(id) != not_in_suspended_but_awake_tasks.end()) {
         not_in_suspended_but_awake_tasks.erase(id);
         return;

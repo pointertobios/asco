@@ -57,6 +57,7 @@ public:
 
     static void remove_task_map(task_id id);
     static void insert_task_map(task_id id, worker *self);
+    static void modify_task_map(task_id id, worker *self);
 
     __always_inline sched::task &current_task() { return *running_task.top(); }
 
@@ -109,7 +110,7 @@ concept is_runtime = requires(T t) {
     // Exception: runtime error when there is not a worker on the current thread.
     { T::__worker::in_worker() } -> same_as<bool>;
     { T::__worker::get_worker() } -> same_as<typename T::__worker &>;
-    // If the task never been control by runtime, return false.
+    // If the task never been controled by runtime, return false.
     { T::__worker::task_available(typename T::task_id{}) } -> same_as<bool>;
     // Exception: runtime error when the task fits !task_available(id).
     { T::__worker::get_worker_from_task_id(typename T::task_id{}) } -> same_as<typename T::__worker &>;
@@ -117,6 +118,9 @@ concept is_runtime = requires(T t) {
     { T::__worker::remove_task_map(typename T::task_id{}) } -> same_as<void>;
     {
         T::__worker::insert_task_map(typename T::task_id{}, declval<typename T::__worker *>())
+    } -> same_as<void>;
+    {
+        T::__worker::modify_task_map(typename T::task_id{}, declval<typename T::__worker *>())
     } -> same_as<void>;
     { T::get_runtime() } -> same_as<T &>;
     { t.send_task(declval<typename T::scheduler::task>()) } -> same_as<void>;

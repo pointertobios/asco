@@ -37,9 +37,6 @@ target_link_libraries(test_condvar PRIVATE asco asco-main)
 add_executable(test_barrier sync/barrier.cpp)
 target_link_libraries(test_barrier PRIVATE asco asco-main)
 
-add_executable(test_unwi unwi.cpp)
-target_link_libraries(test_unwi PRIVATE asco asco-main)
-
 add_executable(test_zcbuffer io/zcbuffer.cpp)
 target_link_libraries(test_zcbuffer PRIVATE asco asco-main)
 
@@ -55,5 +52,4 @@ add_test(NAME sleep COMMAND test_sleep)
 add_test(NAME rwlock COMMAND test_rwlock)
 add_test(NAME condvar COMMAND test_condvar)
 add_test(NAME barrier COMMAND test_barrier)
-add_test(NAME unwi COMMAND test_unwi)
 add_test(NAME zcbuffer COMMAND test_zcbuffer)

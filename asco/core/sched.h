@@ -99,8 +99,13 @@ concept is_scheduler = requires(T t) {
     } -> std::same_as<void>;
     { t.sched() } -> std::same_as<std::optional<task *>>;
     { t.try_reawake_buffered() } -> std::same_as<void>;
-    { t.find_stealable_and_steal() } -> std::same_as<std::optional<task>>;
-    { t.steal(task::task_id{}) } -> std::same_as<std::optional<task>>;
+    {
+        // If call this, you must promise the task is not on invoke by worker thread.
+        t.steal(task::task_id{})
+    } -> std::same_as<std::optional<std::tuple<typename T::task_control *, std::binary_semaphore *>>>;
+    {
+        t.steal_from(std::declval<typename T::task_control *>(), std::declval<std::binary_semaphore *>())
+    } -> std::same_as<void>;
     // return true only when both active tasks and suspending tasks are empty.
     { t.currently_finished_all() } -> std::same_as<bool>;
     { t.has_buffered_awakes() } -> std::same_as<bool>;
@@ -133,8 +138,8 @@ public:
     void push_task(task t, task_control::__control_state initial_state);
     std::optional<task *> sched();
     void try_reawake_buffered();
-    std::optional<task> find_stealable_and_steal();
-    std::optional<task> steal(task::task_id id);
+    std::optional<std::tuple<task_control *, std::binary_semaphore *>> steal(task::task_id id);
+    void steal_from(task_control *, std::binary_semaphore *);
     bool currently_finished_all();
     bool has_buffered_awakes();
 
@@ -155,6 +160,7 @@ private:
     spin<std::unordered_map<task::task_id, task_control *>> suspended_tasks;
 
     std::set<task::task_id> not_in_suspended_but_awake_tasks;
+    std::set<task::task_id> stealed_but_active_tasks;
 
     std::unordered_map<task::task_id, task_control *> task_map;
     std::unordered_map<task::task_id, std::binary_semaphore *> sync_awaiters;
