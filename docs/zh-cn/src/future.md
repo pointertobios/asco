@@ -326,39 +326,6 @@ future_inline<std::optional<T>> recv() {
 }
 ```
 
----
-
-## select\<N\>
-
-选择器，选择最先返回的协程继续运行，打断其它未返回或后返回的协程。
-
-```c++
-asco::interval in1s{1s};
-asco::interval in500ms{500ms};
-for (int i{0}; i < 6; i++) {
-    switch (co_await asco::select<2>{}) {
-    case 0: {
-        co_await in1s.tick();
-        std::cout << "1s\n";
-        break;
-    }
-    case 1: {
-        co_await in500ms.tick();
-        std::cout << "500ms\n";
-        break;
-    }
-    }
-}
-```
-
-选择器将当前协程克隆出 `N` 个协程并同时唤醒运行。对构造的 `select<N>` 对象 `co_await` 后按协程被克隆的顺序返回 `size_t` 类型的值。
-
-选择器仅对 `select<N>` 对象返回后的第一个异步任务有效。
-
-最先返回的异步任务会将其它任务打断，因此即使后来的协程的已经返回，也会根据前文规定的**可打断特性**将其影响的状态恢复。
-
-被打断的协程会将其调用者一并销毁；如果正确使用了 `select<N>` ，其调用者总是被克隆的 **N** 个协程中的 **N-1** 个。
-
 [^1]: 见[asco 异步运行时](进阶/asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。
 [^3]: C++20 coroutine 使用的术语，指 `co_await` 、 `co_yield` 、 `co_return` 。

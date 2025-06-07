@@ -276,8 +276,9 @@ struct future_base {
             throw asco::runtime_error("[ASCO] future didn't bind to a task");
 
         if (e) {
-            std::rethrow_exception(e);
+            auto tmp = e;
             e = nullptr;
+            std::rethrow_exception(tmp);
         }
         return std::move(*return_receiver.recv());
     }
@@ -297,8 +298,9 @@ struct future_base {
             worker::get_worker_from_task_id(task_id).sc.get_sync_awaiter(task_id).acquire();
 
             if (e) {
-                std::rethrow_exception(e);
+                auto tmp = e;
                 e = nullptr;
+                std::rethrow_exception(tmp);
             }
             return std::move(*return_receiver.recv());
         } else {
@@ -398,6 +400,19 @@ struct future_base {
             w.sc.steal_from(task, awaiter);
         }
         co_return co_await f(std::move(co_await self));
+    }
+
+    template<typename F>
+        requires is_exception_handler<F>
+    future_base<std::optional<return_type>, false, Blocking, R> exceptionally(this future_base self, F f) {
+        try {
+            co_return co_await self;
+        } catch (first_argument_t<F> e) {
+            f(e);
+            co_return std::nullopt;
+        } catch (...) {  //
+            std::rethrow_exception(std::current_exception());
+        }
     }
 
 private:

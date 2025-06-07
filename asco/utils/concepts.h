@@ -37,6 +37,45 @@ concept is_async_function = is_future<std::invoke_result_t<F, Args...>> && requi
     { f(std::declval<Args>()...) } -> std::same_as<std::invoke_result_t<F, Args...>>;
 };
 
+template<typename F, typename = void>
+struct first_argument {
+    using type = void;
+};
+
+template<typename R, typename... Args>
+struct first_argument<std::function<R(Args...)>> {
+    using type = std::tuple_element_t<0, std::tuple<Args...>>;
+};
+
+template<typename R, typename A1, typename... Rest>
+struct first_argument<R (*)(A1, Rest...)> {
+    using type = A1;
+};
+
+template<typename C, typename R, typename A1, typename... Rest>
+struct first_argument<R (C::*)(A1, Rest...) const, void> {
+    using type = A1;
+};
+
+template<typename C, typename R, typename A1, typename... Rest>
+struct first_argument<R (C::*)(A1, Rest...), void> {
+    using type = A1;
+};
+
+template<typename F>
+struct first_argument<F, std::void_t<decltype(&F::operator())>> {
+    using type = typename first_argument<decltype(&F::operator())>::type;
+};
+
+template<typename F>
+using first_argument_t = typename first_argument<F>::type;
+
+template<typename F>
+concept is_exception_handler =
+    std::invocable<F, std::exception_ptr>
+    || (std::is_base_of_v<std::exception, std::remove_reference_t<first_argument_t<F>>>
+        && std::invocable<F, first_argument_t<F>>);
+
 };  // namespace asco
 
 #endif
