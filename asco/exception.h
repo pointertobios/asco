@@ -16,8 +16,7 @@ namespace asco {
 
 class exception : public std::runtime_error {
 public:
-    template<typename R = RT>
-        requires core::is_runtime<R>
+    template<core::runtime_type R = RT>
     exception(const std::string &what)
             : std::runtime_error(
                   what + ({

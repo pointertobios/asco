@@ -153,7 +153,7 @@ public:
                                            std::remove_reference_t<decltype(buf)>, std::basic_string<CharT>>)
                         res.append(buf.substr(start, size));
                     else
-                        res.append_range(buf.substr(start, size));
+                        res.append(buf.substr(start, size));
                 },
                 frame->frame->buffer);
         }

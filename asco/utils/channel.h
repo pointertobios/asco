@@ -301,30 +301,25 @@ private:
     bool none{false};
 };
 
-template<typename T, size_t FrameSize = 1024>
-    requires is_move_secure_v<T>
+template<move_secure T, size_t FrameSize = 1024>
 std::tuple<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
     auto *frame = new channel_frame<T, FrameSize>();
     frame->receiver = 0;
     return {sender<T, FrameSize>(frame), receiver<T, FrameSize>(frame)};
 }
 
-template<typename T, size_t FrameSize = 1024>
-    requires is_move_secure_v<T>
+template<move_secure T, size_t FrameSize = 1024>
 using shared_sender = std::shared_ptr<sender<T, FrameSize>>;
 
-template<typename T, size_t FrameSize = 1024>
-    requires is_move_secure_v<T>
+template<move_secure T, size_t FrameSize = 1024>
 shared_sender<T, FrameSize> make_shared_sender(sender<T, FrameSize> &&tx) {
     return std::make_shared<sender<T, FrameSize>>(std::move(tx));
 }
 
-template<typename T, size_t FrameSize = 1024>
-    requires is_move_secure_v<T>
+template<move_secure T, size_t FrameSize = 1024>
 using shared_receiver = std::shared_ptr<receiver<T, FrameSize>>;
 
-template<typename T, size_t FrameSize = 1024>
-    requires is_move_secure_v<T>
+template<move_secure T, size_t FrameSize = 1024>
 shared_receiver<T, FrameSize> make_shared_receiver(receiver<T, FrameSize> &&rx) {
     return std::make_shared<receiver<T, FrameSize>>(std::move(rx));
 }

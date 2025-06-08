@@ -100,7 +100,7 @@ private:
 using std::declval, std::same_as;
 
 template<typename T>
-concept is_runtime = requires(T t) {
+concept runtime_type = requires(T t) {
     typename T::__worker;
     typename T::scheduler;
     typename T::scheduler::task;
@@ -166,7 +166,7 @@ concept is_runtime = requires(T t) {
     { w.is_calculator } -> same_as<bool &>;
     { w.running_task } -> same_as<std::stack<typename T::scheduler::task *> &>;
     { w.sc } -> same_as<typename T::scheduler &>;
-} && sched::is_scheduler<typename T::scheduler>;
+} && sched::scheduler_type<typename T::scheduler>;
 
 class runtime {
 public:

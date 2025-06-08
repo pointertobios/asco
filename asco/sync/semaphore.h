@@ -15,8 +15,7 @@ namespace asco::sync {
 
 using task_id = core::sched::task::task_id;
 
-template<size_t CounterMax, typename R = RT>
-    requires core::is_runtime<R>
+template<size_t CounterMax, core::runtime_type R = RT>
 class semaphore_base {
 public:
     semaphore_base(size_t count)

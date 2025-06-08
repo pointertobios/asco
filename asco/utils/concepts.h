@@ -10,12 +10,12 @@
 namespace asco {
 
 template<typename T>
-constexpr bool is_move_secure_v =
+concept move_secure =
     (std::is_move_constructible_v<T> && std::is_move_assignable_v<T>) || std::is_integral_v<T>
     || std::is_floating_point_v<T> || std::is_pointer_v<T> || std::is_void_v<T>;
 
 template<typename F>
-concept is_future = requires(F f) {
+concept future_type = requires(F f) {
     typename F::corohandle;
     typename F::promise_type;
     typename F::return_type;
@@ -33,7 +33,7 @@ concept is_future = requires(F f) {
 };
 
 template<typename F, typename... Args>
-concept is_async_function = is_future<std::invoke_result_t<F, Args...>> && requires(F f) {
+concept async_function = future_type<std::invoke_result_t<F, Args...>> && requires(F f) {
     { f(std::declval<Args>()...) } -> std::same_as<std::invoke_result_t<F, Args...>>;
 };
 
@@ -43,7 +43,7 @@ struct first_argument {
 };
 
 template<typename R, typename... Args>
-struct first_argument<std::function<R(Args...)>> {
+struct first_argument<R(Args...)> {
     using type = std::tuple_element_t<0, std::tuple<Args...>>;
 };
 
@@ -71,7 +71,7 @@ template<typename F>
 using first_argument_t = typename first_argument<F>::type;
 
 template<typename F>
-concept is_exception_handler =
+concept exception_handler =
     std::invocable<F, std::exception_ptr>
     || (std::is_base_of_v<std::exception, std::remove_reference_t<first_argument_t<F>>>
         && std::invocable<F, first_argument_t<F>>);

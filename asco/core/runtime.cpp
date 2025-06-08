@@ -13,7 +13,6 @@
 #include <string_view>
 
 #ifdef __linux__
-#    include <cpuid.h>
 #    include <pthread.h>
 #    include <sched.h>
 #endif

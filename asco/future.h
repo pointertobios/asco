@@ -10,6 +10,7 @@
 #include <iostream>
 #include <optional>
 #include <semaphore>
+#include <utility>
 
 #include <asco/core/runtime.h>
 #include <asco/core/taskgroup.h>
@@ -26,12 +27,11 @@
 
 namespace asco::base {
 
-using core::is_runtime;
+using core::runtime_type;
 
 struct _future_void {};
 
-template<typename T, bool Inline, bool Blocking, typename R = RT>
-    requires is_move_secure_v<T> && is_runtime<R>
+template<move_secure T, bool Inline, bool Blocking, runtime_type R = RT>
 struct future_base {
     static_assert(!std::is_void_v<T>, "[ASCO] Use asco::future_void instead.");
     static_assert(!Inline || !Blocking, "[ASCO] Inline coroutine cannot be blocking.");
@@ -389,8 +389,7 @@ struct future_base {
         return std::move(*return_receiver.recv());
     }
 
-    template<typename F>
-        requires is_async_function<F, return_type>
+    template<async_function<return_type> F>
     future_base<typename std::invoke_result_t<F, return_type>::return_type, false, Blocking, R>
     then(this future_base self, F f) {
         if (Inline) {
@@ -402,8 +401,7 @@ struct future_base {
         co_return co_await f(std::move(co_await self));
     }
 
-    template<typename F>
-        requires is_exception_handler<F>
+    template<exception_handler F>
     future_base<std::optional<return_type>, false, Blocking, R> exceptionally(this future_base self, F f) {
         try {
             co_return co_await self;
@@ -427,16 +425,13 @@ private:
     bool none{true};
 };
 
-template<typename T, typename R = RT>
-    requires is_move_secure_v<T> && is_runtime<R>
+template<move_secure T, runtime_type R = RT>
 using future = future_base<T, false, false, R>;
 
-template<typename T, typename R = RT>
-    requires is_move_secure_v<T> && is_runtime<R>
+template<move_secure T, runtime_type R = RT>
 using future_inline = future_base<T, true, false, R>;
 
-template<typename T, typename R = RT>
-    requires is_move_secure_v<T> && is_runtime<R>
+template<move_secure T, runtime_type R = RT>
 using future_core = future_base<T, false, true, R>;
 
 using future_void = future<_future_void>;

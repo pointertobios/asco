@@ -14,8 +14,7 @@ namespace asco::sync {
 
 using task_id = core::sched::task::task_id;
 
-template<typename R = RT>
-    requires core::is_runtime<R>
+template<core::runtime_type R = RT>
 class condition_variable {
 public:
     condition_variable() = default;

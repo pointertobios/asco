@@ -91,7 +91,7 @@ struct task {
 };
 
 template<typename T>
-concept is_scheduler = requires(T t) {
+concept scheduler_type = requires(T t) {
     typename T::task;
     typename T::task_control;
     {

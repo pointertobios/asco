@@ -4,7 +4,6 @@
 #include <asco/core/timer.h>
 
 #ifdef __linux__
-#    include <cpuid.h>
 #    include <pthread.h>
 #    include <signal.h>
 #endif

@@ -14,10 +14,9 @@
 
 namespace asco::base::this_coro {
 
-using core::is_runtime;
+using core::runtime_type;
 
-template<typename R = RT>
-    requires is_runtime<R>
+template<runtime_type R = RT>
 bool aborted() {
     return RT::__worker::get_worker().current_task().aborted;
 }
@@ -33,8 +32,7 @@ inline static auto aborted_value_v = aborted_value_t<T>{};
 template<typename T>
 inline static T aborted_value = std::move(*(T *)(&aborted_value_v<T>.null));
 
-template<typename F, typename T, typename R = RT>
-    requires is_future<F> && is_runtime<R>
+template<future_type F, typename T, runtime_type R = RT>
 T move_back_return_value() {
     auto h_ = RT::__worker::get_worker().current_task().handle;
     typename F::corohandle h = *(typename F::corohandle *)(&h_);
@@ -48,28 +46,24 @@ T move_back_return_value() {
     return h.promise().awaiter->retval_move_out();
 }
 
-template<typename R = RT>
-    requires is_runtime<R>
+template<runtime_type R = RT>
 size_t get_id() {
     return RT::__worker::get_worker().current_task_id();
 }
 
-template<typename R = RT>
-    requires is_runtime<R>
+template<runtime_type R = RT>
 RT::__worker &get_worker() {
     return RT::__worker::get_worker();
 }
 
-template<size_t Hash, typename R = RT>
-    requires is_runtime<R>
+template<size_t Hash, runtime_type R = RT>
 bool coro_local_exists() {
     return RT::__worker::get_worker().current_task().coro_local_frame->var_exists<Hash>();
 }
 
 namespace inner {
 
-template<size_t Hash, typename R = RT>
-    requires is_runtime<R>
+template<size_t Hash, runtime_type R = RT>
 bool group_local_exists() {
     return RT::get_runtime().group(RT::__worker::get_worker().current_task_id())->var_exists<Hash>();
 }
