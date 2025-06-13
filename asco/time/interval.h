@@ -38,6 +38,8 @@ public:
                 if (!this_coro::aborted())
                     return;
 
+                this_coro::throw_coroutine_abort<future_inline<nanoseconds>>();
+
                 RT::get_runtime().timer_detach(this_coro::get_id());
 
                 switch (state) {
@@ -66,7 +68,7 @@ public:
                 if (this_coro::aborted()) {
                     start = tmp;
                     restorer.state = 0;
-                    co_return this_coro::aborted_value<nanoseconds>;
+                    throw coroutine_abort{};
                 }
 
             restorer.state = 1;
@@ -83,7 +85,7 @@ public:
         if (this_coro::aborted()) {
             start = tmp;
             restorer.state = 0;
-            co_return this_coro::aborted_value<nanoseconds>;
+            throw coroutine_abort{};
         }
 
         auto now = high_resolution_clock::now();

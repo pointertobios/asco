@@ -103,19 +103,21 @@ public:
                 if (!this_coro::aborted())
                     return;
 
+                this_coro::throw_coroutine_abort<future_inline<guard>>();
+
                 if (state == 1)
                     self->sem.release();
             }
         } restorer{this};
 
         if (this_coro::aborted())
-            co_return std::move(this_coro::aborted_value<guard>);
+            throw coroutine_abort{};
 
         co_await sem.acquire();
 
         if (this_coro::aborted()) {
             sem.release();
-            co_return std::move(this_coro::aborted_value<guard>);
+            throw coroutine_abort{};
         }
 
         restorer.state = 1;

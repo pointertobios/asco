@@ -27,6 +27,8 @@
 
 namespace asco::base {
 
+struct coroutine_abort : std::exception {};
+
 using core::runtime_type;
 
 struct _future_void {};
@@ -93,12 +95,12 @@ struct future_base {
                     auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
                     t.is_inline = true;
                     task_id = t.id;
-                    worker.sc.push_task(t, state::suspending);
+                    worker.sc.push_task(t, state::ready);
                 } else {
                     auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
                     t.is_inline = true;
                     task_id = t.id;
-                    worker.sc.push_task(t, state::suspending);
+                    worker.sc.push_task(t, state::ready);
                 }
 
                 if (worker.is_calculator)
@@ -260,13 +262,12 @@ struct future_base {
             worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
             rt.suspend(id);
 
-            // There are special processing because this task will be awaked by symmatical transform but not
-            // awake()
             auto &task_ = worker.sc.get_task(task_id);
 #ifdef ASCO_PERF_RECORD
             task_.perf_recorder->record_once();
 #endif
             worker.running_task.push(&task_);
+            worker.sc.awake(task_id);
             return task;
         }
     }
@@ -314,9 +315,6 @@ struct future_base {
             return;
 
         RT::get_runtime().abort(task_id);
-        auto t = worker::get_worker_from_task_id(task_id).sc.get_task(task_id);
-        if (!t.is_inline)
-            RT::get_runtime().awake(task_id);
     }
 
     future_base() = default;
@@ -355,8 +353,12 @@ struct future_base {
         if (!promise_returned)
             task.promise().awaiter = nullptr;
 
-        if (e)
-            std::rethrow_exception(e);
+        if (e) {
+            try {
+                std::rethrow_exception(e);
+            } catch (coroutine_abort &) {
+            } catch (...) { std::rethrow_exception(std::current_exception()); }
+        }
     }
 
     future_base &operator=(future_base &&rhs) {
@@ -389,6 +391,13 @@ struct future_base {
         return std::move(*return_receiver.recv());
     }
 
+    void set_abort_exception() {
+        if (none)
+            throw asco::runtime_error("[ASCO] set_abort_exception(): from a none future object.");
+
+        e = std::make_exception_ptr(coroutine_abort{});
+    }
+
     template<async_function<return_type> F>
     future_base<typename std::invoke_result_t<F, return_type>::return_type, false, Blocking, R>
     then(this future_base self, F f) {
@@ -398,19 +407,63 @@ struct future_base {
             w.modify_task_map(self.task_id, &w);
             w.sc.steal_from(task, awaiter);
         }
-        co_return co_await f(std::move(co_await self));
+
+        if (worker::get_worker().current_task().aborted)
+            throw coroutine_abort{};
+
+        auto last_result = co_await self;
+
+        if (worker::get_worker().current_task().aborted)
+            throw coroutine_abort{};
+
+        auto current_result = co_await f(std::move(last_result));
+
+        if (worker::get_worker().current_task().aborted)
+            throw coroutine_abort{};
+
+        co_return std::move(current_result);
     }
 
     template<exception_handler F>
     future_base<std::optional<return_type>, false, Blocking, R> exceptionally(this future_base self, F f) {
+        if (Inline) {
+            auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
+            auto &w = worker::get_worker();
+            w.modify_task_map(self.task_id, &w);
+            w.sc.steal_from(task, awaiter);
+        }
+
         try {
-            co_return co_await self;
+            if (worker::get_worker().current_task().aborted)
+                throw coroutine_abort{};
+
+            auto result = co_await self;
+
+            if (worker::get_worker().current_task().aborted)
+                throw coroutine_abort{};
+
+            co_return std::move(result);
         } catch (first_argument_t<F> e) {
             f(e);
             co_return std::nullopt;
-        } catch (...) {  //
-            std::rethrow_exception(std::current_exception());
+        } catch (...) { std::rethrow_exception(std::current_exception()); }
+    }
+
+    template<std::invocable F>
+    future_base<std::optional<return_type>, false, Blocking, R> aborted(this future_base self, F f) {
+        if (Inline) {
+            auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
+            auto &w = worker::get_worker();
+            w.modify_task_map(self.task_id, &w);
+            w.sc.steal_from(task, awaiter);
         }
+
+        try {
+            co_return std::move(co_await self);
+        } catch (coroutine_abort &) {
+            f();
+            co_return std::nullopt;
+        } catch (...) { std::rethrow_exception(std::current_exception()); }
     }
 
 private:
@@ -448,6 +501,8 @@ using base::future, base::future_inline, base::future_core;
 using base::future_void, base::future_void_inline, base::future_void_core;
 
 using base::runtime_initializer_t;
+
+using base::coroutine_abort;
 
 };  // namespace asco
 

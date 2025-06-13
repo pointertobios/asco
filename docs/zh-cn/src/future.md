@@ -202,24 +202,26 @@ for (char c : str) {
 
 如果你的协程没有实现可打断特性，请谨慎使用于 *asco* 提供的依赖可打断特性的功能。
 
-*asco* 大多数异步函数都具有可打断支持，如信号量的 `.acquire()` 函数：
+*asco* 内部大多数异步函数都具有可打断支持，如信号量的 `.acquire()` 函数：
 
 ```c++
 asco::binary_semaphore sem{1};
 auto task = sem.acquire();
 task.abort();
-co_await task; // acquire() 返回 future_void_inline 类型，需要手动 co_await 使任务开始执行
+// acquire() 返回 future_void_inline 类型，需要手动 co_await 使任务开始执行
+try { co_await task; } catch (coroutine_abort &) {}
 assert_eq(sem.get_counter(), 1);
 ```
 
 ### 恢复任务状态
 
-在 *asco 异步函数*中调用 `bool this_coro::aborted()` ，
-返回 `true` 时执行状态恢复逻辑或缓存已得到的结果供下次调用时使用，
-然后立即 `co_return this_coro::aborted_value<T>` 返回已打断值，若 `T` 不能拷贝构造，使用 `std::move()` 移动（因为 `future<T>` 要求返回类型必须可以移动），
-此处的代码称为**打断判定点**。
+在 *asco 异步函数*中调用 `bool this_coro::aborted()` ，返回 `true` 时执行状态恢复逻辑或缓存已得到的结果供下次调用时使用，
+然后立即 `throw coroutine_abort{}` 。此处的代码称为**打断判定点**。如果没有抛出此异常直接返回，则是未定义行为。
+此异常会继续在调用者 co_await 后抛出，若不使用 `try-catch` 捕获，还可以使用 `future<T>::aborted()`[^3] 对子任务被打断的情况进行处理。
 
-最佳实践：在每个**协程暂停点**[^3]前后设置一个打断判定点，并在 `co_return` 之后利用 `raii` 设置一个**打断判定点**。
+***编写可打断协程最佳实践***：在每个**协程暂停点**[^4]前后设置一个打断判定点，并在 `co_return` 之后利用 `raii` 设置一个**打断判定点**。
+
+在 `co_return` 后，析构阶段无法抛出异常，但是可以通过 `this_coro::throw_coroutin_abort()` 直接让协程抛出异常。
 
 以本项目的 `channel::reveiver<T>::recv()` 为例：
 
@@ -228,8 +230,8 @@ assert_eq(sem.get_counter(), 1);
 协程的自动储存期变量（通常所谓的**本地变量**，这里与**协程本地变量**作区分使用此名称）会在 `co_return` 后按照初始化相反的顺序析构。
 因此，变量 `restorer` 的存在使得协程在返回后依然有机会判断是否被打断。
 
-在每个 `co_return` 前，都设置 `restorer.state` 的值，因此，
-`restorer` 的析构函数可以在不同的 `co_return` 返回后执行不同的恢复操作。
+在每个 `co_return` 或 `throw coroutine_abort{}` 前，都设置 `restorer.state` 的值，因此，
+`restorer` 的析构函数可以在不同的 `co_return` 或 `throw coroutine_abort{}` 后执行不同的恢复操作。
 
 在此期间，可以使用 `T &&this_coro::move_back_return_value<future<T>, T>()` 将返回值移动回当前上下文以避免其被丢弃。
 
@@ -243,6 +245,8 @@ future_inline<std::optional<T>> recv() {
         ~re() {
             if (!this_coro::aborted())
                 return;
+
+            this_coro::throw_coroutine_abort<future_inline<std::optional<T>>>();
 
             switch (state) {
             case 2:
@@ -265,7 +269,7 @@ future_inline<std::optional<T>> recv() {
 
     if (this_coro::aborted()) {
         restorer.state = 0;
-        co_return std::move(this_coro::aborted_value<std::optional<T>>);
+        throw coroutine_abort{}
     }
 
     if (!buffer.empty()) {
@@ -280,7 +284,7 @@ future_inline<std::optional<T>> recv() {
     if (this_coro::aborted()) {
         frame->sem.release();
         restorer.state = 0;
-        co_return std::move(this_coro::aborted_value<std::optional<T>>);
+        throw coroutine_abort{}
     }
 
     if (frame->sender.has_value()) {
@@ -308,7 +312,7 @@ future_inline<std::optional<T>> recv() {
         if (this_coro::aborted()) {
             frame->sem.release();
             restorer.state = 0;
-            co_return std::move(this_coro::aborted_value<std::optional<T>>);
+            throw coroutine_abort{}
         }
 
         if (is_stopped()) {
@@ -322,10 +326,11 @@ future_inline<std::optional<T>> recv() {
     }
 
     restorer.state = 2;
-    co_return std::move(frame->buffer[(*frame->receiver)++]);
+    co_return std::move(((T *)frame->buffer)[(*frame->receiver)++]);
 }
 ```
 
 [^1]: 见[asco 异步运行时](进阶/asco异步运行时.md)
 [^2]: 指`std::move()`，模板参数 `T` 必须实现**移动构造函数**和**移动赋值运算符**。
-[^3]: C++20 coroutine 使用的术语，指 `co_await` 、 `co_yield` 、 `co_return` 。
+[^3]: 任务打断处理，见[任务组合](./任务组合.md)
+[^4]: C++20 coroutine 使用的术语，指 `co_await` 、 `co_yield` 、 `co_return` 。

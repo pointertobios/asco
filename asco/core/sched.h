@@ -94,6 +94,7 @@ template<typename T>
 concept scheduler_type = requires(T t) {
     typename T::task;
     typename T::task_control;
+    typename T::task_control::__control_state;
     {
         t.push_task(std::declval<task>(), std::declval<typename T::task_control::__control_state>())
     } -> std::same_as<void>;
@@ -114,6 +115,7 @@ concept scheduler_type = requires(T t) {
     { t.destroy(task::task_id{}, bool{}) } -> std::same_as<void>;
     { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
     { t.get_task(task::task_id{}) } -> std::same_as<task &>;
+    { t.get_state(task::task_id{}) } -> std::same_as<typename T::task_control::__control_state>;
     { t.register_sync_awaiter(task::task_id{}) } -> std::same_as<void>;
     { t.get_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore &>;
     { t.clone_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore *>;
@@ -130,6 +132,7 @@ public:
     struct task_control {
         task t;
         enum class __control_state {
+            ready,
             running,
             suspending,
         } state{__control_state::running};
@@ -149,6 +152,7 @@ public:
 
     bool task_exists(task::task_id id);
     task &get_task(task::task_id id);
+    task_control::__control_state get_state(task::task_id id);
 
     void register_sync_awaiter(task::task_id id);
     std::binary_semaphore &get_sync_awaiter(task::task_id id);

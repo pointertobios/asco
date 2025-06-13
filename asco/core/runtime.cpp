@@ -181,7 +181,7 @@ runtime::runtime(size_t nthread_)
         while (!(self.task_rx->is_stopped() && self.sc.currently_finished_all())) {
             while (true)
                 if (auto task = self.task_rx->try_recv(); task) {
-                    self.sc.push_task(std::move(*task), scheduler::task_control::__control_state::suspending);
+                    self.sc.push_task(std::move(*task), scheduler::task_control::__control_state::ready);
                     worker::insert_task_map(task->id, self_);
                 } else
                     break;
@@ -375,7 +375,9 @@ void runtime::abort(task_id id) {
     t.aborted = true;
     if (t.waiting) {
         abort(t.waiting);
-        awake(t.waiting);
+    } else {
+        if (w.sc.get_state(id) != sched::std_scheduler::task_control::__control_state::ready)
+            awake(id);
     }
 }
 

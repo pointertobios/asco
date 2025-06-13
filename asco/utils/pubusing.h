@@ -42,15 +42,15 @@ namespace asco::literals {
 
 using namespace asco::types;
 
-consteval inline size_t operator"" _B(size_t n) { return n; }
+consteval inline size_t operator""_B(size_t n) { return n; }
 
-consteval inline size_t operator"" _KB(size_t n) { return n * 1024; }
+consteval inline size_t operator""_KB(size_t n) { return n * 1024; }
 
-consteval inline size_t operator"" _MB(size_t n) { return n * 1024 * 1024; }
+consteval inline size_t operator""_MB(size_t n) { return n * 1024 * 1024; }
 
-consteval inline size_t operator"" _GB(size_t n) { return n * 1024 * 1024 * 1024; }
+consteval inline size_t operator""_GB(size_t n) { return n * 1024 * 1024 * 1024; }
 
-consteval inline size_t operator"" _TB(size_t n) { return n * 1024 * 1024 * 1024 * 1024; }
+consteval inline size_t operator""_TB(size_t n) { return n * 1024 * 1024 * 1024 * 1024; }
 
 };  // namespace asco::literals
 

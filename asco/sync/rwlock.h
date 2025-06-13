@@ -149,20 +149,22 @@ public:
                 if (!this_coro::aborted())
                     return;
 
+                this_coro::throw_coroutine_abort<future_inline<write_guard>>();
+
                 if (state == 1)
                     self->write_sem.release();
             }
         } restorer{this};
 
         if (this_coro::aborted()) {
-            co_return std::move(this_coro::aborted_value<write_guard>);
+            throw coroutine_abort{};
         }
 
         co_await write_sem.acquire();
 
         if (this_coro::aborted()) {
             write_sem.release();
-            co_return std::move(this_coro::aborted_value<write_guard>);
+            throw coroutine_abort{};
         }
 
         restorer.state = 1;
@@ -189,6 +191,8 @@ public:
                 if (!this_coro::aborted())
                     return;
 
+                this_coro::throw_coroutine_abort<future_inline<read_guard>>();
+
                 if (state == 0)
                     return;
                 if (self->read_count.fetch_sub(1, morder::release) > 1)
@@ -198,7 +202,7 @@ public:
         } restorer{this};
 
         if (this_coro::aborted()) {
-            co_return std::move(this_coro::aborted_value<read_guard>);
+            throw coroutine_abort{};
         }
 
         if (read_count.fetch_add(1, morder::acquire) == 0
@@ -209,7 +213,7 @@ public:
             if (read_count.fetch_sub(1, morder::release) == 1)
                 write_sem.release();
 
-            co_return std::move(this_coro::aborted_value<read_guard>);
+            throw coroutine_abort{};
         }
 
         restorer.state = 1;

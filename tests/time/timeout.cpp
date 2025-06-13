@@ -15,9 +15,10 @@ future<int> async_main() {
     auto res = co_await timeout(1s, [] -> future_void {
         interval in{2s};
         std::cout << "interval start\n";
-        co_await in.tick();
+        co_await in.tick().aborted([] {});
         if (asco::this_coro::aborted()) {
             std::cout << "timeout aborted\n";
+            throw asco::coroutine_abort{};
         } else {
             std::cout << "interval 2s\n";
         }

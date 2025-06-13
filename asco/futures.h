@@ -21,29 +21,25 @@ bool aborted() {
     return RT::__worker::get_worker().current_task().aborted;
 }
 
-template<typename T>
-struct aborted_value_t {
-    std::byte null[sizeof(T)];
-};
-
-template<typename T>
-inline static auto aborted_value_v = aborted_value_t<T>{};
-
-template<typename T>
-inline static T aborted_value = std::move(*(T *)(&aborted_value_v<T>.null));
-
-template<future_type F, typename T, runtime_type R = RT>
-T move_back_return_value() {
+template<future_type F, runtime_type R = RT>
+F::return_type move_back_return_value() {
     auto h_ = RT::__worker::get_worker().current_task().handle;
     typename F::corohandle h = *(typename F::corohandle *)(&h_);
     if (h.promise().future_type_hash != type_hash<F>())
         throw asco::runtime_error(
             "[ASCO] move_back_return_value<F, T>(): F is not matched with your current coroutine.");
-    if (std::is_same_v<typename F::return_type, T>)
-        throw asco::runtime_error(
-            "[ASCO] move_back_return_value<F, T>(): T is not matched with your current coroutine.");
     // If a task aborted and must move back return value, its awaiter will always exists.
     return h.promise().awaiter->retval_move_out();
+}
+
+template<future_type F, runtime_type R = RT>
+void throw_coroutine_abort() {
+    auto h_ = RT::__worker::get_worker().current_task().handle;
+    typename F::corohandle h = *(typename F::corohandle *)(&h_);
+    if (h.promise().future_type_hash != type_hash<F>())
+        throw asco::runtime_error(
+            "[ASCO] move_back_return_value<F, T>(): F is not matched with your current coroutine.");
+    return h.promise().awaiter->set_abort_exception();
 }
 
 template<runtime_type R = RT>
@@ -81,8 +77,7 @@ using base::this_coro::aborted, base::this_coro::move_back_return_value;
 using base::this_coro::coro_local_exists;
 using base::this_coro::get_id;
 using base::this_coro::get_worker;
-
-using base::this_coro::aborted_value;
+using base::this_coro::throw_coroutine_abort;
 
 };  // namespace asco::this_coro
 

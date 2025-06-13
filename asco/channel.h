@@ -5,6 +5,7 @@
 #define ASCO_SYNC_CHANNEL_H 1
 
 #include <expected>
+#include <new>
 #include <optional>
 #include <tuple>
 #include <vector>
@@ -18,7 +19,7 @@ namespace asco::base {
 
 template<typename T, size_t Size>
 struct channel_frame {
-    T buffer[Size];
+    std::byte buffer[Size * sizeof(T)];
 
     // Start with index 0, and maybe can goto next frame.
     // When sender port went to next frame, set this to std::nullopt.
@@ -119,7 +120,7 @@ public:
             f->sem.release();
         }
 
-        frame->buffer[(*frame->sender)++] = std::move(data);
+        new (&((T *)frame->buffer)[(*frame->sender)++]) T{std::move(data)};
         frame->sem.release();
 
         return std::nullopt;
@@ -249,7 +250,7 @@ public:
                     "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
         }
 
-        return std::move(frame->buffer[(*frame->receiver)++]);
+        return std::move(((T *)frame->buffer)[(*frame->receiver)++]);
     }
 
     // If receive successful, return T value.
@@ -267,11 +268,12 @@ public:
                 if (!this_coro::aborted())
                     return;
 
+                this_coro::throw_coroutine_abort<future_inline<std::optional<T>>>();
+
                 switch (state) {
                 case 2:
                     self->buffer.push_back(
-                        this_coro::move_back_return_value<
-                            future_inline<std::optional<T>>, std::optional<T>>());
+                        this_coro::move_back_return_value<future_inline<std::optional<T>>>());
                 case 1:
                     self->frame->sem.release();
                     break;
@@ -289,7 +291,7 @@ public:
 
         if (this_coro::aborted()) {
             restorer.state = 0;
-            co_return this_coro::aborted_value<std::optional<T>>;
+            throw coroutine_abort{};
         }
 
         if (!buffer.empty()) {
@@ -304,7 +306,7 @@ public:
         if (this_coro::aborted()) {
             frame->sem.release();
             restorer.state = 0;
-            co_return this_coro::aborted_value<std::optional<T>>;
+            throw coroutine_abort{};
         }
 
         if (frame->sender.has_value()) {
@@ -332,7 +334,7 @@ public:
             if (this_coro::aborted()) {
                 frame->sem.release();
                 restorer.state = 0;
-                co_return this_coro::aborted_value<std::optional<T>>;
+                throw coroutine_abort{};
             }
 
             if (is_stopped()) {
@@ -346,7 +348,7 @@ public:
         }
 
         restorer.state = 2;
-        co_return std::move(frame->buffer[(*frame->receiver)++]);
+        co_return std::move(((T *)frame->buffer)[(*frame->receiver)++]);
     }
 
 private:

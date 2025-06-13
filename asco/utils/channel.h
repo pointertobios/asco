@@ -6,6 +6,7 @@
 
 #include <condition_variable>
 #include <expected>
+#include <new>
 #include <optional>
 #include <semaphore>
 #include <tuple>
@@ -19,7 +20,7 @@ using namespace asco::types;
 
 template<typename T, size_t Size>
 struct channel_frame {
-    T buffer[Size];
+    std::byte buffer[Size * sizeof(T)];
 
     // Start with index 0, and maybe can goto next frame.
     // When sender port went to next frame, set this to std::nullopt.
@@ -119,7 +120,7 @@ public:
             f->sem.release();
         }
 
-        frame->buffer[(*frame->sender)++] = std::move(data);
+        new (&((T *)frame->buffer)[(*frame->sender)++]) T{std::move(data)};
         frame->sem.release();
 
         return std::nullopt;
@@ -246,7 +247,7 @@ public:
                     "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
         }
 
-        return std::move(frame->buffer[(*frame->receiver)++]);
+        return std::move(((T *)frame->buffer)[(*frame->receiver)++]);
     }
 
     // If receive successful, return T value.
@@ -291,7 +292,7 @@ public:
                     "[ASCO] receiver::recv(): Sender gave a new object, but sender index equals to receiver index.");
         }
 
-        return std::move(frame->buffer[(*frame->receiver)++]);
+        return std::move(((T *)frame->buffer)[(*frame->receiver)++]);
     }
 
 private:

@@ -70,6 +70,8 @@ public:
                 if (!this_coro::aborted())
                     return;
 
+                this_coro::throw_coroutine_abort<future_void_inline>();
+
                 {
                     auto guard = self->waiting_tasks.lock();
                     auto id = this_coro::get_id();
@@ -86,7 +88,7 @@ public:
         while (true) {
             if (this_coro::aborted()) {
                 restorer.state = 0;
-                co_return {};
+                throw coroutine_abort{};
             }
 
             size_t val = counter.load(morder::acquire);
@@ -117,6 +119,7 @@ public:
         if (this_coro::aborted()) {
             restorer.state = 0;
             counter.fetch_add(1, morder::release);
+            throw coroutine_abort{};
         }
         co_return {};
     }

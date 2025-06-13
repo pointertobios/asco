@@ -55,7 +55,7 @@ future<int> async_main() {
     }
     auto task = sem.acquire();
     task.abort();
-    co_await task;
+    co_await std::move(task).aborted([] { std::cout << "sem.acquire() truely aborted" << std::endl; });
     std::cout << "test the abortable task (must be 1): " << sem.get_counter() << std::endl;
     assert(sem.get_counter() == 1);
     co_await sem.acquire();

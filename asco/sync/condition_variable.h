@@ -44,7 +44,7 @@ public:
                 if (predicator())
                     break;
                 if (this_coro::aborted())
-                    break;
+                    throw coroutine_abort{};
 
                 auto &worker = this_coro::get_worker();
                 worker.sc.suspend(this_id);
@@ -53,8 +53,10 @@ public:
 
             co_await std::suspend_always{};
 
-            if (this_coro::aborted())
+            if (this_coro::aborted()) {
                 std::erase_if(*waiting_tasks.lock(), [this_id](auto &id) { return id == this_id; });
+                throw coroutine_abort{};
+            }
         }
         co_return {};
     }

@@ -166,6 +166,14 @@ task &std_scheduler::get_task(task::task_id id) {
     }
 }
 
+std_scheduler::task_control::__control_state std_scheduler::get_state(task::task_id id) {
+    if (auto it = task_map.find(id); it != task_map.end()) {
+        return it->second->state;
+    } else {
+        throw asco::runtime_error(std::format("[ASCO] std_scheduler::get_state(): Task {} not found", id));
+    }
+}
+
 void std_scheduler::register_sync_awaiter(task::task_id id) {
     sync_awaiters.emplace(id, new std::binary_semaphore{0});
 }
