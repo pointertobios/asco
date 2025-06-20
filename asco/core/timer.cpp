@@ -15,10 +15,14 @@ namespace asco::core::timer {
 timer::timer()
         : timerthr([this] {
 #ifdef __linux__
-            ::pthread_setname_np(::pthread_self(), std::format("asco::timer").c_str());
             ptid = ::pthread_self();
+            ::pthread_setname_np(ptid, std::format("asco::timer").c_str());
 
-            signal(SIGALRM, [](int) {});
+            pid = ::gettid();
+
+            ::signal(SIGALRM, [](int) {});
+#elifdef _WIN32
+#    error "Windows timer not implemented"
 #endif
             init_waiter.store(true, morder::seq_cst);
 
@@ -92,6 +96,8 @@ void timer::attach(task_id id, high_resolution_clock::time_point time) {
     while (!init_waiter.load(morder::seq_cst));
 #ifdef __linux__
     ::pthread_kill(ptid, SIGALRM);
+#elifdef _WIN32
+#    error "Windows timer not implemented"
 #endif
 }
 

@@ -6,6 +6,7 @@
 
 #include <coroutine>
 #include <cstring>
+#include <expected>
 #include <functional>
 #include <iostream>
 #include <optional>
@@ -383,7 +384,7 @@ struct future_base {
         return *this;
     }
 
-    T &&retval_move_out() {
+    T retval_move_out() {
         if (none)
             throw asco::runtime_error("[ASCO] retval_move_out(): from a none future object.");
 
@@ -425,7 +426,13 @@ struct future_base {
     }
 
     template<exception_handler F>
-    future_base<std::optional<return_type>, false, Blocking, R> exceptionally(this future_base self, F f) {
+    using exceptionally_expected_error_t = std::conditional_t<
+        std::is_void_v<std::invoke_result_t<F, exception_type<F>>>, std::monostate,
+        std::invoke_result_t<F, exception_type<F>>>;
+
+    template<exception_handler F>
+    future_base<std::expected<return_type, exceptionally_expected_error_t<F>>, false, Blocking, R>
+    exceptionally(this future_base self, F f) {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
             auto &w = worker::get_worker();
@@ -444,8 +451,12 @@ struct future_base {
 
             co_return std::move(result);
         } catch (first_argument_t<F> e) {
-            f(e);
-            co_return std::nullopt;
+            if constexpr (!std::is_void_v<std::invoke_result_t<F, exception_type<F>>>) {
+                co_return std::unexpected{f(e)};
+            } else {
+                f(e);
+                co_return std::unexpected{std::monostate{}};
+            }
         } catch (...) { std::rethrow_exception(std::current_exception()); }
     }
 

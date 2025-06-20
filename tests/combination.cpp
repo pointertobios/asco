@@ -22,10 +22,10 @@ future<int> async_main() {
     assert(result == 6);
     std::cout << "then passed\n";
 
-    auto fut2 = async_throw().exceptionally([](const std::runtime_error &e) -> void {
+    auto fut2 = co_await async_throw().exceptionally([](const std::runtime_error &e) -> void {
         std::cout << "exceptionally caught: " << e.what() << std::endl;
     });
-    co_await fut2;
+    assert(!fut2);  // must be the error type of expected<T, E>
     std::cout << "exceptionally passed\n";
 
     co_return 0;

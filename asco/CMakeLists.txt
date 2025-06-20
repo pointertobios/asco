@@ -32,4 +32,15 @@ if (NOT WIN32)
 endif()
 
 add_library(asco-main asco_main.cpp)
-target_link_libraries(asco-main PRIVATE asco)
+target_link_libraries(asco-main PUBLIC asco)
+
+add_library(asco-base asco_main.cpp)
+target_link_libraries(asco-base PUBLIC asco)
+target_compile_definitions(asco-base PRIVATE __ASCORT__)
+
+add_library(asco-main-shared asco_main.cpp)
+target_link_libraries(asco-main-shared PUBLIC asco-shared)
+
+add_library(asco-base-shared asco_main.cpp)
+target_link_libraries(asco-base-shared PUBLIC asco-shared)
+target_compile_definitions(asco-base-shared PRIVATE __ASCORT__)

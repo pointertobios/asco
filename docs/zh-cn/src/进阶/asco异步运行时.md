@@ -1,10 +1,5 @@
 # asco 异步运行时
 
-## 运行时对象
-
-CMake 工程中提供的目标 `asco-main` 中提供了 `main` 函数，其中构造了一个默认的 `asco::runtime` 对象，
-并调用协程 `future<int> async_main()` ，对协程调用同步 `.await()` 。
-
 ## 工作线程
 
 工作线程分为 `io worker` 和 `calculating worker` ，运行时初始化时将合适的工作线程绑定到某个 CPU 执行。

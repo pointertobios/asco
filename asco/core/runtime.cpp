@@ -170,6 +170,10 @@ runtime::runtime(size_t nthread_)
         throw asco::runtime_error("[ASCO] runtime::runtime(): Cannot create multiple runtimes in a process");
     current_runtime = this;
 
+    auto total_threads = nthread;
+    if (nthread > 2)
+        nthread -= 2;
+
     auto worker_lambda = [this](worker *self_) {
         worker &self = *self_;
 
@@ -230,6 +234,16 @@ runtime::runtime(size_t nthread_)
     pool.reserve(nthread);
 #ifdef __linux__
     auto cpus = get_cpus();
+
+    if (total_threads > 2) {
+        auto &timer_cpu = cpus[nthread];
+        if (::sched_setaffinity(timer.native_thread_id(), sizeof(decltype(timer_cpu)), &timer_cpu) == -1) {
+            throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to set timer thread affinity");
+        }
+
+        auto &io_cpu = cpus[nthread + 1];
+        // Set the io thread affinity
+    }
 #endif
 
     auto [io_tx, io_rx_] = inner::channel<sched::task>();
@@ -240,14 +254,13 @@ runtime::runtime(size_t nthread_)
     calcu_task_tx = std::move(calcu_tx);
     task_receiver calcu_rx = make_shared_receiver(std::move(calcu_rx_));
 
-    for (int i = 0; i < nthread; i++) {
+    for (int i{0}; i < nthread; i++) {
         bool is_calculator = false;
 
         // The hyper thread cores are usually the high frequency cores
         // Use them as calculator workers
 #ifdef __linux__
-        std::string path =
-            std::format("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list", i % cpus.size());
+        std::string path = std::format("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list", i);
         std::ifstream f(path);
         if (!f.is_open())
             throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to detect CPU hyperthreading");
@@ -279,7 +292,7 @@ runtime::runtime(size_t nthread_)
         auto &workeri = pool[i];
 
 #ifdef __linux__
-        auto &cpu = cpus[i % cpus.size()];
+        auto &cpu = cpus[i];
         while (!workeri->pid);
         if (::sched_setaffinity(workeri->pid, sizeof(decltype(cpu)), &cpu) == -1) {
             throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to set affinity");

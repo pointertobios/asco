@@ -9,10 +9,14 @@
 
 namespace asco {
 
+template<typename CharT>
+concept simple_char =
+    std::is_integral_v<CharT> || std::is_same_v<CharT, char> || std::is_same_v<CharT, std::byte>;
+
 template<typename T>
 concept move_secure =
-    (std::is_move_constructible_v<T> && std::is_move_assignable_v<T>) || std::is_integral_v<T>
-    || std::is_floating_point_v<T> || std::is_pointer_v<T> || std::is_void_v<T>;
+    std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_pointer_v<T> || std::is_void_v<T>
+    || (std::is_move_constructible_v<T> && std::is_move_assignable_v<T>);
 
 template<typename F>
 concept future_type = requires(F f) {
@@ -33,9 +37,23 @@ concept future_type = requires(F f) {
 };
 
 template<typename F, typename... Args>
-concept async_function = future_type<std::invoke_result_t<F, Args...>> && requires(F f) {
-    { f(std::declval<Args>()...) } -> std::same_as<std::invoke_result_t<F, Args...>>;
+concept async_function =
+    std::invocable<F, Args...> && future_type<std::invoke_result_t<F, Args...>> && requires(F f) {
+        { f(std::declval<Args>()...) } -> std::same_as<std::invoke_result_t<F, Args...>>;
+    };
+
+template<typename F, typename, typename... Args>
+struct invoke_async_result {
+    using type = std::invoke_result_t<F, Args...>;
 };
+
+template<typename F, typename... Args>
+struct invoke_async_result<F, std::void_t<std::enable_if_t<async_function<F, Args...>>>, Args...> {
+    using type = typename std::invoke_result_t<F, Args...>::return_type;
+};
+
+template<typename F, typename... Args>
+using invoke_async_result_t = typename invoke_async_result<F, void, Args...>::type;
 
 template<typename F, typename = void>
 struct first_argument {
@@ -75,6 +93,9 @@ concept exception_handler =
     std::invocable<F, std::exception_ptr>
     || (std::is_base_of_v<std::exception, std::remove_reference_t<first_argument_t<F>>>
         && std::invocable<F, first_argument_t<F>>);
+
+template<exception_handler F>
+using exception_type = first_argument_t<F>;
 
 };  // namespace asco
 

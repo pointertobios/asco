@@ -18,16 +18,23 @@ extern future<int> async_main();
 
 inline asco::runtime_initializer_t runtime_initializer;
 
+namespace asco_main {
+
+lazy_delete<runtime> __rt([] {
+    runtime *rt;
+    if (runtime_initializer) {
+        rt = (*runtime_initializer)();
+    } else {
+        rt = new runtime();
+    }
+    return rt;
+});
+
+};  // namespace asco_main
+
+#ifndef __ASCORT__
+
 int main(int argc, const char **argv, const char **env) {
-    lazy_delete ld{({
-        runtime *rt;
-        if (runtime_initializer) {
-            rt = (*runtime_initializer)();
-        } else {
-            rt = new runtime();
-        }
-        rt;
-    })};
     runtime::sys::set_args(argc, argv);
     runtime::sys::set_env(env);
     try {
@@ -41,3 +48,5 @@ int main(int argc, const char **argv, const char **env) {
         return -1;
     }
 }
+
+#endif

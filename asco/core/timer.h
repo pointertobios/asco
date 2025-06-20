@@ -39,6 +39,8 @@ public:
 
     bool task_attaching(task_id id);
 
+    auto native_thread_id() const { return pid; }
+
 private:
     spin<std::deque<awake_point>> awake_points;  // Use least heap
     spin<std::unordered_set<task_id>> attaching_tasks;
@@ -47,6 +49,9 @@ private:
     std::jthread timerthr;
 
     ::pthread_t ptid;
+#ifdef __linux__
+    int pid;
+#endif
 
     // Too short for both sleep or spin wait under this duration, merge two awake_point into one.
     constexpr static nanoseconds approx_time = 30ns;
