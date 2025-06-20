@@ -5,6 +5,7 @@
 #define ASCO_UTILS_PUBUSING_H 1
 
 #include <atomic>
+#include <chrono>
 #include <concepts>
 #include <cstddef>
 
@@ -53,6 +54,26 @@ consteval inline size_t operator""_GB(unsigned long long n) { return n * 1024 * 
 consteval inline size_t operator""_TB(unsigned long long n) { return n * 1024 * 1024 * 1024 * 1024; }
 
 };  // namespace asco::literals
+
+namespace std::this_thread {
+
+#ifdef __linux__
+
+template<typename _Rep, typename _Period>
+inline void interruptable_sleep_for(const chrono::duration<_Rep, _Period> &__rtime) {
+    if (__rtime <= __rtime.zero())
+        return;
+    auto __s = chrono::duration_cast<chrono::seconds>(__rtime);
+    auto __ns = chrono::duration_cast<chrono::nanoseconds>(__rtime - __s);
+    struct ::timespec __ts = {static_cast<std::time_t>(__s.count()), static_cast<long>(__ns.count())};
+    ::nanosleep(&__ts, &__ts);
+}
+
+#elif
+#    error "Not implemented on this platform"
+#endif
+
+};  // namespace std::this_thread
 
 #define __dispatch(_1, _2, _3, NAME, ...) NAME
 

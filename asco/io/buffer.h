@@ -223,8 +223,8 @@ private:
         size_sum += size;
     }
 
-    constexpr inline static size_t origin_size = 64;
-    constexpr inline static size_t sso_size = 16;
+    constexpr inline static size_t origin_size = 256;
+    constexpr inline static size_t sso_size = 64;
 
     struct buffer_frame {
         std::variant<CharT *, std::basic_string<CharT>, std::basic_string_view<CharT>> buffer;

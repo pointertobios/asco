@@ -33,17 +33,10 @@ worker::worker(int id, const worker_fn &f, task_receiver rx)
     workers[thread.get_id()] = this;
 }
 
-worker::~worker() { join(); }
-
-void worker::join() {
-    if (!moved)
-        thread.join();
-}
-
 std::thread::id worker::get_thread_id() const { return thread.get_id(); }
 
 void worker::conditional_suspend() {
-    if (task_rx->is_stopped())
+    if (task_rx.is_stopped())
         return;
 
     worker_await_sem.acquire();
@@ -182,9 +175,9 @@ runtime::runtime(size_t nthread_)
         self.pid = ::gettid();
 #endif
 
-        while (!(self.task_rx->is_stopped() && self.sc.currently_finished_all())) {
+        while (!(self.task_rx.is_stopped() && self.sc.currently_finished_all())) {
             while (true)
-                if (auto task = self.task_rx->try_recv(); task) {
+                if (auto task = self.task_rx.try_recv(); task) {
                     self.sc.push_task(std::move(*task), scheduler::task_control::__control_state::ready);
                     worker::insert_task_map(task->id, self_);
                 } else
@@ -242,17 +235,17 @@ runtime::runtime(size_t nthread_)
         }
 
         auto &io_cpu = cpus[nthread + 1];
-        // Set the io thread affinity
+        if (::sched_setaffinity(io.native_thread_id(), sizeof(decltype(io_cpu)), &io_cpu) == -1) {
+            throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to set io thread affinity");
+        }
     }
 #endif
 
-    auto [io_tx, io_rx_] = inner::channel<sched::task>();
+    auto [io_tx, io_rx] = inner::ms::channel<sched::task>();
     io_task_tx = std::move(io_tx);
-    task_receiver io_rx = make_shared_receiver(std::move(io_rx_));
 
-    auto [calcu_tx, calcu_rx_] = inner::channel<sched::task>();
+    auto [calcu_tx, calcu_rx] = inner::ms::channel<sched::task>();
     calcu_task_tx = std::move(calcu_tx);
-    task_receiver calcu_rx = make_shared_receiver(std::move(calcu_rx_));
 
     for (int i{0}; i < nthread; i++) {
         bool is_calculator = false;
@@ -307,7 +300,7 @@ runtime::~runtime() {
     io_task_tx->stop();
     calcu_task_tx->stop();
     awake_all();
-    for (auto thread : pool) thread->join();
+    for (auto thread : pool) delete thread;
     current_runtime = nullptr;
 
 #ifdef ASCO_PERF_RECORD

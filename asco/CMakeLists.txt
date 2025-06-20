@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 
 set(ASCO_SOURCES
+    core/daemon.cpp
+    core/io_thread.cpp
     core/runtime.cpp
     core/sched.cpp
     core/timer.cpp

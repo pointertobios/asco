@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <asco/core/io_thread.h>
 #include <asco/core/sched.h>
 #include <asco/core/taskgroup.h>
 #include <asco/core/timer.h>
@@ -36,8 +37,8 @@ class worker;
 using worker_fn = std::function<void(worker *)>;
 
 using task_instance = std::coroutine_handle<>;
-using task_sender = inner::sender<sched::task>;
-using task_receiver = inner::shared_receiver<sched::task>;
+using task_sender = inner::ms::sender<sched::task>;
+using task_receiver = inner::ms::receiver<sched::task>;
 
 class worker {
 public:
@@ -48,9 +49,7 @@ public:
     worker(const worker &) = delete;
     worker(worker &) = delete;
     worker(worker &&) = delete;
-    ~worker();
 
-    void join();
     std::thread::id get_thread_id() const;
     void conditional_suspend();
     void awake();
@@ -80,8 +79,6 @@ public:
 
 private:
     std::jthread thread;
-
-    bool moved{false};
 
 public:
     static bool in_worker();
@@ -240,6 +237,7 @@ private:
     atomic<task_id> task_counter{1};
 
     timer::timer timer;
+    io::io_thread io;
 
     void awake_all();
 

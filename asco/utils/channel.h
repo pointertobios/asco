@@ -10,8 +10,11 @@
 #include <optional>
 #include <semaphore>
 #include <tuple>
+#include <utility>
 
+#include <asco/rterror.h>
 #include <asco/utils/concepts.h>
+#include <asco/utils/mutex.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco::inner {
@@ -126,7 +129,7 @@ public:
         return std::nullopt;
     }
 
-    __always_inline std::optional<T> send(T &data) { return send(std::move(data)); }
+    std::optional<T> send(T &data) { return send(std::move(data)); }
 
 private:
     channel_frame<T, FrameSize> *frame;
@@ -302,6 +305,8 @@ private:
     bool none{false};
 };
 
+namespace ss {
+
 template<move_secure T, size_t FrameSize = 1024>
 std::tuple<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
     auto *frame = new channel_frame<T, FrameSize>();
@@ -309,21 +314,140 @@ std::tuple<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
     return {sender<T, FrameSize>(frame), receiver<T, FrameSize>(frame)};
 }
 
-template<move_secure T, size_t FrameSize = 1024>
-using shared_sender = std::shared_ptr<sender<T, FrameSize>>;
+};  // namespace ss
 
-template<move_secure T, size_t FrameSize = 1024>
-shared_sender<T, FrameSize> make_shared_sender(sender<T, FrameSize> &&tx) {
-    return std::make_shared<sender<T, FrameSize>>(std::move(tx));
+namespace ms {
+
+template<typename T, size_t FrameSize = 1024>
+struct mpsc_channel {
+    std::vector<inner::receiver<T, FrameSize>> receivers;
+    std::binary_semaphore awaker{0};
+};
+
+template<typename T, size_t FrameSize = 1024>
+class receiver {
+public:
+    receiver()
+            : _channel(nullptr) {}
+
+    receiver(std::shared_ptr<mutex<mpsc_channel<T, FrameSize>>> &_channel)
+            : _channel(_channel) {}
+
+    bool is_stopped() {
+        with(auto guard = _channel->lock()) {
+            for (auto &rx : guard->receivers) {
+                if (rx.is_stopped())
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    std::expected<T, typename inner::receiver<T, FrameSize>::receive_fail> try_recv() {
+        do {
+            with(auto guard = _channel->lock()) {
+                if (guard->receivers.empty())
+                    asco::runtime_error("[ASCO] ms::receiver::try_recv(): mpsc receiver cannot be empty.");
+
+                for (auto &rx : guard->receivers) {
+                    auto res = rx.try_recv();
+                    if (res)
+                        return res;
+                    else if (res.error() == inner::receiver<T, FrameSize>::receive_fail::closed)
+                        return std::unexpected{inner::receiver<T, FrameSize>::receive_fail::closed};
+                }
+            }
+        } while (({
+            auto g = _channel->lock();
+            bool b = false;
+            if (g->awaker.try_acquire()) {
+                b = true;
+            }
+            b;
+        }));
+
+        return std::unexpected{inner::receiver<T, FrameSize>::receive_fail::non_object};
+    }
+
+    auto recv() {
+        std::binary_semaphore *s;
+
+        do {
+            with(auto guard = _channel->lock()) {
+                assert(!guard->receivers.empty());
+
+                for (auto &rx : guard->receivers) {
+                    auto res = rx.try_recv();
+                    if (res)
+                        return *res;
+                    else if (res.error() == inner::receiver<T, FrameSize>::receive_fail::closed)
+                        return std::nullopt;
+                }
+
+                s = &guard->awaker;
+            }
+        } while ((s->acquire(), true));
+
+        std::unreachable();
+    }
+
+private:
+    std::shared_ptr<mutex<mpsc_channel<T, FrameSize>>> _channel;
+};
+
+template<typename T, size_t FrameSize = 1024>
+class sender {
+public:
+    sender(inner::sender<T, FrameSize> &&_sender, std::shared_ptr<mutex<mpsc_channel<T, FrameSize>>> &channel)
+            : _sender(std::move(_sender))
+            , channel(channel) {}
+
+    sender(const sender &rhs)
+            : channel(rhs.channel) {
+        auto [tx, rx] = ss::channel<T, FrameSize>();
+        _sender = std::move(tx);
+        with(auto guard = channel->lock()) {
+            guard->receivers.emplace_back(std::move(rx));
+            guard->awaker.release();
+        }
+    }
+
+    sender(sender &&rhs)
+            : _sender(std::move(rhs._sender))
+            , channel(std::move(rhs.channel)) {}
+
+    sender &operator=(sender &&rhs) {
+        _sender = std::move(rhs._sender);
+        channel = std::move(rhs.channel);
+        return *this;
+    }
+
+    ~sender() {
+        if (channel)
+            stop();
+    }
+
+    void stop() { _sender.stop(); }
+
+    auto send(T &&data) { return _sender.send(std::move(data)); }
+
+    auto send(T &data) { return _sender.send(std::move(data)); }
+
+private:
+    inner::sender<T, FrameSize> _sender;
+    std::shared_ptr<mutex<mpsc_channel<T, FrameSize>>> channel;
+};
+
+template<typename T, size_t FrameSize = 1024>
+std::tuple<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
+    auto [tx, rx] = ss::channel<T, FrameSize>();
+    auto mpsc = std::make_shared<mutex<mpsc_channel<T, FrameSize>>>();
+    mpsc->lock()->receivers.emplace_back(std::move(rx));
+    return std::make_tuple(
+        std::move(sender<T, FrameSize>(std::move(tx), mpsc)), std::move(receiver<T, FrameSize>(mpsc)));
 }
 
-template<move_secure T, size_t FrameSize = 1024>
-using shared_receiver = std::shared_ptr<receiver<T, FrameSize>>;
-
-template<move_secure T, size_t FrameSize = 1024>
-shared_receiver<T, FrameSize> make_shared_receiver(receiver<T, FrameSize> &&rx) {
-    return std::make_shared<receiver<T, FrameSize>>(std::move(rx));
-}
+};  // namespace ms
 
 };  // namespace asco::inner
 

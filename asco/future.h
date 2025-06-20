@@ -134,7 +134,7 @@ struct future_base {
                 trace_prev_addr = &currtask.coro_local_frame->tracing_stack;
             }
             auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
-            auto [tx, rx] = inner::channel<T, 1>();
+            auto [tx, rx] = inner::ss::channel<T, 1>();
             return_sender = std::move(tx);
             return future_base<T, Inline, Blocking>(coro, task_id, std::move(rx));
         }
