@@ -14,7 +14,7 @@
 
 namespace asco::types {
 
-using size_t = unsigned long long;
+using size_t = uintptr_t;
 
 using atomic_size_t = std::atomic<size_t>;
 using atomic_int64_t = std::atomic_int64_t;
@@ -42,15 +42,15 @@ namespace asco::literals {
 
 using namespace asco::types;
 
-consteval inline size_t operator""_B(size_t n) { return n; }
+consteval inline size_t operator""_B(unsigned long long n) { return n; }
 
-consteval inline size_t operator""_KB(size_t n) { return n * 1024; }
+consteval inline size_t operator""_KB(unsigned long long n) { return n * 1024; }
 
-consteval inline size_t operator""_MB(size_t n) { return n * 1024 * 1024; }
+consteval inline size_t operator""_MB(unsigned long long n) { return n * 1024 * 1024; }
 
-consteval inline size_t operator""_GB(size_t n) { return n * 1024 * 1024 * 1024; }
+consteval inline size_t operator""_GB(unsigned long long n) { return n * 1024 * 1024 * 1024; }
 
-consteval inline size_t operator""_TB(size_t n) { return n * 1024 * 1024 * 1024 * 1024; }
+consteval inline size_t operator""_TB(unsigned long long n) { return n * 1024 * 1024 * 1024 * 1024; }
 
 };  // namespace asco::literals
 

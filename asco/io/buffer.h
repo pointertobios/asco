@@ -19,8 +19,7 @@ namespace asco::io {
 
 using namespace types;
 
-template<typename CharT = char>
-    requires std::is_integral_v<CharT> || std::is_same_v<CharT, char> || std::is_same_v<CharT, std::byte>
+template<simple_char CharT = char>
 class buffer {
 public:
     explicit buffer() {}
@@ -47,6 +46,8 @@ public:
 
     size_t size() const { return size_sum; }
 
+    bool empty() const { return size_sum == 0; }
+
     void push(CharT value) {
         if (buffer_chain.empty() || buffer_chain.back()->frame->ends) {
             auto frame = std::make_shared<buffer_frame>(
@@ -61,13 +62,36 @@ public:
             auto &node = buffer_chain.back();
             node->size += 1;
             node->frame->push(value);
-            if (node->frame->size == node->frame->capacity)
-                node->frame->ends = true;
         }
         size_sum += 1;
     }
 
     void push(std::basic_string<CharT> &&str) {
+        if (str.size() <= sso_size && !buffer_chain.empty()) {
+            size_t first_section = 0;
+            if (!buffer_chain.empty() && !buffer_chain.back()->frame->ends) {
+                first_section = std::min(str.size(), buffer_chain.back()->frame->rest());
+
+                auto &node = buffer_chain.back();
+                node->size += first_section;
+                node->frame->push(str.data(), first_section);
+            }
+
+            size_t rest_size = str.size() - first_section;
+            if (rest_size > 0) {
+                auto frame = std::make_shared<buffer_frame>(
+                    ({
+                        auto *p = new CharT[origin_size];  // origin_size is always greater than sso_size
+                        std::memcpy(p, str.data() + first_section, rest_size);
+                        p;
+                    }),
+                    origin_size, rest_size);
+                buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, rest_size));
+            }
+
+            return;
+        }
+
         if (!buffer_chain.empty())
             buffer_chain.back()->frame->ends = true;
         auto size = str.size();
@@ -77,6 +101,31 @@ public:
     }
 
     void push(const std::basic_string_view<CharT> &str) {
+        if (str.size() <= sso_size && !buffer_chain.empty()) {
+            size_t first_section = 0;
+            if (!buffer_chain.empty() && !buffer_chain.back()->frame->ends) {
+                first_section = std::min(str.size(), buffer_chain.back()->frame->rest());
+
+                auto &node = buffer_chain.back();
+                node->size += first_section;
+                node->frame->push(str.data(), first_section);
+            }
+
+            size_t rest_size = str.size() - first_section;
+            if (rest_size > 0) {
+                auto frame = std::make_shared<buffer_frame>(
+                    ({
+                        auto *p = new CharT[origin_size];  // origin_size is always greater than sso_size
+                        std::memcpy(p, str.data() + first_section, rest_size);
+                        p;
+                    }),
+                    origin_size, rest_size);
+                buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, rest_size));
+            }
+
+            return;
+        }
+
         if (!buffer_chain.empty())
             buffer_chain.back()->frame->ends = true;
         auto size = str.size();
@@ -151,9 +200,11 @@ public:
                         res.append(buf + start, buf + start + size);
                     else if constexpr (std::is_same_v<
                                            std::remove_reference_t<decltype(buf)>, std::basic_string<CharT>>)
-                        res.append(buf.substr(start, size));
-                    else
-                        res.append(buf.substr(start, size));
+                        res.append(buf, start, size);
+                    else if constexpr (std::is_same_v<
+                                           std::remove_reference_t<decltype(buf)>,
+                                           std::basic_string_view<CharT>>)
+                        res.append(buf, start, size);
                 },
                 frame->frame->buffer);
         }
@@ -190,6 +241,13 @@ private:
                 buffer);
         }
 
+        size_t rest() {
+            if (ends)
+                return 0;
+            else
+                return capacity - size;
+        }
+
         void push(CharT value) {
             std::visit(
                 [&](auto &buf) {
@@ -199,7 +257,27 @@ private:
                             ends = true;
                     } else {
                         throw asco::inner_exception(
-                            "[ASCO] asco::io::buffer::buffer_frame::push(T) inner: This frame is not a raw array.");
+                            "[ASCO] asco::io::buffer::buffer_frame::push(CharT): This frame is not a raw array.");
+                    }
+                },
+                buffer);
+        }
+
+        void push(const CharT *str, size_t size) {
+            if (size > rest())
+                throw asco::inner_exception(
+                    "[ASCO] asco::io::buffer::buffer_frame::push(CharT *, size_t): This frame has not any more space for pushing.");
+
+            std::visit(
+                [&](auto &buf) {
+                    if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>) {
+                        std::memcpy(buf + this->size, str, size);
+                        this->size += size;
+                        if (this->size == capacity)
+                            ends = true;
+                    } else {
+                        throw asco::inner_exception(
+                            "[ASCO] asco::io::buffer::buffer_frame::push(CharT *, size_t): This frame is not a raw array.");
                     }
                 },
                 buffer);
@@ -211,12 +289,13 @@ private:
         size_t start;
         size_t size;
 
-        static std::tuple<std::unique_ptr<shared_frame>, std::unique_ptr<shared_frame>>
-        split(std::unique_ptr<shared_frame> self, size_t offset) {
+        static auto split(std::unique_ptr<shared_frame> self, size_t offset) {
             return std::make_tuple(
                 std::make_unique<shared_frame>(self->frame, self->start, offset),
                 std::make_unique<shared_frame>(self->frame, self->start + offset, self->size - offset));
         }
+
+        auto view() const { return std::basic_string_view<CharT>(frame->buffer + start, size); }
     };
 
     std::vector<std::unique_ptr<shared_frame>> buffer_chain;
