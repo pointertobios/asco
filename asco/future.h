@@ -8,7 +8,6 @@
 #include <cstring>
 #include <expected>
 #include <functional>
-#include <iostream>
 #include <optional>
 #include <semaphore>
 #include <utility>
@@ -88,8 +87,13 @@ struct future_base {
                     task_id = rt.spawn_blocking(coro, curr_clframe, trace);
                 else
                     task_id = rt.spawn(coro, curr_clframe, trace);
+            } else if (!worker::in_worker()) {
+                if constexpr (Blocking)
+                    task_id = rt.spawn_blocking(coro, curr_clframe, trace);
+                else
+                    task_id = rt.spawn(coro, curr_clframe, trace);
             } else {
-                using state = worker::scheduler::task_control::__control_state;
+                using state = worker::scheduler::task_control::state;
                 auto &worker = worker::get_worker();
 
                 if constexpr (Blocking) {
@@ -128,15 +132,21 @@ struct future_base {
             void *trace_addr = unwind::unwind_index(2);  // This addr is only correct when compile with -O0
             unwind::coro_trace *trace_prev_addr = nullptr;
             __coro_local_frame *curr_clframe = nullptr;
+
+            bool ani = false;
+
             if (worker::in_worker()) {
                 auto &currtask = worker::get_worker().current_task();
                 curr_clframe = currtask.coro_local_frame;
                 trace_prev_addr = &currtask.coro_local_frame->tracing_stack;
+            } else {
+                ani = true;
             }
+
             auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
             auto [tx, rx] = inner::ss::channel<T, 1>();
             return_sender = std::move(tx);
-            return future_base<T, Inline, Blocking>(coro, task_id, std::move(rx));
+            return future_base<T, Inline, Blocking>(coro, task_id, std::move(rx), ani);
         }
 
         std::suspend_always initial_suspend() { return {}; }
@@ -218,8 +228,10 @@ struct future_base {
 
                 rt.remove_task_map(corohandle::from_promise(*this).address());
                 asco::core::worker::remove_task_map(task_id);
-                rt.awake(caller_task_id);
-                worker::get_worker_from_task_id(caller_task_id).sc.get_task(caller_task_id).waiting = 0;
+                if (caller_task_id) {
+                    rt.awake(caller_task_id);
+                    worker::get_worker_from_task_id(caller_task_id).sc.get_task(caller_task_id).waiting = 0;
+                }
 
                 return std::suspend_always{};
             }
@@ -306,7 +318,7 @@ struct future_base {
             }
             return std::move(*return_receiver.recv());
         } else {
-            static_assert(false, "[ASCO] future_inline<T> cannot be awaited in synchronized context.");
+            throw asco::runtime_error("[ASCO] future_inline<T> cannot be awaited in synchronized context.");
         }
         std::unreachable();
     }
@@ -336,9 +348,10 @@ struct future_base {
         rhs.none = true;
     }
 
-    future_base(corohandle task, size_t task_id, inner::receiver<T, 1> &&rx)
+    future_base(corohandle task, size_t task_id, inner::receiver<T, 1> &&rx, bool ani)
             : task(task)
             , task_id(task_id)
+            , actually_non_inline(ani)
             , return_receiver(std::move(rx))
             , none(false) {
         task.promise().awaiter = this;
@@ -397,6 +410,26 @@ struct future_base {
             throw asco::runtime_error("[ASCO] set_abort_exception(): from a none future object.");
 
         e = std::make_exception_ptr(coroutine_abort{});
+    }
+
+    future_base<return_type, false, Blocking, R> dispatch(this future_base self) {
+        if (!self.actually_non_inline)
+            throw asco::runtime_error("[ASCO] dispatch(): from an actually inline future.");
+
+        auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
+        auto &w = worker::get_worker();
+        w.modify_task_map(self.task_id, &w);
+        w.sc.steal_from(task, awaiter);
+
+        if (worker::get_worker().current_task().aborted)
+            throw coroutine_abort{};
+
+        auto res = co_await self;
+
+        if (worker::get_worker().current_task().aborted)
+            throw coroutine_abort{};
+
+        co_return std::move(res);
     }
 
     template<async_function<return_type> F>
@@ -484,6 +517,10 @@ private:
     std::exception_ptr e;
     bool promise_returned{false};
 
+    // If a inline future function called at where it is not worker thread, it actually will spawn to a worker
+    // thread.
+    bool actually_non_inline;
+
     inner::receiver<T, 1> return_receiver;
 
     bool none{true};
@@ -503,6 +540,28 @@ using future_void_inline = future_inline<_future_void>;
 using future_void_core = future_core<_future_void>;
 
 using runtime_initializer_t = std::optional<std::function<RT *()>>;
+
+#ifndef FUTURE_IMPL
+
+using core::runtime;
+
+extern template struct future_base<_future_void, false, false, runtime>;
+extern template struct future_base<_future_void, true, false, runtime>;
+extern template struct future_base<_future_void, false, true, runtime>;
+
+extern template struct future_base<int, false, false, runtime>;
+extern template struct future_base<int, true, false, runtime>;
+extern template struct future_base<int, false, true, runtime>;
+
+extern template struct future_base<std::string, false, false, runtime>;
+extern template struct future_base<std::string, true, false, runtime>;
+extern template struct future_base<std::string, false, true, runtime>;
+
+extern template struct future_base<std::string_view, false, false, runtime>;
+extern template struct future_base<std::string_view, true, false, runtime>;
+extern template struct future_base<std::string_view, false, true, runtime>;
+
+#endif
 
 };  // namespace asco::base
 

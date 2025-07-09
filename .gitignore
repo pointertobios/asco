@@ -1,4 +1,6 @@
 /.vscode
+/.idea
+/.cache
 /build
 callgrind.out.*
 core.*
