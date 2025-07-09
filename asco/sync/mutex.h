@@ -4,8 +4,6 @@
 #ifndef ASCO_SYNC_MUTEX_H
 #define ASCO_SYNC_MUTEX_H 1
 
-#include <functional>
-
 #include <asco/future.h>
 #include <asco/sync/semaphore.h>
 

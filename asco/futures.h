@@ -4,8 +4,6 @@
 #ifndef ASCO_FUTURES_H
 #define ASCO_FUTURES_H 1
 
-#include <coroutine>
-
 #include <asco/core/taskgroup.h>
 #include <asco/coro_local.h>
 #include <asco/future.h>

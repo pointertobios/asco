@@ -5,7 +5,6 @@
 
 #include <cxxabi.h>
 #include <dwarf.h>
-#include <iostream>
 #include <ranges>
 #include <unistd.h>
 

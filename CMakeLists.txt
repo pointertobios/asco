@@ -14,6 +14,16 @@ endif()
 enable_testing()
 
 option(ASCO_PERF_RECORD "ASCO Performance Recording" OFF)
+option(ASCO_IO_URING "io_uring support for linux" ON)
+option(ASCO_IOCP "IOCP support for windows" OFF)
+
+if (WIN32 AND ASCO_IO_URING)
+    error("ASCO_IO_URING must be off on windows target.")
+endif()
+
+if (LINUX AND ASCO_IOCP)
+    error("ASCO_IOCP must be off on linux target.")
+endif()
 
 add_subdirectory(asco)
 add_subdirectory(tests)

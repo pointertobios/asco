@@ -4,7 +4,6 @@
 #ifndef ASCO_RTERROR_H
 #define ASCO_RTERROR_H 1
 
-#include <exception>
 #include <stdexcept>
 #include <string>
 

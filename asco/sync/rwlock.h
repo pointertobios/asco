@@ -4,7 +4,6 @@
 #ifndef ASCO_SYNC_RWLOCK_H
 #define ASCO_SYNC_RWLOCK_H 1
 
-#include <forward_list>
 #include <optional>
 
 #include <asco/sync/semaphore.h>

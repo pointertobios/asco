@@ -4,11 +4,8 @@
 #ifndef ASCO_TIMER_H
 #define ASCO_TIMER_H 1
 
-#include <algorithm>
 #include <chrono>
 #include <deque>
-#include <semaphore>
-#include <thread>
 #include <unordered_set>
 
 #include <asco/core/daemon.h>

@@ -5,7 +5,6 @@
 #define ASCO_SELECT_H 1
 
 #include <coroutine>
-#include <functional>
 #include <semaphore>
 
 #include <asco/core/taskgroup.h>

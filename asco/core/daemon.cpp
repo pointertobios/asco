@@ -1,3 +1,6 @@
+// Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
+// SPDX-License-Identifier: MIT
+
 #include <asco/core/daemon.h>
 
 #include <cstring>
@@ -22,7 +25,7 @@ void daemon::awake() {
 #ifdef __linux__
     ::pthread_kill(ptid, awake_sig);
 #elifdef _WIN32
-#    error "Windows timer not implemented"
+#    error "Windows daemon not implemented"
 #endif
 }
 
@@ -43,7 +46,7 @@ void daemon::start() {
         sa.sa_flags = 0;
         ::sigaction(awake_sig, &sa, nullptr);
 #elifdef _WIN32
-#    error "Windows timer not implemented"
+#    error "Windows daemon not implemented"
 #endif
         init_waiter.store(true, morder::seq_cst);
 

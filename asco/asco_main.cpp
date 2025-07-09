@@ -4,7 +4,6 @@
 #include <cxxabi.h>
 #include <functional>
 #include <iostream>
-#include <optional>
 #include <typeinfo>
 
 #include <asco/exception.h>

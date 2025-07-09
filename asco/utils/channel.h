@@ -4,9 +4,7 @@
 #ifndef ASCO_UTILS_CHANNEL_H
 #define ASCO_UTILS_CHANNEL_H
 
-#include <condition_variable>
 #include <expected>
-#include <new>
 #include <optional>
 #include <semaphore>
 #include <tuple>

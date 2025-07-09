@@ -4,11 +4,8 @@
 #include <asco/core/runtime.h>
 
 #include <cassert>
-#include <cerrno>
-#include <cstring>
 #include <fstream>
 #include <iostream>
-#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -178,7 +175,7 @@ runtime::runtime(size_t nthread_)
         while (!(self.task_rx.is_stopped() && self.sc.currently_finished_all())) {
             while (true)
                 if (auto task = self.task_rx.try_recv(); task) {
-                    self.sc.push_task(std::move(*task), scheduler::task_control::__control_state::ready);
+                    self.sc.push_task(std::move(*task), scheduler::task_control::state::ready);
                     worker::insert_task_map(task->id, self_);
                 } else
                     break;
@@ -234,10 +231,12 @@ runtime::runtime(size_t nthread_)
             throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to set timer thread affinity");
         }
 
+#    ifndef ASCO_IO_URING
         auto &io_cpu = cpus[nthread + 1];
         if (::sched_setaffinity(io.native_thread_id(), sizeof(decltype(io_cpu)), &io_cpu) == -1) {
             throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to set io thread affinity");
         }
+#    endif
     }
 #endif
 
@@ -382,7 +381,7 @@ void runtime::abort(task_id id) {
     if (t.waiting) {
         abort(t.waiting);
     } else {
-        if (w.sc.get_state(id) != sched::std_scheduler::task_control::__control_state::ready)
+        if (w.sc.get_state(id) != sched::std_scheduler::task_control::state::ready)
             awake(id);
     }
 }

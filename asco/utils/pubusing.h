@@ -6,8 +6,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <concepts>
-#include <cstddef>
 
 #ifdef _WIN32
 #    define __always_inline __forceinline

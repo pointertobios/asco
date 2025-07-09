@@ -4,8 +4,6 @@
 #ifndef ASCO_RUNTIME_H
 #define ASCO_RUNTIME_H
 
-#include <atomic>
-#include <condition_variable>
 #include <coroutine>
 #include <functional>
 #include <map>
@@ -13,7 +11,6 @@
 #include <semaphore>
 #include <stack>
 #include <thread>
-#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -100,8 +97,6 @@ template<typename T>
 concept runtime_type = requires(T t) {
     typename T::__worker;
     typename T::scheduler;
-    typename T::scheduler::task;
-    typename T::scheduler::task_control::__control_state;
     typename T::task_id;
     typename T::sys;
     // Exception: runtime error when there is not a worker on the current thread.
@@ -237,7 +232,9 @@ private:
     atomic<task_id> task_counter{1};
 
     timer::timer timer;
+#ifndef ASCO_IO_URING
     io::io_thread io;
+#endif
 
     void awake_all();
 
@@ -259,6 +256,7 @@ private:
 
 };  // namespace asco::core
 
+// MUST be in global namespace
 #ifndef SET_RUNTIME
 using RT = asco::core::runtime;
 #endif

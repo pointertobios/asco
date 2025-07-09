@@ -3,6 +3,8 @@
 
 #include <semaphore>
 
+#include <asco/rterror.h>
+
 namespace asco::inner {
 
 template<typename T>

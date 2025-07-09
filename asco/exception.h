@@ -4,7 +4,6 @@
 #ifndef ASCO_EXCEPTION_H
 #define ASCO_EXCEPTION_H 1
 
-#include <exception>
 #include <format>
 #include <stdexcept>
 

@@ -1,3 +1,6 @@
+// Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
+// SPDX-License-Identifier: MIT
+
 #ifndef ASCO_CORE_DAEMON_H
 #define ASCO_CORE_DAEMON_H 1
 
@@ -37,5 +40,11 @@ private:
 };
 
 };  // namespace asco::core
+
+namespace asco {
+
+using daemon = core::daemon;
+
+};  // namespace asco
 
 #endif

@@ -15,6 +15,12 @@ namespace asco::io {
 using namespace types;
 using namespace literals;
 
+template<typename T>
+class buffered_reader {};
+
+template<typename T>
+class buffered_writer {};
+
 };  // namespace asco::io
 
 #endif
