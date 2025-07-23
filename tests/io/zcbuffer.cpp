@@ -1,6 +1,7 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include "asco/rterror.h"
 #include <cassert>
 #include <iostream>
 #include <string>
@@ -103,7 +104,7 @@ future<int> async_main() {
     try {
         auto [l, r] = std::move(buf16).split(5);
         assert(false);  // 不应到达此处
-    } catch (const asco::exception &) { std::cout << "Test 13 (split out of range) passed\n"; }
+    } catch (const asco::runtime_error &) { std::cout << "Test 13 (split out of range) passed\n"; }
 
     // size() 测试
     buffer buf17;
