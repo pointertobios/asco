@@ -4,6 +4,7 @@
 #ifndef ASCO_RUNTIME_H
 #define ASCO_RUNTIME_H
 
+#include "asco/utils/pubusing.h"
 #include <coroutine>
 #include <functional>
 #include <map>
@@ -15,6 +16,7 @@
 #include <vector>
 
 #include <asco/core/io_thread.h>
+#include <asco/core/linux/io_uring.h>
 #include <asco/core/sched.h>
 #include <asco/core/taskgroup.h>
 #include <asco/core/timer.h>
@@ -42,7 +44,7 @@ public:
     using scheduler = sched::std_scheduler;
     using task_id = sched::task::task_id;
 
-    explicit worker(int id, const worker_fn &f, task_receiver rx);
+    explicit worker(size_t id, const worker_fn &f, task_receiver rx);
     worker(const worker &) = delete;
     worker(worker &) = delete;
     worker(worker &&) = delete;
@@ -55,11 +57,15 @@ public:
     static void insert_task_map(task_id id, worker *self);
     static void modify_task_map(task_id id, worker *self);
 
-    __always_inline sched::task &current_task() { return *running_task.top(); }
+    __asco_always_inline sched::task &current_task() { return *running_task.top(); }
 
-    __always_inline task_id current_task_id() { return running_task.top()->id; }
+    __asco_always_inline task_id current_task_id() { return running_task.top()->id; }
 
-    __always_inline bool task_schedulable(task_id id) { return sc.task_exists(id); }
+    __asco_always_inline bool task_schedulable(task_id id) { return sc.task_exists(id); }
+
+#ifdef ASCO_IO_URING
+    __asco_always_inline _linux::uring &get_uring() { return io_uring; }
+#endif
 
     int id;
     bool is_calculator;
@@ -76,6 +82,10 @@ public:
 
 private:
     std::jthread thread;
+
+#ifdef ASCO_IO_URING
+    _linux::uring io_uring;
+#endif
 
 public:
     static bool in_worker();
@@ -149,6 +159,7 @@ concept runtime_type = requires(T t) {
     { t.exit_group(typename T::task_id{}) } -> same_as<void>;
     { t.in_group(typename T::task_id{}) } -> same_as<bool>;
     { t.group(typename T::task_id{}) } -> same_as<task_group *>;
+    { t.get_worker_from_id(size_t{}) } -> same_as<typename T::__worker &>;
 } && requires(T::__worker w) {
     { w.conditional_suspend() } -> same_as<void>;
     { w.current_task() } -> same_as<typename T::scheduler::task &>;
@@ -164,10 +175,10 @@ class runtime {
 public:
     struct sys {
         static void set_args(int argc, const char **argv);
-        __always_inline static std::vector<std::string> &args() { return __args; }
+        __asco_always_inline static std::vector<std::string> &args() { return __args; }
 
         static void set_env(const char **env);
-        __always_inline static std::unordered_map<std::string, std::string> &env() { return __env; }
+        __asco_always_inline static std::unordered_map<std::string, std::string> &env() { return __env; }
 
     private:
         static std::vector<std::string> __args;
@@ -201,10 +212,10 @@ public:
 
     void remove_task_map(void *addr);
 
-    __always_inline void inc_io_load() { io_worker_load++; }
-    __always_inline void dec_io_load() { io_worker_load--; }
-    __always_inline void inc_calcu_load() { calcu_worker_load++; }
-    __always_inline void dec_calcu_load() { calcu_worker_load--; }
+    __asco_always_inline void inc_io_load() { io_worker_load++; }
+    __asco_always_inline void dec_io_load() { io_worker_load--; }
+    __asco_always_inline void inc_calcu_load() { calcu_worker_load++; }
+    __asco_always_inline void dec_calcu_load() { calcu_worker_load--; }
 
     void timer_attach(task_id id, std::chrono::high_resolution_clock::time_point time);
     void timer_detach(task_id id);
@@ -216,7 +227,7 @@ public:
     task_group *group(task_id id);
 
 private:
-    int nthread;
+    size_t nthread;
     std::vector<worker *> pool;
 
     spin<std::unordered_map<task_id, task_group *>> task_groups;
@@ -228,37 +239,38 @@ private:
     atomic_size_t calcu_worker_count{0};
     atomic_size_t calcu_worker_load{0};
 
-    spin<std::map<void *, task_id>> coro_to_task_id;
+    // <pointer of coroutine handle, task_id>
+    spin<std::unordered_map<void *, task_id>> coro_to_task_id;
     atomic<task_id> task_counter{1};
 
     timer::timer timer;
 #ifndef ASCO_IO_URING
-    io::io_thread io;
+    io_thread io;
 #endif
 
     void awake_all();
 
 public:
-    __always_inline static runtime &get_runtime() {
+    __asco_always_inline static runtime &get_runtime() {
         if (!current_runtime)
             throw asco::runtime_error(
                 "[ASCO] runtime::get_runtime(): The async function must be called with asco::runtime initialized");
         return *current_runtime;
     }
 
+    __asco_always_inline worker &get_worker_from_id(size_t wid) {
+        if (pool.size() < wid)
+            throw asco::runtime_error(
+                std::format("[ASCO] runtime::get_worker_from_id(): Worker {} not initialized.", wid));
+        return *pool[wid];
+    }
+
 private:
     static runtime *current_runtime;
 };
 
-// Define macro `SET_RUNTIME` with set_runtime(rt)
-// And use this before include future.h
-#define set_runtime(rt) using RT = rt
-
 };  // namespace asco::core
 
-// MUST be in global namespace
-#ifndef SET_RUNTIME
 using RT = asco::core::runtime;
-#endif
 
 #endif

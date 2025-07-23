@@ -8,6 +8,7 @@ set(ASCO_SOURCES
     core/timer.cpp
     future.cpp
     futures.cpp
+    io/file.cpp
     unwind/unwind.cpp
 )
 
@@ -15,12 +16,18 @@ set(ASCO_SOURCES
 if (LINUX)
     set(ASCO_SOURCES ${ASCO_SOURCES}
         unwind/linux_unwind.cpp
+        io/linux_file.cpp
     )
 
     if (NOT ASCO_IO_URING)
-    set(ASCO_SOURCES ${ASCO_SOURCES}
-    core/linux/io_thread.cpp
-    )
+        set(ASCO_SOURCES ${ASCO_SOURCES}
+            core/linux/io_thread.cpp
+        )
+    else()
+        set(ASCO_SOURCES ${ASCO_SOURCES}
+            core/linux/io_uring.cpp
+            io/uring_file.cpp
+        )
     endif()
     
     set(DEPLIBS ${DEPLIBS} dw elf z)
@@ -43,13 +50,13 @@ endif()
 
 add_library(asco ${ASCO_SOURCES})
 target_include_directories(asco PUBLIC ../)
-target_link_libraries(asco PRIVATE ${DEPLIBS})
-target_compile_definitions(asco PRIVATE ${MDEFS})
+target_link_libraries(asco PUBLIC ${DEPLIBS})
+target_compile_definitions(asco PUBLIC ${MDEFS})
 
 add_library(asco-shared SHARED ${ASCO_SOURCES})
 target_include_directories(asco-shared PUBLIC ../)
-target_link_libraries(asco-shared PRIVATE ${DEPLIBS})
-target_compile_definitions(asco-shared PRIVATE ${MDEFS})
+target_link_libraries(asco-shared PUBLIC ${DEPLIBS})
+target_compile_definitions(asco-shared PUBLIC ${MDEFS})
 if (NOT WIN32)
     set_target_properties(asco-shared PROPERTIES OUTPUT_NAME asco)
 endif()

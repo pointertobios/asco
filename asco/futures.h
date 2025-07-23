@@ -37,7 +37,7 @@ void throw_coroutine_abort() {
     if (h.promise().future_type_hash != type_hash<F>())
         throw asco::runtime_error(
             "[ASCO] move_back_return_value<F, T>(): F is not matched with your current coroutine.");
-    return h.promise().awaiter->set_abort_exception();
+    h.promise().awaiter->set_abort_exception();
 }
 
 template<runtime_type R = RT>

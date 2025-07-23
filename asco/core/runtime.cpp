@@ -22,11 +22,12 @@ std::unordered_map<std::thread::id, worker *> worker::workers;
 thread_local worker *worker::current_worker{nullptr};
 runtime *runtime::current_runtime{nullptr};
 
-worker::worker(int id, const worker_fn &f, task_receiver rx)
+worker::worker(size_t id, const worker_fn &f, task_receiver rx)
         : id(id)
         , is_calculator(false)
         , task_rx(rx)
-        , thread([f, this] { f(this); }) {
+        , thread([f, this] { f(this); })
+        , io_uring(id) {
     workers[thread.get_id()] = this;
 }
 
@@ -160,10 +161,6 @@ runtime::runtime(size_t nthread_)
         throw asco::runtime_error("[ASCO] runtime::runtime(): Cannot create multiple runtimes in a process");
     current_runtime = this;
 
-    auto total_threads = nthread;
-    if (nthread > 2)
-        nthread -= 2;
-
     auto worker_lambda = [this](worker *self_) {
         worker &self = *self_;
 
@@ -221,6 +218,15 @@ runtime::runtime(size_t nthread_)
         }
     };
 
+    auto total_threads = nthread;
+#ifndef ASCO_IO_URING
+    if (nthread > 2)
+        nthread -= 2;
+#else
+    if (nthread > 1)
+        nthread -= 1;
+#endif
+
     pool.reserve(nthread);
 #ifdef __linux__
     auto cpus = get_cpus();
@@ -246,7 +252,7 @@ runtime::runtime(size_t nthread_)
     auto [calcu_tx, calcu_rx] = inner::ms::channel<sched::task>();
     calcu_task_tx = std::move(calcu_tx);
 
-    for (int i{0}; i < nthread; i++) {
+    for (size_t i{0}; i < nthread; i++) {
         bool is_calculator = false;
 
         // The hyper thread cores are usually the high frequency cores

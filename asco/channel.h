@@ -126,7 +126,7 @@ public:
     }
 
     [[nodiscard("[ASCO] sender::send(): You must deal with the case of channel closed.")]]
-    __always_inline std::optional<T> send(T &data) {
+    __asco_always_inline std::optional<T> send(T &data) {
         return send(std::move(data));
     }
 

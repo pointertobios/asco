@@ -26,7 +26,7 @@ target_link_libraries(<your-target> PRIVATE asco asco-main)
 
 ```cmake
 add_subdirectory(<path-to-this-repo>)
-target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
+target_link_libraries(<your-target> PRIVATE asco-shared asco-main-shared)
 ```
 
 ## Features
@@ -46,8 +46,9 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main)
   - [x] Pipe(Channel)
   - [x] Timer and Interval
 - [ ] Async IO
-  - [ ] Async file read/write
+  - [x] Async file IO
   - [ ] Async TCP/UDP stream
+- [ ] No lock data structures and algorithms
 
 ## Compilers
 

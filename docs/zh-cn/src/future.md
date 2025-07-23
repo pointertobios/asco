@@ -1,4 +1,4 @@
-# future\<T\> 协程函数下的异步编程
+# future\<T\> 协程下的异步编程
 
 `asco::future<T>`是C++20 coroutine的一个等待器（ awaiter ），它与`std::future<T>`没有任何联系。
 
@@ -75,7 +75,7 @@ future<int> async_main() {
 
 #### dispatch() 函数
 
-当在非异步函数环境中调用 `future_inline<T>` 的异步函数时，不能使用 `await()` 阻塞等待其返回，
+当在非异步环境中调用 `future_inline<T>` 的异步函数时，不能使用 `await()` 阻塞等待其返回，
 需要先调用 `dispatch()` 将其转化为非 inline 的异步任务后再使用 `await()`。也可以利用[异步任务组合](./任务组合.md)将此任务向后传递。
 
 在异步函数环境中调用 `dispatch()` 时，将抛出一个运行时异常。
@@ -93,11 +93,20 @@ future<int> async_main() {
 
 ---
 
+## `asco::yield`
+
+包含头文件 `<asco/yield.h>` 即可使用。
+
+当你认为当前协程可能长时间占用工作线程或任何可能需要让出工作线程以使其它协程得以执行时，使用 `co_await asco::yield{}`
+以暂时让出工作线程，协程依然处于活动状态，若当前工作线程中没有其它可以调度的活动协程，当前协程依然会被继续调度。
+
+---
+
 ## 有关协程之间引用的传递
 
 协程的自动储存期变量根据不同情况有不同的储存位置：
 
-* 变量的所有访问行为没有跨过任何协程暂停点，变量会被分配到当前工作线程的线程栈中。
+* 变量的所有访问行为没有跨过任何协程暂停点，变量可能会被优化到当前工作线程的线程栈中。
 * 变量的所有访问行为跨过了协程暂停点，变量会存在于协程状态对象中，随着协程的创建和销毁而构造和析构。
 
 由于协程可能会分配到不同的工作线程中执行，前一种自动储存期变量的引用不可以在协程间传递。以 `thread_local` 关键字声明的变量与这种情况相同，
@@ -118,14 +127,16 @@ cv.notify_one();
 co_await t;
 ```
 
+> `decl_local(cv)`、`coro_local(cv)` 的使用是安全的，这两个宏将在后面的段落讲解。
+
 变量 `flag` 没有跨过任何协程暂停点，因此它将在当前工作线程的线程栈中被分配。
 
 讨论两种情况：
 
-* 当前协程与 lambda 表达式在同一工作线程中被调度执行，当前协程执行至 `co_await t` 挂起后，线程栈退出当前栈帧， `flag` 变量失效， lambda
-  表达式中捕获的 `flag` 将引用一个有效但不合法的地址，是未定义行为。
-* 当前协程与 lambda 表达式不在同一工作线程中被调度执行， lambda表达式中的变量 `flag` 引用了一个其它线程中的地址，
-  通常这个地址是无效的，触发段错误，如果这个地址在当前工作线程中恰好是有效的，则是未定义行为。
+* 当前协程与 lambda 表达式在同一工作线程中被调度执行：当前协程执行至 `co_await t` 挂起后，线程栈退出当前栈帧，如果 `flag` 被优化到栈上，
+  会失效， lambda 表达式中捕获的 `flag` 将引用一个有效但不合法的地址，是未定义行为。
+* 当前协程与 lambda 表达式不在同一工作线程中被调度执行：如果 `flag` 被优化到栈上，
+  lambda表达式中的变量 `flag` 引用了一个其它线程中的栈上地址，C++标准并未规定线程栈在整个进程中的可访问性，访问这个引用是未定义行为。
 
 ---
 
@@ -247,7 +258,7 @@ assert_eq(sem.get_counter(), 1);
 在每个 `co_return` 或 `throw coroutine_abort{}` 前，都设置 `restorer.state` 的值，因此，
 `restorer` 的析构函数可以在不同的 `co_return` 或 `throw coroutine_abort{}` 后执行不同的恢复操作。
 
-在此期间，可以使用 `T &&this_coro::move_back_return_value<future<T>, T>()` 将返回值移动回当前上下文以避免其被丢弃。
+在此期间，可以使用 `T &&this_coro::move_back_return_value<future<T>>()` 将返回值移动回当前上下文以避免其被丢弃。
 
 ```c++
 [[nodiscard("[ASCO] receiver::recv(): You must deal with the case of channel closed.")]]
@@ -265,7 +276,7 @@ future_inline<std::optional<T>> recv() {
             switch (state) {
             case 2:
                 self->buffer.push_back(
-                    this_coro::move_back_return_value<future_inline<std::optional<T>>, std::optional<T>>());
+                    this_coro::move_back_return_value<future_inline<std::optional<T>>>());
             case 1:
                 self->frame->sem.release();
                 break;

@@ -4,16 +4,18 @@
 #ifndef ASCO_IO_BUFFER_H
 #define ASCO_IO_BUFFER_H 1
 
+#include <asco/rterror.h>
+#include <asco/utils/concepts.h>
+#include <asco/utils/pubusing.h>
+
+#include <cstring>
 #include <memory>
-#include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <variant>
 #include <vector>
-
-#include <asco/exception.h>
-#include <asco/utils/pubusing.h>
 
 namespace asco::io {
 
@@ -22,6 +24,8 @@ using namespace types;
 template<simple_char CharT = char>
 class buffer {
 public:
+    using char_type = CharT;
+
     explicit buffer() {}
 
     buffer(const buffer &rhs) = delete;
@@ -42,6 +46,13 @@ public:
     buffer(const std::basic_string_view<CharT> &str)
             : buffer() {
         push(str);
+    }
+
+    buffer &operator=(buffer &&rhs) {
+        buffer_chain = std::move(rhs.buffer_chain);
+        size_sum = rhs.size_sum;
+        rhs.size_sum = 0;
+        return *this;
     }
 
     size_t size() const { return size_sum; }
@@ -89,13 +100,15 @@ public:
                 buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, rest_size));
             }
 
+            size_sum += str.size();
+
             return;
         }
 
         if (!buffer_chain.empty())
             buffer_chain.back()->frame->ends = true;
         auto size = str.size();
-        auto frame = std::make_shared<buffer_frame>(std::move(str), size, size, true);
+        auto frame = std::make_shared<buffer_frame>(std::move(str), size, size, nullptr, true);
         buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, size));
         size_sum += size;
     }
@@ -123,13 +136,15 @@ public:
                 buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, rest_size));
             }
 
+            size_sum += str.size();
+
             return;
         }
 
         if (!buffer_chain.empty())
             buffer_chain.back()->frame->ends = true;
         auto size = str.size();
-        auto frame = std::make_shared<buffer_frame>(str, size, size, true);
+        auto frame = std::make_shared<buffer_frame>(str, size, size, nullptr, true);
         buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, size));
         size_sum += size;
     }
@@ -171,7 +186,7 @@ public:
                 second.buffer_chain.push_back(*it);
                 second.size_sum += frame_size;
             } else {
-                auto [a, b] = shared_frame::split(*it, pos - current_size);
+                auto [a, b] = std::move(**it).split(pos - current_size);
                 first.buffer_chain.push_back(std::move(a));
                 first.size_sum += pos - current_size;
                 second.buffer_chain.push_back(std::move(b));
@@ -181,7 +196,7 @@ public:
         }
 
         if (current_size < pos)
-            throw asco::exception("buffer::split(): pos out of range.");
+            throw runtime_error("buffer::split(): pos out of range.");
 
         self.buffer_chain.clear();
         self.size_sum = 0;
@@ -192,18 +207,11 @@ public:
     std::basic_string<CharT> to_string(this buffer &&self) {
         std::basic_string<CharT> res;
         for (auto &frame : self.buffer_chain) {
-            auto start = frame->start;
-            auto size = frame->size;
             std::visit(
-                [&](auto &buf) {
+                [&res, start = frame->start, size = frame->size](auto &buf) {
                     if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>)
                         res.append(buf + start, buf + start + size);
-                    else if constexpr (std::is_same_v<
-                                           std::remove_reference_t<decltype(buf)>, std::basic_string<CharT>>)
-                        res.append(buf, start, size);
-                    else if constexpr (std::is_same_v<
-                                           std::remove_reference_t<decltype(buf)>,
-                                           std::basic_string_view<CharT>>)
+                    else
                         res.append(buf, start, size);
                 },
                 frame->frame->buffer);
@@ -213,30 +221,36 @@ public:
         return res;
     }
 
-private:
-    // The buffer `buf` must be allocated by operator new[]
-    void push_raw_array_buffer(CharT *buf, size_t capacity, size_t size) {
-        if (!buffer_chain.empty())
-            buffer_chain.back()->ends = true;
-        auto frame = std::make_shared<buffer_frame>(buf, capacity, size, true);
-        buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, size));
-        size_sum += size;
-    }
+    size_t buffer_count() const noexcept { return buffer_chain.size(); }
 
+private:
     constexpr inline static size_t origin_size = 256;
-    constexpr inline static size_t sso_size = 64;
+    constexpr inline static size_t sso_size = 32;
 
     struct buffer_frame {
+        using buffer_destroyer = void(CharT *) noexcept;
+
         std::variant<CharT *, std::basic_string<CharT>, std::basic_string_view<CharT>> buffer;
         size_t capacity;
         size_t size;
+
+        // Available while buffer is of type CharT *.
+        // On deconstruction, call this function to free the raw array bufer if not nullptr.
+        // Or use delete[] by default.
+        buffer_destroyer *rawarr_de{nullptr};
+
         bool ends{false};
 
         ~buffer_frame() {
             std::visit(
-                [](auto &buf) {
-                    if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>)
-                        delete[] buf;
+                [rawarr_de = this->rawarr_de](auto &buf) {
+                    if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>) {
+                        if (!rawarr_de) {
+                            delete[] buf;
+                        } else {
+                            rawarr_de(buf);
+                        }
+                    }
                 },
                 buffer);
         }
@@ -256,7 +270,7 @@ private:
                         if (size == capacity)
                             ends = true;
                     } else {
-                        throw asco::inner_exception(
+                        throw runtime_error(
                             "[ASCO] asco::io::buffer::buffer_frame::push(CharT): This frame is not a raw array.");
                     }
                 },
@@ -265,7 +279,7 @@ private:
 
         void push(const CharT *str, size_t size) {
             if (size > rest())
-                throw asco::inner_exception(
+                throw runtime_error(
                     "[ASCO] asco::io::buffer::buffer_frame::push(CharT *, size_t): This frame has not any more space for pushing.");
 
             std::visit(
@@ -276,7 +290,7 @@ private:
                         if (this->size == capacity)
                             ends = true;
                     } else {
-                        throw asco::inner_exception(
+                        throw runtime_error(
                             "[ASCO] asco::io::buffer::buffer_frame::push(CharT *, size_t): This frame is not a raw array.");
                     }
                 },
@@ -289,10 +303,10 @@ private:
         size_t start;
         size_t size;
 
-        static auto split(std::unique_ptr<shared_frame> self, size_t offset) {
+        auto split(this shared_frame &&self, size_t offset) {
             return std::make_tuple(
-                std::make_unique<shared_frame>(self->frame, self->start, offset),
-                std::make_unique<shared_frame>(self->frame, self->start + offset, self->size - offset));
+                std::make_unique<shared_frame>(self.frame, self.start, offset),
+                std::make_unique<shared_frame>(self.frame, self.start + offset, self.size - offset));
         }
 
         auto view() const { return std::basic_string_view<CharT>(frame->buffer + start, size); }
@@ -301,8 +315,75 @@ private:
     std::vector<std::unique_ptr<shared_frame>> buffer_chain;
 
     size_t size_sum{0};
+
+public:
+    // If rawarr_de is nullptr, the buffer `buf` must be allocated by operator new[], so that buffer_frame
+    // will free it with delete[].
+    void push_raw_array_buffer(
+        CharT *buf, size_t capacity, size_t size, buffer_frame::buffer_destroyer *rawarr_de = nullptr) {
+        if (!buffer_chain.empty())
+            buffer_chain.back()->frame->ends = true;
+        auto frame = std::make_shared<buffer_frame>(buf, capacity, size, rawarr_de, true);
+        buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, size));
+        size_sum += size;
+    }
+    struct rawbuffer_iterator {
+        struct rawbuffer {
+            void *buffer;
+            size_t size;
+
+            size_t seq;
+        };
+
+        rawbuffer_iterator(
+            std::vector<std::unique_ptr<shared_frame>>::const_iterator it,
+            std::vector<std::unique_ptr<shared_frame>>::const_iterator end) noexcept
+                : it(it)
+                , end(end) {}
+
+        rawbuffer operator*() const {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-stack-address"
+            uint8_t *ptr = static_cast<uint8_t *>(std::visit(
+                [](auto buf) {
+                    if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>)
+                        return static_cast<void *>(buf);
+                    else
+                        return const_cast<void *>(reinterpret_cast<const void *>(buf.data()));
+                },
+                (*it)->frame->buffer));
+#pragma clang diagnostic pop
+
+            void *buf = ptr + (*it)->start;
+            return {buf, (*it)->size, seq};
+        }
+
+        const rawbuffer_iterator &operator++() const {
+            it++;
+            seq++;
+            return *this;
+        }
+
+        const rawbuffer_iterator &operator++(int) const { return ++*this; }
+
+        bool is_end() const { return it == end; }
+
+    private:
+        size_t mutable seq{0};
+        std::vector<std::unique_ptr<shared_frame>>::const_iterator mutable it;
+        std::vector<std::unique_ptr<shared_frame>>::const_iterator end;
+    };
+
+    rawbuffer_iterator rawbuffers() const noexcept { return {buffer_chain.begin(), buffer_chain.end()}; }
 };
 
 };  // namespace asco::io
+
+namespace asco {
+
+template<simple_char CharT>
+using buffer = io::buffer<CharT>;
+
+};
 
 #endif

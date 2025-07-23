@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 
+#include <asco/exception.h>
 #include <asco/future.h>
 #include <asco/io/buffer.h>
 
