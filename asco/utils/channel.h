@@ -11,8 +11,8 @@
 #include <utility>
 
 #include <asco/rterror.h>
+#include <asco/sync/spin.h>
 #include <asco/utils/concepts.h>
-#include <asco/utils/mutex.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco::inner {
@@ -328,7 +328,7 @@ public:
     receiver()
             : _channel(nullptr) {}
 
-    receiver(std::shared_ptr<mutex<mpsc_channel<T, FrameSize>>> &_channel)
+    receiver(std::shared_ptr<spin<mpsc_channel<T, FrameSize>>> &_channel)
             : _channel(_channel) {}
 
     bool is_stopped() {
@@ -390,13 +390,13 @@ public:
     }
 
 private:
-    std::shared_ptr<mutex<mpsc_channel<T, FrameSize>>> _channel;
+    std::shared_ptr<spin<mpsc_channel<T, FrameSize>>> _channel;
 };
 
 template<typename T, size_t FrameSize = 1024>
 class sender {
 public:
-    sender(inner::sender<T, FrameSize> &&_sender, std::shared_ptr<mutex<mpsc_channel<T, FrameSize>>> &channel)
+    sender(inner::sender<T, FrameSize> &&_sender, std::shared_ptr<spin<mpsc_channel<T, FrameSize>>> &channel)
             : _sender(std::move(_sender))
             , channel(channel) {}
 
@@ -433,13 +433,13 @@ public:
 
 private:
     inner::sender<T, FrameSize> _sender;
-    std::shared_ptr<mutex<mpsc_channel<T, FrameSize>>> channel;
+    std::shared_ptr<spin<mpsc_channel<T, FrameSize>>> channel;
 };
 
 template<typename T, size_t FrameSize = 1024>
 std::tuple<sender<T, FrameSize>, receiver<T, FrameSize>> channel() {
     auto [tx, rx] = ss::channel<T, FrameSize>();
-    auto mpsc = std::make_shared<mutex<mpsc_channel<T, FrameSize>>>();
+    auto mpsc = std::make_shared<spin<mpsc_channel<T, FrameSize>>>();
     mpsc->lock()->receivers.emplace_back(std::move(rx));
     return std::make_tuple(
         std::move(sender<T, FrameSize>(std::move(tx), mpsc)), std::move(receiver<T, FrameSize>(mpsc)));
