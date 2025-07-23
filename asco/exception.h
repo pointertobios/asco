@@ -15,8 +15,7 @@ namespace asco {
 
 class exception : public std::runtime_error {
 public:
-    template<core::runtime_type R = RT>
-    exception(const std::string &what)
+    constexpr exception(const std::string &what)
             : std::runtime_error(
                   what + ({
                       if (!RT::__worker::in_worker())
@@ -29,7 +28,7 @@ public:
 
 class inner_exception : public exception {
 public:
-    inner_exception(const std::string &what)
+    constexpr inner_exception(const std::string &what)
             : exception(what) {}
 };
 

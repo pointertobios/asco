@@ -15,7 +15,7 @@
 
 namespace asco::base {
 
-using namespace asco::types;
+using namespace types;
 
 struct __coro_local_frame {
     __coro_local_frame *prev{nullptr};

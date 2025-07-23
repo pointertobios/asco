@@ -8,7 +8,7 @@
 
 namespace asco::sync {
 
-using namespace asco::types;
+using namespace types;
 
 template<typename T>
 class spin {

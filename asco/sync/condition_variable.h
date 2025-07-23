@@ -14,7 +14,6 @@ namespace asco::sync {
 
 using task_id = core::sched::task::task_id;
 
-template<core::runtime_type R = RT>
 class condition_variable {
 public:
     condition_variable() = default;
@@ -69,7 +68,7 @@ private:
 
 namespace asco {
 
-using condition_variable = sync::condition_variable<RT>;
+using condition_variable = sync::condition_variable;
 
 };  // namespace asco
 

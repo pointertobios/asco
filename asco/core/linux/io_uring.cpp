@@ -1,3 +1,6 @@
+// Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
+// SPDX-License-Identifier: MIT
+
 #include <asco/core/linux/io_uring.h>
 
 #include <asco/rterror.h>

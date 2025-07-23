@@ -8,22 +8,20 @@
 
 namespace asco::base {
 
-using core::runtime;
+template struct future_base<_future_void, false, false>;
+template struct future_base<_future_void, true, false>;
+template struct future_base<_future_void, false, true>;
 
-template struct future_base<_future_void, false, false, runtime>;
-template struct future_base<_future_void, true, false, runtime>;
-template struct future_base<_future_void, false, true, runtime>;
+template struct future_base<int, false, false>;
+template struct future_base<int, true, false>;
+template struct future_base<int, false, true>;
 
-template struct future_base<int, false, false, runtime>;
-template struct future_base<int, true, false, runtime>;
-template struct future_base<int, false, true, runtime>;
+template struct future_base<std::string, false, false>;
+template struct future_base<std::string, true, false>;
+template struct future_base<std::string, false, true>;
 
-template struct future_base<std::string, false, false, runtime>;
-template struct future_base<std::string, true, false, runtime>;
-template struct future_base<std::string, false, true, runtime>;
-
-template struct future_base<std::string_view, false, false, runtime>;
-template struct future_base<std::string_view, true, false, runtime>;
-template struct future_base<std::string_view, false, true, runtime>;
+template struct future_base<std::string_view, false, false>;
+template struct future_base<std::string_view, true, false>;
+template struct future_base<std::string_view, false, true>;
 
 };  // namespace asco::base

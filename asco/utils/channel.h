@@ -17,7 +17,7 @@
 
 namespace asco::inner {
 
-using namespace asco::types;
+using namespace types;
 
 template<typename T, size_t Size>
 struct channel_frame {

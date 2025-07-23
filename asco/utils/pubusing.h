@@ -34,7 +34,7 @@ using morder = std::memory_order;
 
 namespace asco::literals {
 
-using namespace asco::types;
+using namespace types;
 
 consteval inline size_t operator""_B(unsigned long long n) { return n; }
 

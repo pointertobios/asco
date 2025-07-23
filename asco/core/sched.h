@@ -4,7 +4,6 @@
 #ifndef ASCO_SCHED_H
 #define ASCO_SCHED_H
 
-#include <concepts>
 #include <coroutine>
 #include <optional>
 #include <semaphore>
@@ -88,41 +87,6 @@ struct task {
     }
 };
 
-template<typename T>
-concept scheduler_type = requires(T t) {
-    typename T::task;
-    typename T::task_control;
-    typename T::task_control::state;
-    {
-        t.push_task(std::declval<task>(), std::declval<typename T::task_control::state>())
-    } -> std::same_as<void>;
-    { t.sched() } -> std::same_as<std::optional<task *>>;
-    { t.try_reawake_buffered() } -> std::same_as<void>;
-    {
-        // If call this, you must promise the task is not on invoke by worker thread.
-        t.steal(task::task_id{})
-    } -> std::same_as<std::optional<std::tuple<typename T::task_control *, std::binary_semaphore *>>>;
-    {
-        t.steal_from(std::declval<typename T::task_control *>(), std::declval<std::binary_semaphore *>())
-    } -> std::same_as<void>;
-    // return true only when both active tasks and suspending tasks are empty.
-    { t.currently_finished_all() } -> std::same_as<bool>;
-    { t.has_buffered_awakes() } -> std::same_as<bool>;
-    { t.awake(task::task_id{}) } -> std::same_as<void>;
-    { t.suspend(task::task_id{}) } -> std::same_as<void>;
-    { t.destroy(task::task_id{}, bool{}) } -> std::same_as<void>;
-    { t.task_exists(task::task_id{}) } -> std::same_as<bool>;
-    { t.get_task(task::task_id{}) } -> std::same_as<task &>;
-    { t.get_state(task::task_id{}) } -> std::same_as<typename T::task_control::state>;
-    { t.register_sync_awaiter(task::task_id{}) } -> std::same_as<void>;
-    { t.get_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore &>;
-    { t.clone_sync_awaiter(task::task_id{}) } -> std::same_as<std::binary_semaphore *>;
-    {
-        t.emplace_sync_awaiter(task::task_id{}, std::declval<std::binary_semaphore *>())
-    } -> std::same_as<void>;
-};
-
-// I call it std_scheduler because it uses STL.
 class std_scheduler {
 public:
     using task = task;

@@ -12,7 +12,6 @@ namespace asco::unwind {
 
 class coro_unwinder : public function_unwinder {
 public:
-    template<core::runtime_type R = RT>
     static stacktrace unwind() {
         coro_unwinder unwinder;
 

@@ -4,7 +4,6 @@
 #ifndef ASCO_RUNTIME_H
 #define ASCO_RUNTIME_H
 
-#include "asco/utils/pubusing.h"
 #include <coroutine>
 #include <functional>
 #include <map>
@@ -28,7 +27,7 @@
 
 namespace asco::core {
 
-using namespace asco::types;
+using namespace types;
 
 using base::__coro_local_frame;
 
@@ -100,76 +99,6 @@ private:
     static std::unordered_map<std::thread::id, worker *> workers;
     thread_local static worker *current_worker;
 };
-
-using std::declval, std::same_as;
-
-template<typename T>
-concept runtime_type = requires(T t) {
-    typename T::__worker;
-    typename T::scheduler;
-    typename T::task_id;
-    typename T::sys;
-    // Exception: runtime error when there is not a worker on the current thread.
-    { T::__worker::in_worker() } -> same_as<bool>;
-    { T::__worker::get_worker() } -> same_as<typename T::__worker &>;
-    // If the task never been controled by runtime, return false.
-    { T::__worker::task_available(typename T::task_id{}) } -> same_as<bool>;
-    // Exception: runtime error when the task fits !task_available(id).
-    { T::__worker::get_worker_from_task_id(typename T::task_id{}) } -> same_as<typename T::__worker &>;
-    { T::__worker::set_task_sem(typename T::task_id{}) } -> same_as<void>;
-    { T::__worker::remove_task_map(typename T::task_id{}) } -> same_as<void>;
-    {
-        T::__worker::insert_task_map(typename T::task_id{}, declval<typename T::__worker *>())
-    } -> same_as<void>;
-    {
-        T::__worker::modify_task_map(typename T::task_id{}, declval<typename T::__worker *>())
-    } -> same_as<void>;
-    { T::get_runtime() } -> same_as<T &>;
-    { t.send_task(declval<typename T::scheduler::task>()) } -> same_as<void>;
-    { t.send_blocking_task(declval<typename T::scheduler::task>()) } -> same_as<void>;
-    {
-        t.spawn(
-            task_instance{}, declval<__coro_local_frame *>(), declval<unwind::coro_trace>(),
-            typename T::task_id{})
-    } -> same_as<typename T::task_id>;
-    {
-        t.spawn_blocking(
-            task_instance{}, declval<__coro_local_frame *>(), declval<unwind::coro_trace>(),
-            typename T::task_id{})
-    } -> same_as<typename T::task_id>;
-    { t.awake(typename T::task_id{}) } -> same_as<void>;
-    { t.suspend(typename T::task_id{}) } -> same_as<void>;
-    { t.abort(typename T::task_id{}) } -> same_as<void>;
-    { t.register_sync_awaiter(typename T::task_id{}) } -> same_as<void>;
-    { t.task_id_from_corohandle(declval<std::coroutine_handle<>>()) } -> same_as<typename T::task_id>;
-    {
-        t.to_task(
-            declval<task_instance>(), bool{}, declval<__coro_local_frame *>(), declval<unwind::coro_trace>())
-    } -> same_as<sched::task>;
-    { t.remove_task_map(nullptr) } -> same_as<void>;
-    { t.inc_io_load() } -> same_as<void>;
-    { t.dec_io_load() } -> same_as<void>;
-    { t.inc_calcu_load() } -> same_as<void>;
-    { t.dec_calcu_load() } -> same_as<void>;
-    {
-        t.timer_attach(typename T::task_id{}, declval<std::chrono::high_resolution_clock::time_point>())
-    } -> same_as<void>;
-    { t.timer_detach(typename T::task_id{}) } -> same_as<void>;
-    { t.join_task_to_group(typename T::task_id{}, typename T::task_id{}, bool{}) } -> same_as<void>;
-    { t.exit_group(typename T::task_id{}) } -> same_as<void>;
-    { t.in_group(typename T::task_id{}) } -> same_as<bool>;
-    { t.group(typename T::task_id{}) } -> same_as<task_group *>;
-    { t.get_worker_from_id(size_t{}) } -> same_as<typename T::__worker &>;
-} && requires(T::__worker w) {
-    { w.conditional_suspend() } -> same_as<void>;
-    { w.current_task() } -> same_as<typename T::scheduler::task &>;
-    { w.current_task_id() } -> same_as<typename T::task_id>;
-    // If the task had destroyed by scheduler, return false.
-    { w.task_schedulable(typename T::task_id{}) } -> same_as<bool>;
-    { w.is_calculator } -> same_as<bool &>;
-    { w.running_task } -> same_as<std::stack<typename T::scheduler::task *> &>;
-    { w.sc } -> same_as<typename T::scheduler &>;
-} && sched::scheduler_type<typename T::scheduler>;
 
 class runtime {
 public:

@@ -29,11 +29,9 @@ namespace asco::base {
 
 struct coroutine_abort : std::exception {};
 
-using core::runtime_type;
-
 struct _future_void {};
 
-template<move_secure T, bool Inline, bool Blocking, runtime_type R = RT>
+template<move_secure T, bool Inline, bool Blocking>
 struct future_base {
     static_assert(!std::is_void_v<T>, "[ASCO] Use asco::future_void instead.");
     static_assert(!Inline || !Blocking, "[ASCO] Inline coroutine cannot be blocking.");
@@ -412,7 +410,7 @@ struct future_base {
         e = std::make_exception_ptr(coroutine_abort{});
     }
 
-    future_base<return_type, false, Blocking, R> dispatch(this future_base self) {
+    future_base<return_type, false, Blocking> dispatch(this future_base self) {
         if (!self.actually_non_inline)
             throw asco::runtime_error("[ASCO] dispatch(): from an actually inline future.");
 
@@ -433,7 +431,7 @@ struct future_base {
     }
 
     template<async_function<return_type> F>
-    future_base<typename std::invoke_result_t<F, return_type>::return_type, false, Blocking, R>
+    future_base<typename std::invoke_result_t<F, return_type>::return_type, false, Blocking>
     then(this future_base self, F f) {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
@@ -464,7 +462,7 @@ struct future_base {
         std::invoke_result_t<F, exception_type<F>>>;
 
     template<exception_handler F>
-    future_base<std::expected<return_type, exceptionally_expected_error_t<F>>, false, Blocking, R>
+    future_base<std::expected<return_type, exceptionally_expected_error_t<F>>, false, Blocking>
     exceptionally(this future_base self, F f) {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
@@ -494,7 +492,7 @@ struct future_base {
     }
 
     template<std::invocable F>
-    future_base<std::optional<return_type>, false, Blocking, R> aborted(this future_base self, F f) {
+    future_base<std::optional<return_type>, false, Blocking> aborted(this future_base self, F f) {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
             auto &w = worker::get_worker();
@@ -526,14 +524,14 @@ private:
     bool none{true};
 };
 
-template<move_secure T, runtime_type R = RT>
-using future = future_base<T, false, false, R>;
+template<move_secure T>
+using future = future_base<T, false, false>;
 
-template<move_secure T, runtime_type R = RT>
-using future_inline = future_base<T, true, false, R>;
+template<move_secure T>
+using future_inline = future_base<T, true, false>;
 
-template<move_secure T, runtime_type R = RT>
-using future_core = future_base<T, false, true, R>;
+template<move_secure T>
+using future_core = future_base<T, false, true>;
 
 using future_void = future<_future_void>;
 using future_void_inline = future_inline<_future_void>;
@@ -543,23 +541,21 @@ using runtime_initializer_t = std::optional<std::function<RT *()>>;
 
 #ifndef FUTURE_IMPL
 
-using core::runtime;
+extern template struct future_base<_future_void, false, false>;
+extern template struct future_base<_future_void, true, false>;
+extern template struct future_base<_future_void, false, true>;
 
-extern template struct future_base<_future_void, false, false, runtime>;
-extern template struct future_base<_future_void, true, false, runtime>;
-extern template struct future_base<_future_void, false, true, runtime>;
+extern template struct future_base<int, false, false>;
+extern template struct future_base<int, true, false>;
+extern template struct future_base<int, false, true>;
 
-extern template struct future_base<int, false, false, runtime>;
-extern template struct future_base<int, true, false, runtime>;
-extern template struct future_base<int, false, true, runtime>;
+extern template struct future_base<std::string, false, false>;
+extern template struct future_base<std::string, true, false>;
+extern template struct future_base<std::string, false, true>;
 
-extern template struct future_base<std::string, false, false, runtime>;
-extern template struct future_base<std::string, true, false, runtime>;
-extern template struct future_base<std::string, false, true, runtime>;
-
-extern template struct future_base<std::string_view, false, false, runtime>;
-extern template struct future_base<std::string_view, true, false, runtime>;
-extern template struct future_base<std::string_view, false, true, runtime>;
+extern template struct future_base<std::string_view, false, false>;
+extern template struct future_base<std::string_view, true, false>;
+extern template struct future_base<std::string_view, false, true>;
 
 #endif
 
