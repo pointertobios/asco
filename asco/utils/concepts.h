@@ -7,9 +7,13 @@
 #include <concepts>
 #include <coroutine>
 #include <exception>
+#include <type_traits>
 #include <utility>
 
 namespace asco {
+
+template<typename E>
+concept enum_type = std::is_enum_v<E>;
 
 template<typename CharT>
 concept simple_char =
