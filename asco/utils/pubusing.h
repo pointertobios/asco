@@ -6,34 +6,29 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 
-#ifdef _WIN32
-#    define __always_inline __forceinline
+#ifdef __linux__
+#    define __asco_always_inline __inline __attribute__((__always_inline__))
+#elifdef _WIN32
+#    define __asco_always_inline __forceinline
 #endif
 
 namespace asco::types {
 
 using size_t = uintptr_t;
+using ssize_t = intptr_t;
 
 using atomic_size_t = std::atomic<size_t>;
 using atomic_int64_t = std::atomic_int64_t;
 using atomic_bool = std::atomic_bool;
 
+using offset_t = std::ptrdiff_t;
+
 template<typename T>
 using atomic = std::atomic<T>;
 
 using morder = std::memory_order;
-
-#ifdef _WIN32
-using __u8 = unsigned char;
-#endif
-
-template<typename T>
-__always_inline void blackbox(T) noexcept {}
-
-template<typename T>
-    requires(!(std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T>))
-__always_inline void blackbox(T &) noexcept {}
 
 };  // namespace asco::types
 

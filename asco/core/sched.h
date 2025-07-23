@@ -47,28 +47,28 @@ struct task {
 
     bool mutable destroyed{false};
 
-    __always_inline void coro_frame_exit() {
+    __asco_always_inline void coro_frame_exit() {
         coro_local_frame->subframe_exit();
         if (!coro_local_frame->get_ref_count())
             delete coro_local_frame;
     }
 
-    __always_inline bool operator==(task &rhs) const { return id == rhs.id; }
+    __asco_always_inline bool operator==(task &rhs) const { return id == rhs.id; }
 
-    __always_inline void resume() const {
+    __asco_always_inline void resume() const {
         if (handle.done())
             throw asco::runtime_error("[ASCO] task::resume() Inner error: task is done but not destroyed.");
         handle.resume();
     }
 
-    __always_inline bool done() const {
+    __asco_always_inline bool done() const {
         if (destroyed)
             return true;
         bool b = handle.done();
         return b;
     }
 
-    __always_inline void destroy() {
+    __asco_always_inline void destroy() {
         if (!destroyed) {
 #ifdef ASCO_PERF_RECORD
             if (perf_recorder)
@@ -80,9 +80,9 @@ struct task {
         }
     }
 
-    __always_inline void set_real_time() { real_time = true; }
+    __asco_always_inline void set_real_time() { real_time = true; }
 
-    __always_inline void reset_real_time() {
+    __asco_always_inline void reset_real_time() {
         if (real_time)
             real_time = false;
     }
