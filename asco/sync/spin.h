@@ -41,18 +41,18 @@ public:
 
         ~guard() { s.locked.store(false, morder::release); }
 
-        T &operator*() { return s.value; }
+        T &operator*() noexcept { return s.value; }
 
-        const T &operator*() const { return s.value; }
+        const T &operator*() const noexcept { return s.value; }
 
-        T *operator->() { return &s.value; }
+        T *operator->() noexcept { return &s.value; }
 
-        const T *operator->() const { return &s.value; }
+        const T *operator->() const noexcept { return &s.value; }
     };
 
-    guard lock() { return guard{*this}; }
+    guard lock() noexcept { return guard{*this}; }
 
-    T &&get() { return std::move(value); }
+    T &&get() noexcept { return std::move(value); }
 
 private:
     T value;

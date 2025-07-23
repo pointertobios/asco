@@ -33,7 +33,7 @@ public:
         rwspin &rw;
 
     public:
-        read_guard(rwspin &rw)
+        read_guard(rwspin &rw) noexcept
                 : rw{rw} {
             size_t expected;
             do {
@@ -43,35 +43,35 @@ public:
                 !rw.state.compare_exchange_weak(expected, expected + 1, morder::acquire, morder::relaxed));
         }
 
-        ~read_guard() { rw.state.fetch_sub(1, morder::release); }
+        ~read_guard() noexcept { rw.state.fetch_sub(1, morder::release); }
 
-        const T &operator*() const { return rw.value; }
+        const T &operator*() const noexcept { return rw.value; }
 
-        const T *operator->() const { return &rw.value; }
+        const T *operator->() const noexcept { return &rw.value; }
     };
 
     class write_guard {
         rwspin &rw;
 
     public:
-        write_guard(rwspin &rw)
+        write_guard(rwspin &rw) noexcept
                 : rw{rw} {
             for (size_t expected = 0;
                  !rw.state.compare_exchange_weak(expected, write_mask, morder::acquire, morder::relaxed);
                  expected = 0);
         }
 
-        ~write_guard() { rw.state.store(0, morder::release); }
+        ~write_guard() noexcept { rw.state.store(0, morder::release); }
 
-        T &operator*() { return rw.value; }
-        const T &operator*() const { return rw.value; }
+        T &operator*() noexcept { return rw.value; }
+        const T &operator*() const noexcept { return rw.value; }
 
-        T *operator->() { return &rw.value; }
-        const T *operator->() const { return &rw.value; }
+        T *operator->() noexcept { return &rw.value; }
+        const T *operator->() const noexcept { return &rw.value; }
     };
 
-    read_guard read() { return read_guard{*this}; }
-    write_guard write() { return write_guard{*this}; }
+    read_guard read() noexcept { return read_guard{*this}; }
+    write_guard write() noexcept { return write_guard{*this}; }
 
 private:
     T value;
