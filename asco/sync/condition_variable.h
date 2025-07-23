@@ -18,23 +18,10 @@ class condition_variable {
 public:
     condition_variable() = default;
 
-    void notify_one() {
-        auto guard = waiting_tasks.lock();
-        if (!guard->empty()) {
-            auto id = std::move(guard->front());
-            guard->pop_front();
+    void notify_one();
+    void notify_all();
 
-            RT::get_runtime().awake(id);
-        }
-    }
-
-    void notify_all() {
-        auto guard = waiting_tasks.lock();
-        for (auto id : *guard) { RT::get_runtime().awake(id); }
-        guard->clear();
-    }
-
-    template<typename F>
+    template<std::invocable F>
         requires std::is_same_v<std::invoke_result_t<F>, bool>
     future_void_inline wait(F predicator) {
         auto this_id = this_coro::get_id();

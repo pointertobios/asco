@@ -9,6 +9,7 @@ set(ASCO_SOURCES
     future.cpp
     futures.cpp
     io/file.cpp
+    sync/condition_variable.cpp
     unwind/unwind.cpp
 )
 
