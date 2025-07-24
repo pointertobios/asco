@@ -69,9 +69,8 @@ future_void test_mutex_locks() {
     auto task = co_await lock.write().then([](rwlock<int>::write_guard write_guard) -> future<future_void> {
         std::cout << "Write lock acquired: " << *write_guard << std::endl;
 
-        rwlock<int> coro_local(lock);
-
-        auto task = [&]() -> future_void {
+        auto task = []() -> future_void {
+            rwlock<int> coro_local(lock);
             auto read_guard = co_await lock.read();
             std::cout << "Read lock acquired after write lock released: " << *read_guard << std::endl;
             assert(*read_guard == 10);
