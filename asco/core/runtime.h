@@ -6,7 +6,6 @@
 
 #include <coroutine>
 #include <functional>
-#include <map>
 #include <optional>
 #include <semaphore>
 #include <stack>
@@ -92,8 +91,8 @@ public:
     static bool task_available(task_id id);
     static worker &get_worker_from_task_id(task_id id);
     static void set_task_sem(task_id id);
-    static rwspin<std::map<task_id, std::binary_semaphore *>> workers_by_task_id_sem;
-    static std::map<task_id, worker *> workers_by_task_id;
+    static rwspin<std::unordered_map<task_id, std::binary_semaphore *>> workers_by_task_id_sem;
+    static std::unordered_map<task_id, worker *> workers_by_task_id;
 
 private:
     static std::unordered_map<std::thread::id, worker *> workers;

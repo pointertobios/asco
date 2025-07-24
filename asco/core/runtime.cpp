@@ -5,9 +5,9 @@
 
 #include <cassert>
 #include <fstream>
-#include <iostream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 #ifdef __linux__
 #    include <pthread.h>
@@ -16,8 +16,8 @@
 
 namespace asco::core {
 
-rwspin<std::map<worker::task_id, std::binary_semaphore *>> worker::workers_by_task_id_sem;
-std::map<worker::task_id, worker *> worker::workers_by_task_id;
+rwspin<std::unordered_map<worker::task_id, std::binary_semaphore *>> worker::workers_by_task_id_sem;
+std::unordered_map<worker::task_id, worker *> worker::workers_by_task_id;
 std::unordered_map<std::thread::id, worker *> worker::workers;
 thread_local worker *worker::current_worker{nullptr};
 runtime *runtime::current_runtime{nullptr};
@@ -179,14 +179,8 @@ runtime::runtime(size_t nthread_)
 
             if (auto task = self.sc.sched(); task) {
                 self.running_task.push(*task);
-                try {
-                    if (!(*task)->done())
-                        (*task)->resume();
-                } catch (std::exception &e) {
-                    std::cerr << std::format(
-                        "[ASCO] worker thread: Inner error at task {}: {}\n", (*task)->id, e.what());
-                    break;
-                }
+                if (!(*task)->done())
+                    (*task)->resume();
 
                 while (!self.running_task.empty()) {
                     auto task = self.running_task.top();
