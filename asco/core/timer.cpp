@@ -53,7 +53,7 @@ bool timer::task_attaching(task_id id) { return attaching_tasks.lock()->contains
 
 void timer::run() {
     if (awake_points.lock()->empty()) {
-        std::this_thread::sleep_for(5ms);
+        std::this_thread::interruptable_sleep_for(5ms);
     }
     if (awake_points.lock()->empty())
         return;

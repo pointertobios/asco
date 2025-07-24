@@ -22,6 +22,7 @@ using ssize_t = intptr_t;
 using atomic_size_t = std::atomic<size_t>;
 using atomic_int64_t = std::atomic_int64_t;
 using atomic_bool = std::atomic_bool;
+using atomic_flag = std::atomic_flag;
 
 using offset_t = std::ptrdiff_t;
 
