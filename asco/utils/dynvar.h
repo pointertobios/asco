@@ -8,7 +8,7 @@
 
 #include <asco/utils/pubusing.h>
 
-namespace asco {
+namespace asco::inner {
 
 struct dynvar {
     using destructor = std::function<void(void *)>;
@@ -18,6 +18,6 @@ struct dynvar {
     destructor deconstruct;
 };
 
-};  // namespace asco
+};  // namespace asco::inner
 
 #endif

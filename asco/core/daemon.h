@@ -43,7 +43,7 @@ private:
 
 namespace asco {
 
-using daemon = core::daemon;
+using core::daemon;
 
 };  // namespace asco
 

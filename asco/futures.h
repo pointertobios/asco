@@ -18,7 +18,7 @@ template<future_type F>
 F::return_type move_back_return_value() {
     auto h_ = RT::__worker::get_worker().current_task().handle;
     typename F::corohandle h = *(typename F::corohandle *)(&h_);
-    if (h.promise().future_type_hash != type_hash<F>())
+    if (h.promise().future_type_hash != inner::type_hash<F>())
         throw asco::runtime_error(
             "[ASCO] move_back_return_value<F, T>(): F is not matched with your current coroutine.");
     // If a task aborted and must move back return value, its awaiter will always exists.
@@ -29,7 +29,7 @@ template<future_type F>
 void throw_coroutine_abort() {
     auto h_ = RT::__worker::get_worker().current_task().handle;
     typename F::corohandle h = *(typename F::corohandle *)(&h_);
-    if (h.promise().future_type_hash != type_hash<F>())
+    if (h.promise().future_type_hash != inner::type_hash<F>())
         throw asco::runtime_error(
             "[ASCO] move_back_return_value<F, T>(): F is not matched with your current coroutine.");
     h.promise().set_abort_exception();

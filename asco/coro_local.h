@@ -19,7 +19,7 @@ using namespace types;
 
 struct __coro_local_frame {
     __coro_local_frame *prev{nullptr};
-    std::unordered_map<size_t, dynvar> vars;
+    std::unordered_map<size_t, inner::dynvar> vars;
 
     // Just like other corolocal variables, tracing stack must be destroyed after all sub coroutine exited.
     unwind::coro_trace tracing_stack;
@@ -69,7 +69,7 @@ struct __coro_local_frame {
     template<typename T, size_t Hash>
     T &get_var(const char *name) {
         if (auto it = vars.find(Hash); it != vars.end()) {
-            if (it->second.type != type_hash<T>())
+            if (it->second.type != inner::type_hash<T>())
                 throw asco::runtime_error(
                     "[ASCO] __coro_local_frame::get_var(): Coroutine local variable type mismatch");
             return *reinterpret_cast<T *>(it->second.p);
@@ -83,12 +83,12 @@ struct __coro_local_frame {
     }
 
     template<typename T, size_t Hash>
-    T &decl_var(const char *name, T *pt, dynvar::destructor destructor) {
+    T &decl_var(const char *name, T *pt, inner::dynvar::destructor destructor) {
         if (auto it = vars.find(Hash); it != vars.end())
             throw asco::runtime_error(
                 std::format("[ASCO] Coroutine local variable \'{}\' already declared", name));
 
-        vars[Hash] = dynvar{type_hash<T>(), pt, destructor};
+        vars[Hash] = inner::dynvar{inner::type_hash<T>(), pt, destructor};
         return *pt;
     }
 
@@ -105,32 +105,37 @@ struct __coro_local_frame {
 
 };  // namespace asco::base
 
-#define coro_local(name)               \
-    &name = RT::__worker::get_worker() \
-                .current_task()        \
-                .coro_local_frame      \
-                ->get_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name)
+#define coro_local(name)                                                                                  \
+    &name =                                                                                               \
+        RT::__worker::get_worker()                                                                        \
+            .current_task()                                                                               \
+            .coro_local_frame                                                                             \
+            ->get_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
+                #name)
 
-#define decl_local_1arg(name)      \
-    &name =                        \
-        RT::__worker::get_worker() \
-            .current_task()        \
-            .coro_local_frame      \
-            ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name)
+#define decl_local_1arg(name)                                                                              \
+    &name =                                                                                                \
+        RT::__worker::get_worker()                                                                         \
+            .current_task()                                                                                \
+            .coro_local_frame                                                                              \
+            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
+                #name)
 
-#define decl_local_2arg(name, ptr)                                                                      \
-    &name = RT::__worker::get_worker()                                                                  \
-                .current_task()                                                                         \
-                .coro_local_frame                                                                       \
-                ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>( \
-                    #name, ptr)
+#define decl_local_2arg(name, ptr)                                                                         \
+    &name =                                                                                                \
+        RT::__worker::get_worker()                                                                         \
+            .current_task()                                                                                \
+            .coro_local_frame                                                                              \
+            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
+                #name, ptr)
 
-#define decl_local_3arg(name, ptr, destructor)                                                          \
-    &name = RT::__worker::get_worker()                                                                  \
-                .current_task()                                                                         \
-                .coro_local_frame                                                                       \
-                ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>( \
-                    #name, ptr, destructor)
+#define decl_local_3arg(name, ptr, destructor)                                                             \
+    &name =                                                                                                \
+        RT::__worker::get_worker()                                                                         \
+            .current_task()                                                                                \
+            .coro_local_frame                                                                              \
+            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
+                #name, ptr, destructor)
 
 #define decl_local(...) \
     __dispatch(__VA_ARGS__, decl_local_3arg, decl_local_2arg, decl_local_1arg)(__VA_ARGS__)

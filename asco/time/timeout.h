@@ -14,6 +14,8 @@
 
 namespace asco::time {
 
+using namespace concepts;
+
 template<typename Ti, async_function F>
     requires std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>
 future_inline<std::optional<typename std::invoke_result_t<F>::return_type>> timeout(Ti time, F f) {
@@ -35,6 +37,7 @@ future_inline<std::optional<typename std::invoke_result_t<F>::return_type>> time
 namespace asco {
 
 using time::timeout;
-};
+
+};  // namespace asco
 
 #endif

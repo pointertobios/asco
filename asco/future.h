@@ -30,6 +30,7 @@
 namespace asco::base {
 
 using namespace types;
+using namespace concepts;
 
 struct coroutine_abort : std::exception {};
 
@@ -58,7 +59,7 @@ struct future_base {
     };
 
     struct promise_type {
-        size_t future_type_hash{type_hash<future_base<T, Inline, Blocking>>()};
+        size_t future_type_hash{inner::type_hash<future_base<T, Inline, Blocking>>()};
 
         size_t task_id{};
 
@@ -128,7 +129,7 @@ struct future_base {
                 auto &worker = worker::get_worker();
                 auto currid = worker.current_task_id();
                 if (rt.in_group(currid) && rt.group(currid)->is_origin(currid)
-                    && group_local_exists<__consteval_str_hash("__asco_select_sem__")>()) {
+                    && group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()) {
                     rt.join_task_to_group(task_id, currid);
                 }
             }
@@ -162,7 +163,7 @@ struct future_base {
             task_id = worker::get_worker().current_task_id();
             // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
             // `__asco_select_sem__` for continue running
-            if (group_local_exists<__consteval_str_hash("__asco_select_sem__")>()
+            if (group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()
                 && !rt.group(task_id)->is_origin(task_id)) {
                 std::binary_semaphore group_local(__asco_select_sem__);
                 if (__asco_select_sem__.try_acquire()) {
@@ -186,7 +187,7 @@ struct future_base {
             auto caller_task_id = state->caller_task_id.load();
             // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
             // `__asco_select_sem__` for continue running
-            if (group_local_exists<__consteval_str_hash("__asco_select_sem__")>()) {
+            if (group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()) {
                 auto &rt = RT::get_runtime();
                 rt.exit_group(task_id);
                 if (caller_task_id)

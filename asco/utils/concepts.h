@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace asco {
+namespace asco::concepts {
 
 template<typename E>
 concept enum_type = std::is_enum_v<E>;
@@ -103,6 +103,6 @@ concept exception_handler =
 template<exception_handler F>
 using exception_type = first_argument_t<F>;
 
-};  // namespace asco
+};  // namespace asco::concepts
 
 #endif

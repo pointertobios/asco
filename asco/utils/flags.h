@@ -10,6 +10,7 @@
 namespace asco::utils {
 
 using namespace types;
+using namespace concepts;
 
 // The enum members cannot have overlapped bit(s). Oneday C++26 come out, we would use reflection to assert
 // this.
@@ -62,7 +63,7 @@ private:
 
 namespace asco {
 
-template<enum_type E>
+template<concepts::enum_type E>
 using flags = utils::flags<E>;
 
 };

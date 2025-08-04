@@ -6,7 +6,7 @@
 
 #include <asco/utils/pubusing.h>
 
-namespace asco {
+namespace asco::inner {
 
 consteval size_t __consteval_str_hash(const char *name) {
     constexpr size_t offset_basis = 0xcbf29ce484222325ULL;
@@ -32,6 +32,6 @@ consteval size_t type_hash() {
     return p;
 }
 
-};  // namespace asco
+};  // namespace asco::inner
 
 #endif

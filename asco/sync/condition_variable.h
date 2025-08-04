@@ -55,7 +55,7 @@ private:
 
 namespace asco {
 
-using condition_variable = sync::condition_variable;
+using sync::condition_variable;
 
 };  // namespace asco
 

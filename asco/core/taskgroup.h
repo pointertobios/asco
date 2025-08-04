@@ -59,19 +59,19 @@ public:
         if (auto it = vars.find(Hash); it == vars.end())
             throw asco::runtime_error(std::format("[ASCO] Task group local variable \'{}\' not found", name));
 
-        if (vars[Hash].type != type_hash<T>())
+        if (vars[Hash].type != inner::type_hash<T>())
             throw asco::runtime_error(
                 std::format("[ASCO] Task group local variable \'{}\' type mismatch", name));
         return *reinterpret_cast<T *>(vars[Hash].p);
     }
 
     template<typename T, size_t Hash>
-    T &decl_var(const char *name, T *pt, dynvar::destructor destructor) {
+    T &decl_var(const char *name, T *pt, inner::dynvar::destructor destructor) {
         if (auto it = vars.find(Hash); it != vars.end())
             throw asco::runtime_error(
                 std::format("[ASCO] Task group local variable \'{}\' already declared", name));
 
-        vars[Hash] = dynvar{type_hash<T>(), pt, destructor};
+        vars[Hash] = inner::dynvar{inner::type_hash<T>(), pt, destructor};
         return *pt;
     }
 
@@ -97,33 +97,38 @@ private:
     std::unordered_set<task_id> tasks;
     std::unordered_set<task_id> origin_tasks;
 
-    std::unordered_map<size_t, dynvar> vars;
+    std::unordered_map<size_t, inner::dynvar> vars;
 };
 
 };  // namespace asco::core
 
-#define group_local(name)                                            \
-    &name = RT::get_runtime()                                        \
-                .group(RT::__worker::get_worker().current_task_id()) \
-                ->get_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name)
+#define group_local(name)                                                                                 \
+    &name =                                                                                               \
+        RT::get_runtime()                                                                                 \
+            .group(RT::__worker::get_worker().current_task_id())                                          \
+            ->get_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
+                #name)
 
-#define decl_glocal_1arg(name)                                   \
-    &name =                                                      \
-        RT::get_runtime()                                        \
-            .group(RT::__worker::get_worker().current_task_id()) \
-            ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>(#name)
+#define decl_glocal_1arg(name)                                                                             \
+    &name =                                                                                                \
+        RT::get_runtime()                                                                                  \
+            .group(RT::__worker::get_worker().current_task_id())                                           \
+            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
+                #name)
 
-#define decl_glocal_2arg(name, ptr)                                                                     \
-    &name = RT::get_runtime()                                                                           \
-                .group(RT::__worker::get_worker().current_task_id())                                    \
-                ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>( \
-                    #name, ptr)
+#define decl_glocal_2arg(name, ptr)                                                                        \
+    &name =                                                                                                \
+        RT::get_runtime()                                                                                  \
+            .group(RT::__worker::get_worker().current_task_id())                                           \
+            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
+                #name, ptr)
 
-#define decl_glocal_3arg(name, ptr, destructor)                                                         \
-    &name = RT::get_runtime()                                                                           \
-                .group(RT::__worker::get_worker().current_task_id())                                    \
-                ->decl_var<std::remove_reference_t<decltype(name)>, asco::__consteval_str_hash(#name)>( \
-                    #name, ptr, destructor)
+#define decl_glocal_3arg(name, ptr, destructor)                                                            \
+    &name =                                                                                                \
+        RT::get_runtime()                                                                                  \
+            .group(RT::__worker::get_worker().current_task_id())                                           \
+            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
+                #name, ptr, destructor)
 
 #define decl_glocal(...) \
     __dispatch(__VA_ARGS__, decl_glocal_3arg, decl_glocal_2arg, decl_glocal_1arg)(__VA_ARGS__)
@@ -131,6 +136,6 @@ private:
 #define del_glocal(name)                                     \
     RT::get_runtime()                                        \
         .group(RT::__worker::get_worker().current_task_id()) \
-        ->del_var<asco::__consteval_str_hash(name)>()
+        ->del_var<asco::inner::__consteval_str_hash(name)>()
 
 #endif

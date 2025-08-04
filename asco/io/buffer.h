@@ -20,6 +20,7 @@
 namespace asco::io {
 
 using namespace types;
+using namespace concepts;
 
 template<simple_char CharT = char>
 class buffer {
@@ -381,7 +382,7 @@ public:
 
 namespace asco {
 
-template<simple_char CharT>
+template<concepts::simple_char CharT>
 using buffer = io::buffer<CharT>;
 
 };

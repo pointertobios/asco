@@ -229,8 +229,7 @@ private:
 
 namespace asco {
 
-template<typename T>
-using rwlock = sync::rwlock<T>;
+using sync::rwlock;
 
 };  // namespace asco
 
