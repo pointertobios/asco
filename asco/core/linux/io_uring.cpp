@@ -142,14 +142,13 @@ uring::req_token uring::submit(ioreq::open req) {
     ::open_how how{
         req.mode.raw(), static_cast<::mode_t>(req.perm),
         (req.resolve | ioreq::open::resolve_mode::in_root).raw()};
-    req.path_copy = std::string(req.path);
 
     auto [it, _] = unpeeked_opens.lock()->emplace(reqn, std::move(req));
 
     // God knows why openat2 always fail with -EINVAL.
     // Linux documentations are completely bullshit.
-    // ::io_uring_prep_openat2(sqe, AT_FDCWD, it->second.path_copy.c_str(), &how);
-    ::io_uring_prep_openat(sqe, AT_FDCWD, it->second.path_copy.c_str(), how.flags, how.mode);
+    // ::io_uring_prep_openat2(sqe, AT_FDCWD, it->second.path.c_str(), &how);
+    ::io_uring_prep_openat(sqe, AT_FDCWD, it->second.path.c_str(), how.flags, how.mode);
     ::io_uring_submit(&this->ring);
 
     return req_token{this->worker_id, reqn};

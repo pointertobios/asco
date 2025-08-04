@@ -57,7 +57,7 @@ public:
 
     file &operator=(file &&);
 
-    inline static constexpr opener at(std::string path) noexcept;
+    inline static constexpr opener at(std::string_view path) noexcept;
 
     // Unabortable
     future_void_inline open(
@@ -122,10 +122,13 @@ struct open_file {
 };
 
 struct opener {
-    std::string _path;
+    std::string_view _path;
     flags<file::options> opts{file::options::read};
     flags<file::resolve_mode> resolve{};
     uint64_t perm{};
+
+    inline opener(std::string_view path)
+            : _path(path) {}
 
     inline constexpr opener &&read(this opener &&self, bool b = true) noexcept {
         if (b)
@@ -287,13 +290,13 @@ struct opener {
     inline future<std::expected<file, int>> open(this opener &&self) {
         if (!self.perm && self.opts.has(file::options::create))
             throw inner_exception("[ASCO] opener::open(): file access mode not set while creating file.");
-        return open_file::open(std::move(self._path), self.opts, self.perm, self.resolve);
+        return open_file::open(std::string(self._path), self.opts, self.perm, self.resolve);
     }
 
     inline future_void_inline reopen(this opener &&self, file &f) { return f.reopen(std::move(self)); }
 };
 
-constexpr opener file::at(std::string path) noexcept { return {std::move(path)}; }
+constexpr opener file::at(std::string_view path) noexcept { return {path}; }
 
 };  // namespace asco::io
 

@@ -13,7 +13,6 @@
 #include <cstdint>
 #include <deque>
 #include <flat_map>
-#include <string_view>
 #include <unordered_map>
 
 #include <liburing.h>
@@ -54,11 +53,10 @@ struct open {
         in_root = RESOLVE_IN_ROOT,
         cached = RESOLVE_CACHED,
     };
-    std::string_view path;
+    std::string path;
     flags<open_mode> mode;
     uint64_t perm;
     flags<resolve_mode> resolve;
-    std::string path_copy{};
 };
 
 struct close {

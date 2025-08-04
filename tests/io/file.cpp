@@ -19,10 +19,8 @@ future<int> async_main() {
         std::println("--- Normal tests ---");
 
         {
-            std::string testpath = "asco_test_file.txt";
-
             {
-                auto ores = co_await file::at(testpath)
+                auto ores = co_await file::at("asco_test_file.txt")
                                 .create()
                                 .mode(0644)
                                 .write()  //
@@ -43,7 +41,7 @@ future<int> async_main() {
             }
 
             {
-                auto ores = co_await file::at(testpath).read().open();
+                auto ores = co_await file::at("asco_test_file.txt").read().open();
                 assert(ores.has_value());
                 auto f = std::move(ores.value());
 
@@ -52,7 +50,7 @@ future<int> async_main() {
                 assert(partial.size() == 10);
                 std::println("First 10 bytes: \'{}\'.", std::move(partial).to_string());
             }
-            ::system(std::format("rm {}", testpath).c_str());
+            ::system(std::format("rm {}", "asco_test_file.txt").c_str());
         }
 
         {

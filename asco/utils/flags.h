@@ -55,7 +55,7 @@ public:
     void clear() { value = 0; }
 
 private:
-    uint64_t value;
+    uint64_t value{0};
 };
 
 };  // namespace asco::utils

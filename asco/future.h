@@ -62,7 +62,7 @@ struct future_base {
 
         size_t task_id{};
 
-        std::shared_ptr<future_state> state;
+        std::shared_ptr<future_state> state{std::make_shared<future_state>()};
 
         void *operator new(std::size_t n) noexcept {
             auto *p = static_cast<size_t *>(::operator new(n + 2 * sizeof(size_t)));
@@ -152,7 +152,6 @@ struct future_base {
             }
 
             auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
-            state = std::make_shared<future_state>();
             return future_base<T, Inline, Blocking>(coro, task_id, ani, state);
         }
 
