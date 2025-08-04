@@ -9,14 +9,24 @@ namespace asco::io {
 
 file::file(file &&rhs)
         : none{rhs.none}
+#ifdef __linux__
         , fd{rhs.fd}
+#endif
         , path{std::move(rhs.path)}
         , opts{rhs.opts}
-        , resolve{rhs.resolve} {
+        , resolve{rhs.resolve}
+        , pread{rhs.pread}
+        , pwrite{rhs.pwrite}
+#ifdef ASCO_IO_URING
+        , aborted_token{std::move(rhs.aborted_token)}
+#endif
+        , aborted_buffer{std::move(rhs.aborted_buffer)} {
     rhs.none = true;
     rhs.fd = -1;
     rhs.opts.clear();
     rhs.resolve.clear();
+    rhs.pread = 0;
+    rhs.pwrite = 0;
 }
 
 file::~file() {
@@ -26,25 +36,38 @@ file::~file() {
 
 file::file(int fd, std::string path, flags<options> opts, flags<resolve_mode> resolve)
         : none{false}
+#ifdef __linux__
         , fd{fd}
+#endif
         , path{std::move(path)}
         , opts{opts}
-        , resolve{resolve} {}
+        , resolve{resolve} {
+}
 
 file &file::operator=(file &&rhs) {
     if (!none)
         close();
 
     none = rhs.none;
+#ifdef __linux__
     fd = rhs.fd;
+#endif
     path = std::move(rhs.path);
     opts = rhs.opts;
     resolve = rhs.resolve;
+    pread = rhs.pread;
+    pwrite = rhs.pwrite;
+#ifdef ASCO_IO_URING
+    aborted_token = std::move(rhs.aborted_token);
+#endif
+    aborted_buffer = std::move(rhs.aborted_buffer);
 
     rhs.none = true;
     rhs.fd = -1;
     rhs.opts.clear();
     rhs.resolve.clear();
+    rhs.pread = 0;
+    rhs.pwrite = 0;
 
     return *this;
 }

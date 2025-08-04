@@ -96,7 +96,12 @@ future<std::expected<file, int>> open_file::open(
             if (*res < 0)
                 co_return std::unexpected{*res};
 
-            co_return file{static_cast<int>(*res), std::move(path), opts, resolve};
+            auto f = file{static_cast<int>(*res), std::move(path), opts, resolve};
+            if (opts.has(file::options::append)) {
+                f.seekg(0, seekpos::end);
+                f.seekp(0, seekpos::end);
+            }
+            co_return std::move(f);
         }
     }
 }

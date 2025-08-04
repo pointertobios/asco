@@ -7,10 +7,10 @@
 #include <asco/exception.h>
 #include <asco/future.h>
 #include <asco/io/buffer.h>
+#include <asco/io/bufio.h>
 #include <asco/utils/flags.h>
 
 #include <chrono>
-#include <expected>
 #include <optional>
 #include <string>
 
@@ -52,6 +52,8 @@ public:
     file() = default;
 
     file(file &&);
+
+    file(const file &) = delete;
 
     ~file();
 
@@ -302,8 +304,8 @@ constexpr opener file::at(std::string_view path) noexcept { return {path}; }
 
 namespace asco {
 
-using file = io::file;
+using io::file;
 
-};
+};  // namespace asco
 
 #endif
