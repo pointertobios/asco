@@ -11,6 +11,7 @@
 #include <asco/utils/flags.h>
 
 #include <chrono>
+#include <expected>
 #include <optional>
 #include <string>
 
@@ -75,8 +76,14 @@ public:
     // Platform related, unabortable
     future<std::optional<io::buffer<>>> write(buffer<> buf);
 
+    enum class read_result {
+        eof,
+        interrupted,
+        again,
+    };
+
     // Platform related
-    future<buffer<>> read(size_t nbytes);
+    future<std::expected<buffer<>, read_result>> read(size_t nbytes);
 
     enum class seekpos { begin, current, end };
 

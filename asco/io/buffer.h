@@ -382,7 +382,7 @@ public:
 
 namespace asco {
 
-template<concepts::simple_char CharT>
+template<concepts::simple_char CharT = char>
 using buffer = io::buffer<CharT>;
 
 };

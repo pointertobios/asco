@@ -12,7 +12,7 @@
 #include <string>
 #include <string_view>
 
-using asco::future, asco::file, asco::buffer;
+using asco::future, asco::file, asco::buffer, asco::seekpos;
 
 future<int> async_main() {
     {
@@ -46,7 +46,7 @@ future<int> async_main() {
                 auto f = std::move(ores.value());
 
                 f.seekg(10);
-                auto partial = co_await f.read(10);
+                auto partial = (co_await f.read(10)).value_or(buffer{});
                 assert(partial.size() == 10);
                 std::println("First 10 bytes: \'{}\'.", std::move(partial).to_string());
             }
@@ -96,7 +96,7 @@ future<int> async_main() {
             f = std::move(ores.value());
         }
 
-        auto content = co_await f.read(10);
+        auto content = (co_await f.read(10)).value_or(buffer{});
         assert(content.size() == 0);
 
         co_await f.close();
@@ -147,7 +147,7 @@ future<int> async_main() {
             assert(ores.has_value());
             auto f = std::move(ores.value());
 
-            auto content = co_await f.read(1024);
+            auto content = (co_await f.read(1024)).value_or(buffer{});
             std::string content_str = std::move(content).to_string();
             std::println("Append test content: '{}'", content_str);
             assert(content_str.find("Initial content") != std::string::npos);
@@ -184,29 +184,29 @@ future<int> async_main() {
             assert(ores.has_value());
             auto f = std::move(ores.value());
 
-            f.seekg(5, file::seekpos::begin);
+            f.seekg(5, seekpos::begin);
             assert(f.tellg() == 5);
-            auto content1 = co_await f.read(5);
+            auto content1 = (co_await f.read(5)).value_or(buffer{});
             std::println("Read from position 5: '{}'", std::move(content1).to_string());
 
-            f.seekg(-3, file::seekpos::current);
+            f.seekg(-3, seekpos::current);
             assert(f.tellg() == 7);
-            auto content2 = co_await f.read(3);
+            auto content2 = (co_await f.read(3)).value_or(buffer{});
             std::println("Read after seekg(-3): '{}'", std::move(content2).to_string());
 
-            f.seekg(-5, file::seekpos::end);
+            f.seekg(-5, seekpos::end);
             assert(f.tellg() == 21);
-            auto content3 = co_await f.read(5);
+            auto content3 = (co_await f.read(5)).value_or(buffer{});
             std::println("Read 5 chars from end(-5): '{}'", std::move(content3).to_string());
 
-            f.seekp(10, file::seekpos::begin);
+            f.seekp(10, seekpos::begin);
             assert(f.tellp() == 10);
             buffer wbuf(std::string_view("**MODIFIED**"));
             auto res = co_await f.write(std::move(wbuf));
             assert(!res);
 
-            f.seekg(0, file::seekpos::begin);
-            auto final_content = co_await f.read(100);
+            f.seekg(0, seekpos::begin);
+            auto final_content = (co_await f.read(100)).value_or(buffer{});
             std::println("Final content after seek/write: '{}'", std::move(final_content).to_string());
         }
 

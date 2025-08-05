@@ -145,7 +145,7 @@ future<std::optional<io::buffer<>>> file::write(buffer<> buf) {
     }
 }
 
-future<io::buffer<>> file::read(size_t nbytes) {
+future<std::expected<buffer<>, file::read_result>> file::read(size_t nbytes) {
     if (none)
         throw inner_exception("[ASCO] asco::io::file::read(): file not opened");
 
@@ -209,7 +209,20 @@ after_submit:
         uring = &RT::get_runtime().get_worker_from_id(token.worker_id).get_uring();
 
         if (auto res = uring->peek(token.seq_num)) {
-            if (auto rbuf = uring->peek_read_buffer(token.seq_num, *res)) {
+            if (*res == 0) {
+                co_return std::unexpected{file::read_result::eof};
+            } else if (*res < 0) {
+                switch (-*res) {
+                case EINTR:
+                    co_return std::unexpected{file::read_result::interrupted};
+                case EAGAIN:
+                    co_return std::unexpected{file::read_result::again};
+                default:
+                    throw inner_exception(
+                        std::format(
+                            "[ASCO] asco::io::file::read(): read failed because: {}", std::strerror(-*res)));
+                }
+            } else if (auto rbuf = uring->peek_read_buffer(token.seq_num, *res)) {
                 restorer.state = 1;
                 restorer.pread_inc = *res;
                 pread += *res;
