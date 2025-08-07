@@ -6,7 +6,7 @@
 namespace asco::core::sched {
 
 void std_scheduler::push_task(task t, task_control::state initial_state) {
-    auto p = new task_control{t};
+    auto p = new task_control{std::move(t)};
     task_map.emplace(t.id, p);
     p->s = initial_state;
     if (initial_state == task_control::state::running)

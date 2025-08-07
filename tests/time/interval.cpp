@@ -6,17 +6,17 @@
 #include <asco/future.h>
 #include <asco/time/interval.h>
 
-using asco::future, asco::future_void;
+using asco::future;
 using asco::interval;
 using namespace std::chrono_literals;
 
-future_void foo() {
+future<void> foo() {
     interval in(1s);
     for (int i = 0; i < 10; i++) {
         co_await in.tick();
         std::cout << "tick foo" << std::endl;
     }
-    co_return {};
+    co_return;
 }
 
 future<int> async_main() {

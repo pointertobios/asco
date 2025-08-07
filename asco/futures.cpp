@@ -22,7 +22,7 @@ size_t clone(std::coroutine_handle<> h) {
     // Spawn coroutine and clone coroutine local frame
     size_t src_id = rt.task_id_from_corohandle(h);
     auto &src_worker = RT::__worker::get_worker_from_task_id(src_id);
-    auto src_task = src_worker.sc.get_task(src_id);
+    auto src_task = std::move(src_worker.sc.get_task(src_id));
     auto src_frame = src_task.coro_local_frame;
     size_t dst_id;
     if (src_task.is_blocking)

@@ -117,10 +117,10 @@ future<int> async_main() {
 ```c++
 condition_variable decl_local(cv);
 bool flag = false;
-auto t = [&flag] -> future_void {
+auto t = [&flag] -> future<void> {
     condition_variable coro_local(cv);
     co_await cv.wait([flag]{ return flag; });
-    co_return {};
+    co_return;
 } ();
 flag = true;
 cv.notify_one();
@@ -173,7 +173,7 @@ co_await t;
 睡眠指定的时间间隔：
 
 ```c++
-future_void_inline sleep_for(std::chrono::duration<Rep, Period>)
+future_inline<void> sleep_for(std::chrono::duration<Rep, Period>)
 ```
 
 `duration` 类型包括标准库中任意的时间间隔类型如 `nanoseconds` 、 `miliseconds` 等，以及它们对应的字面值字符串运算符。
@@ -181,7 +181,7 @@ future_void_inline sleep_for(std::chrono::duration<Rep, Period>)
 睡眠至指定的时间点：
 
 ```c++
-future_void_inline sleep_until(std::chrono::time_point<Clock, Duration>)
+future_inline<void> sleep_until(std::chrono::time_point<Clock, Duration>)
 ```
 
 ---
@@ -231,7 +231,7 @@ for (char c : str) {
 asco::binary_semaphore sem{1};
 auto task = sem.acquire();
 task.abort();
-// acquire() 返回 future_void_inline 类型，需要手动 co_await 使任务开始执行
+// acquire() 返回 future_inline<void> 类型，需要手动 co_await 使任务开始执行
 try { co_await task; } catch (coroutine_abort &) {}
 assert_eq(sem.get_counter(), 1);
 ```

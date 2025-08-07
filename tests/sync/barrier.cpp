@@ -7,15 +7,14 @@
 #include <asco/sync/barrier.h>
 
 using asco::future;
-using asco::future_void;
 
 constexpr size_t NUM_THREADS = 5;
 
-future_void worker(asco::sync::barrier<NUM_THREADS> &bar, size_t id) {
+future<void> worker(asco::sync::barrier<NUM_THREADS> &bar, size_t id) {
     std::cout << "Worker " << id << " arrived at barrier.\n";
     co_await bar.arrive().wait();
     std::cout << "Worker " << id << " passed the barrier.\n";
-    co_return {};
+    co_return;
 }
 
 future<int> async_main() {

@@ -20,13 +20,11 @@ future<int> async_main() {
         case 0: {
             co_await in1s.tick();
             std::cout << "1s\n";
-            break;
-        }
+        } break;
         case 1: {
             co_await in500ms.tick();
             std::cout << "500ms\n";
-            break;
-        }
+        } break;
         }
     }
     std::cout << "async_main exit\n";

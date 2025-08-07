@@ -10,17 +10,17 @@ inline asco::runtime_initializer_t runtime_initializer = []() {
     return new asco::core::runtime;
 };
 
-using asco::future, asco::future_void_inline;
+using asco::future, asco::future_inline;
 
 future<std::string> bar() {
     std::cout << "bar" << std::endl;
     co_return "Hello, World! from bar";
 }
 
-future_void_inline foo() {
+future_inline<void> foo() {
     auto s = co_await bar();
     std::cout << "foo got: " << s << std::endl;
-    co_return {};
+    co_return;
 }
 
 future<int> async_main() {

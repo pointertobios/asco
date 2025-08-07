@@ -22,15 +22,15 @@ public:
                 , last_arriver(last_arriver)
                 , self(self) {}
 
-        future_void_inline wait() {
+        future_inline<void> wait() {
             if (last_arriver)
-                co_return {};
+                co_return;
 
             if (*self.generation.read() != generation)
-                co_return {};
+                co_return;
 
             co_await self.sem.acquire();
-            co_return {};
+            co_return;
         }
 
     private:

@@ -10,23 +10,23 @@ namespace asco::this_coro {
 
 template<typename Ti>
     requires std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>
-future_void_inline sleep_for(Ti time) {
+future_inline<void> sleep_for(Ti time) {
     interval in{time};
     co_await in.tick();
-    co_return {};
+    co_return;
 }
 
 template<typename Tc>
     requires std::is_same_v<Tc, std::chrono::time_point<typename Tc::clock, typename Tc::duration>>
-future_void_inline sleep_until(Tc time) {
+future_inline<void> sleep_until(Tc time) {
     auto now = Tc::clock::now();
 
     if (now >= time)
-        co_return {};
+        co_return;
 
     interval in{time - now};
     co_await in.tick();
-    co_return {};
+    co_return;
 }
 
 };  // namespace asco::this_coro

@@ -61,7 +61,7 @@ public:
     }
 
     [[nodiscard("[ASCO] semaphore_base<N>::acquire(): co_await or assign its return value.")]]
-    future_void_inline acquire() {
+    future_inline<void> acquire() {
         struct re {
             semaphore_base *self;
             int state{0};
@@ -70,7 +70,7 @@ public:
                 if (!this_coro::aborted())
                     return;
 
-                this_coro::throw_coroutine_abort<future_void_inline>();
+                this_coro::throw_coroutine_abort<future_inline<void>>();
 
                 {
                     auto guard = self->waiting_tasks.lock();
@@ -121,7 +121,7 @@ public:
             counter.fetch_add(1, morder::release);
             throw coroutine_abort{};
         }
-        co_return {};
+        co_return;
     }
 
     bool try_acquire() {

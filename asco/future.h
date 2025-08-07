@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <semaphore>
+#include <type_traits>
 #include <utility>
 
 #include <asco/core/runtime.h>
@@ -22,6 +23,7 @@
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
+#include <variant>
 
 #if defined(_MSC_VER) && !defined(__clang__)
 #    error "[ASCO] Compile with clang-cl instead of MSVC"
@@ -34,11 +36,8 @@ using namespace concepts;
 
 struct coroutine_abort : std::exception {};
 
-struct _future_void {};
-
 template<move_secure T, bool Inline, bool Blocking>
 struct future_base {
-    static_assert(!std::is_void_v<T>, "[ASCO] Use asco::future_void instead.");
     static_assert(!Inline || !Blocking, "[ASCO] Inline coroutine cannot be blocking.");
 
     using worker = RT::__worker;
@@ -47,6 +46,14 @@ struct future_base {
     using corohandle = std::coroutine_handle<promise_type>;
     using return_type = T;
 
+    template<move_secure U = T>
+    struct return_value_storage {
+        char value[sizeof(U)];
+    };
+
+    template<>
+    struct return_value_storage<void> {};
+
     struct future_state {
         std::exception_ptr e;
 
@@ -54,11 +61,11 @@ struct future_base {
         std::coroutine_handle<> caller_task;
 
         atomic_bool returned{false};
-        char return_value[sizeof(T)];
         atomic_bool moved_back{false};
+        return_value_storage<> return_value;
     };
 
-    struct promise_type {
+    struct promise_base {
         size_t future_type_hash{inner::type_hash<future_base<T, Inline, Blocking>>()};
 
         size_t task_id{};
@@ -76,6 +83,8 @@ struct future_base {
             ::operator delete(q);
         }
 
+        virtual corohandle corohandle_from_promise() = 0;
+
         template<size_t Hash>
         static bool group_local_exists() {
             if (!worker::in_worker())
@@ -89,7 +98,7 @@ struct future_base {
 
         corohandle spawn(__coro_local_frame *curr_clframe, unwind::coro_trace trace) {
             auto &rt = RT::get_runtime();
-            auto coro = corohandle::from_promise(*this);
+            auto coro = corohandle_from_promise();
 
             if constexpr (!Inline) {
                 if constexpr (Blocking)
@@ -114,7 +123,7 @@ struct future_base {
                     auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
                     t.is_inline = true;
                     task_id = t.id;
-                    worker.sc.push_task(t, state::ready);
+                    worker.sc.push_task(std::move(t), state::ready);
                 }
 
                 if (worker.is_calculator)
@@ -158,7 +167,7 @@ struct future_base {
 
         std::suspend_always initial_suspend() { return {}; }
 
-        void return_value(T val) {
+        bool return_value_select_case_impl() {
             auto &rt = RT::get_runtime();
             task_id = worker::get_worker().current_task_id();
             // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
@@ -174,12 +183,10 @@ struct future_base {
                         }
                     }
                 } else {
-                    return;
+                    return true;
                 }
             }
-
-            new (static_cast<void *>(&state->return_value)) T(std::move(val));
-            state->returned.store(true);
+            return false;
         }
 
         // The inline future will return the caller_resumer to symmatrical transform to the caller task.
@@ -219,7 +226,7 @@ struct future_base {
                     rt.awake(caller_task_id);
                     RT::__worker::get_worker_from_task_id(caller_task_id)
                         .sc.get_task(caller_task_id)
-                        .waiting = 0;
+                        .waiting.store(0);
                 }
 
                 if (worker::task_available(task_id))
@@ -232,11 +239,13 @@ struct future_base {
                 if (worker::task_available(task_id))
                     rt.suspend(task_id);
 
-                rt.remove_task_map(corohandle::from_promise(*this).address());
+                rt.remove_task_map(corohandle_from_promise().address());
                 asco::core::worker::remove_task_map(task_id);
                 if (caller_task_id) {
                     rt.awake(caller_task_id);
-                    worker::get_worker_from_task_id(caller_task_id).sc.get_task(caller_task_id).waiting = 0;
+                    worker::get_worker_from_task_id(caller_task_id)
+                        .sc.get_task(caller_task_id)
+                        .waiting.store(0);
                 }
 
                 return std::suspend_always{};
@@ -254,10 +263,39 @@ struct future_base {
                     "[ASCO] Can't move back return value bacause coroutine didn't return.");
 
             state->moved_back.store(true);
-            return std::move(*reinterpret_cast<T *>(&state->return_value));
+            if constexpr (!std::is_void_v<T>)
+                return std::move(*reinterpret_cast<T *>(&state->return_value));
         }
 
         void set_abort_exception() { state->e = std::make_exception_ptr(coroutine_abort{}); }
+    };
+
+    struct return_value_mixin_promise : promise_base {
+        void return_value(std::conditional_t<std::is_void_v<T>, std::monostate, T> val)
+            requires(!std::is_void_v<T>)
+        {
+            if (promise_base::return_value_select_case_impl())
+                return;
+
+            new (static_cast<void *>(&promise_base::state->return_value)) T(std::move(val));
+            promise_base::state->returned.store(true);
+        }
+    };
+
+    struct return_void_mixin_promise : promise_base {
+        void return_void()
+            requires(std::is_void_v<T>)
+        {
+            if (promise_base::return_value_select_case_impl())
+                return;
+
+            promise_base::state->returned.store(true);
+        }
+    };
+
+    struct promise_type
+            : std::conditional_t<std::is_void_v<T>, return_void_mixin_promise, return_value_mixin_promise> {
+        corohandle corohandle_from_promise() override { return corohandle::from_promise(*this); }
     };
 
     bool await_ready() {
@@ -274,7 +312,7 @@ struct future_base {
                 auto id = rt.task_id_from_corohandle(handle);
                 state->caller_task = handle;
                 state->caller_task_id.store(id);
-                worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
+                worker::get_worker_from_task_id(id).sc.get_task(id).waiting.store(task_id);
                 rt.suspend(id);
                 return true;
             }
@@ -285,7 +323,7 @@ struct future_base {
             auto id = rt.task_id_from_corohandle(handle);
             state->caller_task = handle;
             state->caller_task_id.store(id);
-            worker::get_worker_from_task_id(id).sc.get_task(id).waiting = task_id;
+            worker::get_worker_from_task_id(id).sc.get_task(id).waiting.store(task_id);
             rt.suspend(id);
 
             auto &task_ = worker.sc.get_task(task_id);
@@ -307,7 +345,9 @@ struct future_base {
             e = nullptr;
             std::rethrow_exception(tmp);
         }
-        return std::move(*reinterpret_cast<T *>(&state->return_value));
+
+        if constexpr (!std::is_void_v<T>)
+            return std::move(*reinterpret_cast<T *>(&state->return_value));
     }
 
     T await() {
@@ -318,8 +358,10 @@ struct future_base {
             throw asco::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime workers");
 
         if constexpr (!Inline) {
-            if (state->returned.load())
-                return std::move(*reinterpret_cast<T *>(&state->return_value));
+            if constexpr (!std::is_void_v<T>) {
+                if (state->returned.load())
+                    return std::move(*reinterpret_cast<T *>(&state->return_value));
+            }
 
             RT::get_runtime().register_sync_awaiter(task_id);
             worker::get_worker_from_task_id(task_id).sc.get_sync_awaiter(task_id).acquire();
@@ -329,7 +371,9 @@ struct future_base {
                 e = nullptr;
                 std::rethrow_exception(tmp);
             }
-            return std::move(*reinterpret_cast<T *>(&state->return_value));
+
+            if constexpr (!std::is_void_v<T>)
+                return std::move(*reinterpret_cast<T *>(&state->return_value));
         } else {
             throw asco::runtime_error("[ASCO] future_inline<T> cannot be awaited in synchronized context.");
         }
@@ -414,12 +458,19 @@ struct future_base {
         if (worker::get_worker().current_task().aborted)
             throw coroutine_abort{};
 
-        auto res = co_await self;
+        if constexpr (!std::is_void_v<T>) {
+            auto res = co_await self;
 
-        if (worker::get_worker().current_task().aborted)
-            throw coroutine_abort{};
+            if (worker::get_worker().current_task().aborted)
+                throw coroutine_abort{};
 
-        co_return std::move(res);
+            co_return std::move(res);
+        } else {
+            if (worker::get_worker().current_task().aborted)
+                throw coroutine_abort{};
+
+            co_return;
+        }
     }
 
     template<async_function<return_type> F>
@@ -483,8 +534,12 @@ struct future_base {
         } catch (...) { std::rethrow_exception(std::current_exception()); }
     }
 
+    template<typename U>
+    using aborted_optional_value_t = std::conditional_t<std::is_void_v<U>, std::monostate, U>;
+
     template<std::invocable F>
-    future_base<std::optional<return_type>, false, Blocking> aborted(this future_base self, F f) {
+    future_base<std::optional<aborted_optional_value_t<return_type>>, false, Blocking>
+    aborted(this future_base self, F f) {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
             auto &w = worker::get_worker();
@@ -493,7 +548,12 @@ struct future_base {
         }
 
         try {
-            co_return std::move(co_await self);
+            if constexpr (!std::is_void_v<T>)
+                co_return co_await self;
+            else {
+                co_await self;
+                co_return std::monostate{};
+            }
         } catch (coroutine_abort &) {
             f();
             co_return std::nullopt;
@@ -511,7 +571,7 @@ private:
     std::shared_ptr<future_state> state;
 
     bool none{true};
-};
+};  // namespace asco::base
 
 template<move_secure T>
 using future = future_base<T, false, false>;
@@ -522,17 +582,13 @@ using future_inline = future_base<T, true, false>;
 template<move_secure T>
 using future_core = future_base<T, false, true>;
 
-using future_void = future<_future_void>;
-using future_void_inline = future_inline<_future_void>;
-using future_void_core = future_core<_future_void>;
-
 using runtime_initializer_t = std::optional<std::function<RT *()>>;
 
 #ifndef FUTURE_IMPL
 
-extern template struct future_base<_future_void, false, false>;
-extern template struct future_base<_future_void, true, false>;
-extern template struct future_base<_future_void, false, true>;
+extern template struct future_base<void, false, false>;
+extern template struct future_base<void, true, false>;
+extern template struct future_base<void, false, true>;
 
 extern template struct future_base<int, false, false>;
 extern template struct future_base<int, true, false>;
@@ -547,13 +603,11 @@ extern template struct future_base<std::string_view, true, false>;
 extern template struct future_base<std::string_view, false, true>;
 
 #endif
-
 };  // namespace asco::base
 
 namespace asco {
 
 using base::future, base::future_inline, base::future_core;
-using base::future_void, base::future_void_inline, base::future_void_core;
 
 using base::runtime_initializer_t;
 

@@ -9,17 +9,17 @@
 #include <asco/sync/semaphore.h>
 #include <asco/time/interval.h>
 
-using asco::future, asco::future_void, asco::binary_semaphore, asco::mutex, asco::interval;
+using asco::future, asco::binary_semaphore, asco::mutex, asco::interval;
 using namespace std::chrono_literals;
 
-future_void foo() {
+future<void> foo() {
     binary_semaphore coro_local(sem);
     sem.release();
     std::cout << "foo release semaphore, counter: " << sem.get_counter() << std::endl;
-    co_return {};
+    co_return;
 }
 
-future_void bar() {
+future<void> bar() {
     binary_semaphore coro_local(sem);
     for (int i = 0; i < 100; i++) {
         sem.release();
@@ -28,16 +28,16 @@ future_void bar() {
     }
     sem.release();
     std::cout << "bar release, counter: " << sem.get_counter() << std::endl;
-    co_return {};
+    co_return;
 }
 
-future_void fot() {
+future<void> fot() {
     mutex<int> coro_local(mut);
     std::cout << "fot lock" << std::endl;
     auto g = co_await mut.lock();
     *g = 5;
     std::cout << "fot *g: " << *g << std::endl;
-    co_return {};
+    co_return;
 }
 
 future<int> async_main() {
@@ -60,7 +60,7 @@ future<int> async_main() {
     assert(sem.get_counter() == 1);
     co_await sem.acquire();
 
-    future_void t = bar();
+    future<void> t = bar();
     for (int i = 0; i < 100; i++) {
         co_await sem.acquire();
         std::cout << i << " counter: " << sem.get_counter() << std::endl;

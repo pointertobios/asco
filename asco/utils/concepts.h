@@ -9,6 +9,7 @@
 #include <exception>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace asco::concepts {
 
@@ -20,9 +21,13 @@ concept simple_char =
     std::is_integral_v<CharT> || std::is_same_v<CharT, char> || std::is_same_v<CharT, std::byte>;
 
 template<typename T>
+using monostate_if_void = std::conditional_t<std::is_void_v<T>, std::monostate, T>;
+
+template<typename T>
 concept move_secure =
-    std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_pointer_v<T> || std::is_void_v<T>
-    || (std::is_move_constructible_v<T> && std::is_move_assignable_v<T>);
+    std::is_void_v<T> || std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_pointer_v<T>
+    || (std::is_move_constructible_v<monostate_if_void<T>>
+        && std::is_move_assignable_v<monostate_if_void<T>>);
 
 template<typename F>
 concept future_type = requires(F f) {
@@ -37,10 +42,13 @@ concept future_type = requires(F f) {
 } && requires(F::promise_type p) {
     { p.get_return_object() } -> std::same_as<F>;
     { p.initial_suspend() } -> std::same_as<std::suspend_always>;
-    { p.return_value(std::declval<typename F::return_type>()) } -> std::same_as<void>;
     { p.final_suspend() };
     { p.unhandled_exception() } -> std::same_as<void>;
-};
+} && ((!std::is_void_v<typename F::return_type> && requires(F::promise_type p) {
+                          { p.return_value(std::declval<typename F::return_type>()) } -> std::same_as<void>;
+                      }) || (std::is_void_v<typename F::return_type> && requires(F::promise_type p) {
+                          { p.return_void() } -> std::same_as<void>;
+                      }));
 
 template<typename F, typename... Args>
 concept async_function =

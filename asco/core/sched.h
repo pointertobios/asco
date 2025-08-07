@@ -42,9 +42,53 @@ struct task {
     bool real_time{false};
 
     bool aborted{false};
-    task_id waiting{0};
+    std::atomic<task_id> waiting{0};
 
     bool mutable destroyed{false};
+
+    task(
+        task_id id, std::coroutine_handle<> handle, __coro_local_frame *coro_local_frame, bool is_blocking,
+        bool is_inline = false)
+            : id(id)
+            , handle(handle)
+            , coro_local_frame(coro_local_frame)
+            , is_blocking(is_blocking)
+            , is_inline(is_inline) {}
+
+    task(task &&rhs) noexcept
+            : id(rhs.id)
+            , handle(rhs.handle)
+            , coro_local_frame(rhs.coro_local_frame)
+            , is_blocking(rhs.is_blocking)
+            , is_inline(rhs.is_inline)
+#ifdef ASCO_PERF_RECORD
+            , perf_recorder(rhs.perf_recorder)
+#endif
+            , real_time(rhs.real_time)
+            , aborted(rhs.aborted)
+            , waiting(rhs.waiting.load())
+            , destroyed(rhs.destroyed) {
+    }
+
+    task &operator=(task &&rhs) noexcept {
+        if (this == &rhs)
+            return *this;
+
+        id = rhs.id;
+        handle = rhs.handle;
+        coro_local_frame = rhs.coro_local_frame;
+        is_blocking = rhs.is_blocking;
+        is_inline = rhs.is_inline;
+#ifdef ASCO_PERF_RECORD
+        perf_recorder = rhs.perf_recorder;
+#endif
+        real_time = rhs.real_time;
+        aborted = rhs.aborted;
+        waiting.store(rhs.waiting.load());
+        destroyed = rhs.destroyed;
+
+        return *this;
+    }
 
     __asco_always_inline void coro_frame_exit() {
         coro_local_frame->subframe_exit();

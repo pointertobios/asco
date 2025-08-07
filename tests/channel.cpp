@@ -7,15 +7,15 @@
 #include <asco/channel.h>
 #include <asco/future.h>
 
-using asco::future, asco::future_void, asco::ss::channel;
+using asco::future, asco::ss::channel;
 
-future_void sending(asco::sender<int> tx) {
+future<void> sending(asco::sender<int> tx) {
     for (int i = 0; i < 30000; i++) {
         auto r = tx.send(i);
         if (r.has_value())
             break;
     }
-    co_return {};
+    co_return;
 }
 
 future<int> async_main() {

@@ -8,9 +8,9 @@
 
 namespace asco::base {
 
-template struct future_base<_future_void, false, false>;
-template struct future_base<_future_void, true, false>;
-template struct future_base<_future_void, false, true>;
+template struct future_base<void, false, false>;
+template struct future_base<void, true, false>;
+template struct future_base<void, false, true>;
 
 template struct future_base<int, false, false>;
 template struct future_base<int, true, false>;

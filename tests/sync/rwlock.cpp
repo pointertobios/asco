@@ -11,7 +11,7 @@
 #include <asco/sync/rwlock.h>
 #include <asco/time/sleep.h>
 
-using asco::future, asco::future_void, asco::rwlock;
+using asco::future, asco::future, asco::rwlock;
 using namespace std::chrono_literals;
 
 void test_constructors() {
@@ -22,7 +22,7 @@ void test_constructors() {
     std::cout << "Constructors tested successfully." << std::endl;
 }
 
-future_void test_locks() {
+future<void> test_locks() {
     rwlock<int> lock(10);
 
     {
@@ -36,10 +36,10 @@ future_void test_locks() {
         std::cout << "Write lock acquired and value updated: " << *write_guard << std::endl;
     }
 
-    co_return {};
+    co_return;
 }
 
-future_void test_nested_locks() {
+future<void> test_nested_locks() {
     rwlock<int> lock(10);
 
     {
@@ -60,21 +60,21 @@ future_void test_nested_locks() {
         std::cout << std::endl;
     }
 
-    co_return {};
+    co_return;
 }
 
-future_void test_mutex_locks() {
+future<void> test_mutex_locks() {
     rwlock<int> decl_local(lock, new rwlock<int>(10));
 
-    auto task = co_await lock.write().then([](rwlock<int>::write_guard write_guard) -> future<future_void> {
+    auto task = co_await lock.write().then([](rwlock<int>::write_guard write_guard) -> future<future<void>> {
         std::cout << "Write lock acquired: " << *write_guard << std::endl;
 
-        auto task = []() -> future_void {
+        auto task = []() -> future<void> {
             rwlock<int> coro_local(lock);
             auto read_guard = co_await lock.read();
             std::cout << "Read lock acquired after write lock released: " << *read_guard << std::endl;
             assert(*read_guard == 10);
-            co_return {};
+            co_return;
         }();
         co_await asco::this_coro::sleep_for(1s);
         std::cout << "Write lock released" << std::endl;
@@ -83,10 +83,10 @@ future_void test_mutex_locks() {
 
     co_await task;
 
-    co_return {};
+    co_return;
 }
 
-future_void test_exception_handling() {
+future<void> test_exception_handling() {
     rwlock<int> lock(10);
 
     try {
@@ -98,7 +98,7 @@ future_void test_exception_handling() {
         std::cout << "Read lock acquired after exception: " << *read_guard << std::endl;
     }
 
-    co_return {};
+    co_return;
 }
 
 future<int> async_main() {

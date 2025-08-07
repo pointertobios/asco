@@ -18,11 +18,17 @@ using namespace concepts;
 
 template<typename Ti, async_function F>
     requires std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>
-future_inline<std::optional<typename std::invoke_result_t<F>::return_type>> timeout(Ti time, F f) {
+future_inline<std::optional<monostate_if_void<typename std::invoke_result_t<F>::return_type>>>
+timeout(Ti time, F f) {
     interval in{time};
     switch (co_await select<2>{}) {
     case 0: {
-        co_return co_await f();
+        if constexpr (std::is_void_v<typename std::invoke_result_t<F>::return_type>) {
+            co_await f();
+            co_return std::monostate{};
+        } else {
+            co_return co_await f();
+        }
     }
     case 1: {
         co_await in.tick();

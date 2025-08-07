@@ -352,7 +352,7 @@ runtime::spawn(task_instance task_, __coro_local_frame *pframe, unwind::coro_tra
     auto res = task.id;
     if (gid)
         join_task_to_group(res, gid, true);
-    send_task(task);
+    send_task(std::move(task));
     return res;
 }
 
@@ -362,7 +362,7 @@ runtime::task_id runtime::spawn_blocking(
     auto res = task.id;
     if (gid)
         join_task_to_group(res, gid, true);
-    send_blocking_task(task);
+    send_blocking_task(std::move(task));
     return res;
 }
 
@@ -378,8 +378,8 @@ void runtime::abort(task_id id) {
     auto &w = worker::get_worker_from_task_id(id);
     auto &t = w.sc.get_task(id);
     t.aborted = true;
-    if (t.waiting) {
-        abort(t.waiting);
+    if (auto wid = t.waiting.load(); wid) {
+        abort(wid);
     } else {
         if (w.sc.get_state(id) != sched::std_scheduler::task_control::state::ready)
             awake(id);

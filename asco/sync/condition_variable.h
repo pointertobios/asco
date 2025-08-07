@@ -23,7 +23,7 @@ public:
 
     template<std::invocable F>
         requires std::is_same_v<std::invoke_result_t<F>, bool>
-    future_void_inline wait(F predicator) {
+    future_inline<void> wait(F predicator) {
         auto this_id = this_coro::get_id();
         while (true) {
             with(auto guard = waiting_tasks.lock()) {
@@ -44,7 +44,7 @@ public:
                 throw coroutine_abort{};
             }
         }
-        co_return {};
+        co_return;
     }
 
 private:

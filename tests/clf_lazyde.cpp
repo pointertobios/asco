@@ -8,13 +8,13 @@
 #include <asco/coro_local.h>
 #include <asco/future.h>
 
-using asco::future, asco::future_void;
+using asco::future;
 
-future_void foo() {
+future<void> foo() {
     int *coro_local(arr);
     for (int i = 0; i < 1000; i++) { arr[i] = i; }
     std::cout << "foo exited" << std::endl;
-    co_return {};
+    co_return;
 }
 
 future<int> async_main() {
