@@ -5,6 +5,7 @@
 
 #include <cstring>
 
+#include <asco/coroutine_allocator.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco::base::this_coro::inner {
@@ -13,11 +14,12 @@ size_t clone(std::coroutine_handle<> h) {
     auto &rt = RT::get_runtime();
 
     // Clone coroutine state structure
-    size_t *src = reinterpret_cast<size_t *>(h.address()) - 2;
+    size_t *src = reinterpret_cast<size_t *>(h.address()) - coroutine_allocator::header_size;
     size_t n = *src;
-    size_t *dst = reinterpret_cast<size_t *>(::operator new(n + 2 * sizeof(size_t)));
-    std::memcpy(dst, src, n + 2 * sizeof(size_t));
-    auto coh = std::coroutine_handle<>::from_address(dst + 2);
+    size_t *dst =
+        reinterpret_cast<size_t *>(coroutine_allocator::allocate(n)) - coroutine_allocator::header_size;
+    std::memcpy(dst, src, n + coroutine_allocator::header_size * sizeof(size_t));
+    auto coh = std::coroutine_handle<>::from_address(dst + coroutine_allocator::header_size);
 
     // Spawn coroutine and clone coroutine local frame
     size_t src_id = rt.task_id_from_corohandle(h);

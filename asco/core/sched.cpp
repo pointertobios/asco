@@ -147,6 +147,34 @@ void std_scheduler::destroy(task::task_id id, bool no_sync_awake) {
     susg->erase(iter);
 }
 
+void std_scheduler::free_only(task::task_id id, bool no_sync_awake) {
+    if (!no_sync_awake) {
+        if (auto it = sync_awaiters.find(id); it != sync_awaiters.end())
+            it->second->release();
+    }
+
+    auto guard = active_tasks.lock();
+    task_map.erase(id);
+    if (auto it = std::find_if(guard->begin(), guard->end(), [id](task_control *t) { return t->t.id == id; });
+        it != guard->end()) {
+        (*it)->t.free_only();
+        delete *it;
+
+        guard->erase(it);
+        return;
+    }
+
+    auto susg = suspended_tasks.lock();
+    auto iter = susg->find(id);
+    if (iter == susg->end())
+        return;
+
+    iter->second->t.free_only();
+    delete iter->second;
+
+    susg->erase(iter);
+}
+
 bool std_scheduler::task_exists(task::task_id id) {
     auto guard = active_tasks.lock();
     auto susg = suspended_tasks.lock();

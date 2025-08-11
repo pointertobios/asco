@@ -18,6 +18,7 @@
 #include <asco/core/runtime.h>
 #include <asco/core/taskgroup.h>
 #include <asco/coro_local.h>
+#include <asco/coroutine_allocator.h>
 #include <asco/perf.h>
 #include <asco/rterror.h>
 #include <asco/utils/channel.h>
@@ -72,16 +73,9 @@ struct future_base {
 
         std::shared_ptr<future_state> state{std::make_shared<future_state>()};
 
-        void *operator new(std::size_t n) noexcept {
-            auto *p = static_cast<size_t *>(::operator new(n + 2 * sizeof(size_t)));
-            *p = n;
-            return p + 2;
-        }
+        void *operator new(std::size_t n) noexcept { return coroutine_allocator::allocate(n); }
 
-        void operator delete(void *p) noexcept {
-            size_t *q = static_cast<size_t *>(p) - 2;
-            ::operator delete(q);
-        }
+        void operator delete(void *p) noexcept { coroutine_allocator::deallocate(p); }
 
         virtual corohandle corohandle_from_promise() = 0;
 
@@ -207,7 +201,7 @@ struct future_base {
                     worker.sc.get_task(task_id).aborted) {
                     if (worker::task_available(caller_task_id)) {
                         auto &w = worker::get_worker_from_task_id(caller_task_id);
-                        w.sc.destroy(caller_task_id, true);
+                        w.sc.free_only(caller_task_id, true);
                         if (w.is_calculator)
                             rt.dec_calcu_load();
                         else

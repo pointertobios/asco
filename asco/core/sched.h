@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <asco/coro_local.h>
+#include <asco/coroutine_allocator.h>
 #include <asco/perf.h>
 #include <asco/rterror.h>
 #include <asco/sync/spin.h>
@@ -123,6 +124,18 @@ struct task {
         }
     }
 
+    __asco_always_inline void free_only() {
+        if (!destroyed) {
+#ifdef ASCO_PERF_RECORD
+            if (perf_recorder)
+                delete perf_recorder;
+#endif
+            coro_frame_exit();
+            base::coroutine_allocator::deallocate(handle.address());
+            destroyed = true;
+        }
+    }
+
     __asco_always_inline void set_real_time() { real_time = true; }
 
     __asco_always_inline void reset_real_time() {
@@ -155,6 +168,7 @@ public:
     void awake(task::task_id id);
     void suspend(task::task_id id);
     void destroy(task::task_id id, bool no_sync_awake = false);
+    void free_only(task::task_id id, bool no_sync_awake = false);
 
     bool task_exists(task::task_id id);
     task &get_task(task::task_id id);
