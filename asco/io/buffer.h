@@ -8,8 +8,11 @@
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
 
+#include <algorithm>
+#include <cassert>
 #include <cstring>
 #include <memory>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -62,14 +65,7 @@ public:
 
     void push(CharT value) {
         if (buffer_chain.empty() || buffer_chain.back()->frame->ends) {
-            auto frame = std::make_shared<buffer_frame>(
-                ({
-                    auto *p = new CharT[origin_size];
-                    p[0] = value;
-                    p;
-                }),
-                origin_size, 1);
-            buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, 1));
+            buffer_chain.push_back(std::make_unique<shared_frame>(make_rawarray_buffer(1, &value), 0, 1));
         } else {
             auto &node = buffer_chain.back();
             node->size += 1;
@@ -81,7 +77,7 @@ public:
     void push(std::basic_string<CharT> &&str) {
         if (str.size() <= sso_size && !buffer_chain.empty()) {
             size_t first_section = 0;
-            if (!buffer_chain.empty() && !buffer_chain.back()->frame->ends) {
+            if (!buffer_chain.back()->frame->ends) {
                 first_section = std::min(str.size(), buffer_chain.back()->frame->rest());
 
                 auto &node = buffer_chain.back();
@@ -91,14 +87,9 @@ public:
 
             size_t rest_size = str.size() - first_section;
             if (rest_size > 0) {
-                auto frame = std::make_shared<buffer_frame>(
-                    ({
-                        auto *p = new CharT[origin_size];  // origin_size is always greater than sso_size
-                        std::memcpy(p, str.data() + first_section, rest_size);
-                        p;
-                    }),
-                    origin_size, rest_size);
-                buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, rest_size));
+                buffer_chain.push_back(
+                    std::make_unique<shared_frame>(
+                        make_rawarray_buffer(rest_size, str.data() + first_section), 0, rest_size));
             }
 
             size_sum += str.size();
@@ -117,7 +108,7 @@ public:
     void push(const std::basic_string_view<CharT> &str) {
         if (str.size() <= sso_size && !buffer_chain.empty()) {
             size_t first_section = 0;
-            if (!buffer_chain.empty() && !buffer_chain.back()->frame->ends) {
+            if (!buffer_chain.back()->frame->ends) {
                 first_section = std::min(str.size(), buffer_chain.back()->frame->rest());
 
                 auto &node = buffer_chain.back();
@@ -127,14 +118,9 @@ public:
 
             size_t rest_size = str.size() - first_section;
             if (rest_size > 0) {
-                auto frame = std::make_shared<buffer_frame>(
-                    ({
-                        auto *p = new CharT[origin_size];  // origin_size is always greater than sso_size
-                        std::memcpy(p, str.data() + first_section, rest_size);
-                        p;
-                    }),
-                    origin_size, rest_size);
-                buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, rest_size));
+                buffer_chain.push_back(
+                    std::make_unique<shared_frame>(
+                        make_rawarray_buffer(rest_size, str.data() + first_section), 0, rest_size));
             }
 
             size_sum += str.size();
@@ -160,6 +146,39 @@ public:
 
         buf.size_sum = 0;
         buf.buffer_chain.clear();
+    }
+
+    void fill_zero(size_t n) {
+        if (n <= sso_size && !buffer_chain.empty()) {
+            size_t first_section = 0;
+            if (!buffer_chain.back()->frame->ends) {
+                first_section = std::min(n, buffer_chain.back()->frame->rest());
+
+                auto &node = buffer_chain.back();
+                node->size += first_section;
+                CharT arr[first_section];
+                std::memset(arr, 0, first_section * sizeof(CharT));
+                node->frame->push(arr, first_section);
+            }
+
+            size_t rest_size = n - first_section;
+            if (rest_size > 0) {
+                buffer_chain.push_back(
+                    std::make_unique<shared_frame>(make_rawarray_buffer(rest_size), 0, rest_size));
+            }
+
+            size_sum += n;
+
+            return;
+        }
+
+        if (!buffer_chain.empty())
+            buffer_chain.back()->frame->ends = true;
+        while (n) {
+            auto size = std::min(n, origin_size);
+            buffer_chain.push_back(std::make_unique<shared_frame>(make_rawarray_buffer(size), 0, size));
+            n -= size;
+        }
     }
 
     void swap(buffer &rhs) {
@@ -207,7 +226,7 @@ public:
 
     std::basic_string<CharT> to_string(this buffer &&self) {
         std::basic_string<CharT> res;
-        for (auto &frame : self.buffer_chain) {
+        std::ranges::for_each(self.buffer_chain, [&res](auto &frame) {
             std::visit(
                 [&res, start = frame->start, size = frame->size](auto &buf) {
                     if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>)
@@ -216,16 +235,47 @@ public:
                         res.append(buf, start, size);
                 },
                 frame->frame->buffer);
-        }
+        });
         self.buffer_chain.clear();
         self.size_sum = 0;
         return res;
     }
 
+    buffer clone() const {
+        buffer new_buffer;
+
+        new_buffer.buffer_chain = buffer_chain
+                                  | std::views::transform([](auto const &f) { return f->clone(); })
+                                  | std::ranges::to<decltype(new_buffer.buffer_chain)>();
+        new_buffer.size_sum = size_sum;
+
+        return new_buffer;
+    }
+
+    void modify(this buffer &self, size_t start, buffer<CharT> buf) {
+        if (start > self.size_sum)
+            throw runtime_error("[ASCO] buffer::modify(): start out of range.");
+
+        if (start == self.size_sum) {
+            self.push(std::move(buf));
+            return;
+        }
+
+        auto [left, right] = std::move(self).split(start);
+        self = std::move(left);
+
+        auto modsize = buf.size();
+        self.push(std::move(buf));
+
+        if (right.size() > modsize) {
+            self.push(std::get<1>(std::move(right).split(modsize)));
+        }
+    }
+
     size_t buffer_count() const noexcept { return buffer_chain.size(); }
 
 private:
-    constexpr inline static size_t origin_size = 256;
+    constexpr inline static size_t origin_size = 4096;
     constexpr inline static size_t sso_size = 32;
 
     struct buffer_frame {
@@ -299,6 +349,28 @@ private:
         }
     };
 
+    static auto make_rawarray_buffer(size_t fill, const CharT *fill_with) {
+        assert(fill <= origin_size);
+        return std::make_shared<buffer_frame>(
+            ({
+                auto *p = new CharT[origin_size];
+                std::memcpy(p, fill_with, fill * sizeof(CharT));
+                p;
+            }),
+            origin_size, fill);
+    }
+
+    static auto make_rawarray_buffer(size_t fill_zero) {
+        assert(fill_zero <= origin_size);
+        return std::make_shared<buffer_frame>(
+            ({
+                auto *p = new CharT[origin_size];
+                std::memset(p, 0, fill_zero * sizeof(CharT));
+                p;
+            }),
+            origin_size, fill_zero);
+    }
+
     struct shared_frame {
         std::shared_ptr<buffer_frame> frame;
         size_t start;
@@ -311,6 +383,10 @@ private:
         }
 
         auto view() const { return std::basic_string_view<CharT>(frame->buffer + start, size); }
+
+        std::unique_ptr<shared_frame> clone() const {
+            return std::make_unique<shared_frame>(frame, start, size);
+        }
     };
 
     std::vector<std::unique_ptr<shared_frame>> buffer_chain;
@@ -342,7 +418,7 @@ public:
                 : it(it)
                 , end(end) {}
 
-        rawbuffer operator*() const {
+        const rawbuffer operator*() const {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wreturn-stack-address"
             uint8_t *ptr = static_cast<uint8_t *>(std::visit(
