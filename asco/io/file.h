@@ -22,8 +22,19 @@ struct open_file;
 
 class file {
     friend struct open_file;
+    friend struct opener;
 
 public:
+#ifdef __linux__
+    using file_raw_handle = int;
+    constexpr static int raw_handle_invalid = -1;
+
+    struct file_state {
+        struct stat st;
+        size_t size() const { return st.st_size; }
+    };
+#endif
+
     enum class options {
         read = 1,
         write = 1 << 1,
@@ -41,15 +52,6 @@ public:
         rsync = 1 << 13,
     };
 
-    enum class resolve_mode {
-        no_cross_dev = 1,
-        no_magic_links = 1 << 1,
-        no_symlinks = 1 << 2,
-        beneath = 1 << 3,
-        in_root = 1 << 4,
-        cached = 1 << 5,
-    };
-
     file() = default;
 
     file(file &&);
@@ -61,58 +63,52 @@ public:
     file &operator=(file &&);
 
     inline static constexpr opener at(std::string_view path) noexcept;
+    inline static constexpr opener at() noexcept;  // Use for reopen file
 
     // Unabortable
-    future_void_inline open(
-        std::string path, flags<file::options> opts, uint64_t perm = 0,
-        flags<file::resolve_mode> resolve = flags<file::resolve_mode>{});
+    future_inline<void> open(std::string path, flags<file::options> opts, uint64_t perm = 0);
 
     // Platform related, unabortable
-    future_void close();
+    future<void> close();
 
     // Unabortable
-    future_void_inline reopen(opener &&o);
+    future_inline<void> reopen(opener &&o);
 
     // Platform related, unabortable
-    future<std::optional<io::buffer<>>> write(buffer<> buf);
-
-    enum class read_result {
-        eof,
-        interrupted,
-        again,
-    };
+    future<std::optional<buffer<>>> write(buffer<> buf);
 
     // Platform related
     future<std::expected<buffer<>, read_result>> read(size_t nbytes);
 
-    enum class seekpos { begin, current, end };
-
     __asco_always_inline size_t seekg(ssize_t offset, seekpos whence = seekpos::current) {
-        return _seek_fp(fd, pread, offset, whence);
+        return _seek_fp(pread, offset, whence);
     }
 
     __asco_always_inline size_t seekp(ssize_t offset, seekpos whence = seekpos::current) {
-        return _seek_fp(fd, pwrite, offset, whence);
+        return _seek_fp(pwrite, offset, whence);
     }
 
     __asco_always_inline size_t tellg() const noexcept { return pread; }
     __asco_always_inline size_t tellp() const noexcept { return pwrite; }
 
-private:
-    file(int fd, std::string path, flags<file::options> opts, flags<file::resolve_mode> resolve);
+    __asco_always_inline file_raw_handle raw_handle() const noexcept { return fhandle; }
 
-    static size_t _seek_fp(int fd, size_t &fp, ssize_t offset, seekpos whence);
+    // Platform related
+    file_state state() const;
+
+private:
+    file(int fhandle, std::string path, flags<file::options> opts);
+
+    size_t _seek_fp(size_t &fp, ssize_t offset, seekpos whence);
 
     static constexpr std::chrono::microseconds max_waiting_time = std::chrono::microseconds(10);
 
     bool none{true};
 
-#ifdef __linux__
-    int fd{-1};
-#endif
+    file_raw_handle fhandle{raw_handle_invalid};
+
     std::string path;
     flags<options> opts;
-    flags<resolve_mode> resolve;
 
     size_t pread{0};
     size_t pwrite{0};
@@ -125,15 +121,13 @@ private:
 
 struct open_file {
     // Platform related, unabortable
-    static future<std::expected<file, int>> open(
-        std::string path, flags<file::options> opts, uint64_t perm = 0,
-        flags<file::resolve_mode> resolve = flags<file::resolve_mode>{});
+    static future<std::expected<file, int>>
+    open(std::string path, flags<file::options> opts, uint64_t perm = 0);
 };
 
 struct opener {
     std::string_view _path;
     flags<file::options> opts{file::options::read};
-    flags<file::resolve_mode> resolve{};
     uint64_t perm{};
 
     inline opener(std::string_view path)
@@ -243,54 +237,6 @@ struct opener {
         return std::move(self);
     }
 
-    inline constexpr opener &&no_cross_dev(this opener &&self, bool b = true) noexcept {
-        if (b)
-            self.resolve |= file::resolve_mode::no_cross_dev;
-        else
-            self.resolve -= file::resolve_mode::no_cross_dev;
-        return std::move(self);
-    }
-
-    inline constexpr opener &&no_magic_links(this opener &&self, bool b = true) noexcept {
-        if (b)
-            self.resolve |= file::resolve_mode::no_magic_links;
-        else
-            self.resolve -= file::resolve_mode::no_magic_links;
-        return std::move(self);
-    }
-
-    inline constexpr opener &&no_symlinks(this opener &&self, bool b = true) noexcept {
-        if (b)
-            self.resolve |= file::resolve_mode::no_symlinks;
-        else
-            self.resolve -= file::resolve_mode::no_symlinks;
-        return std::move(self);
-    }
-
-    inline constexpr opener &&beneath(this opener &&self, bool b = true) noexcept {
-        if (b)
-            self.resolve |= file::resolve_mode::beneath;
-        else
-            self.resolve -= file::resolve_mode::beneath;
-        return std::move(self);
-    }
-
-    inline constexpr opener &&in_root(this opener &&self, bool b = true) noexcept {
-        if (b)
-            self.resolve |= file::resolve_mode::in_root;
-        else
-            self.resolve -= file::resolve_mode::in_root;
-        return std::move(self);
-    }
-
-    inline constexpr opener &&cached(this opener &&self, bool b = true) noexcept {
-        if (b)
-            self.resolve |= file::resolve_mode::cached;
-        else
-            self.resolve -= file::resolve_mode::cached;
-        return std::move(self);
-    }
-
     inline constexpr opener &&mode(this opener &&self, uint64_t perm) noexcept {
         self.perm = perm;
         return std::move(self);
@@ -299,13 +245,18 @@ struct opener {
     inline future<std::expected<file, int>> open(this opener &&self) {
         if (!self.perm && self.opts.has(file::options::create))
             throw inner_exception("[ASCO] opener::open(): file access mode not set while creating file.");
-        return open_file::open(std::string(self._path), self.opts, self.perm, self.resolve);
+        return open_file::open(std::string(self._path), self.opts, self.perm);
     }
 
-    inline future_void_inline reopen(this opener &&self, file &f) { return f.reopen(std::move(self)); }
+    inline future_inline<void> reopen(this opener &&self, file &f) {
+        self._path = f.path;
+        return f.reopen(std::move(self));
+    }
 };
 
 constexpr opener file::at(std::string_view path) noexcept { return {path}; }
+
+constexpr opener file::at() noexcept { return {""}; }
 
 };  // namespace asco::io
 

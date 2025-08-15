@@ -28,8 +28,7 @@ using clock = std::chrono::high_resolution_clock;
                  co_await std::suspend_always{};                     \
          }))
 
-future<std::expected<file, int>> open_file::open(
-    std::string path, flags<file::options> opts, uint64_t perm, flags<file::resolve_mode> resolve) {
+future<std::expected<file, int>> open_file::open(std::string path, flags<file::options> opts, uint64_t perm) {
     flags<ioreq::open::open_mode> uring_openmode;
     {
         using open_mode = ioreq::open::open_mode;
@@ -66,21 +65,6 @@ future<std::expected<file, int>> open_file::open(
     }
 
     flags<ioreq::open::resolve_mode> uring_resolvemode;
-    {
-        using resolve_mode = ioreq::open::resolve_mode;
-        if (resolve.has(file::resolve_mode::no_cross_dev))
-            uring_resolvemode |= resolve_mode::no_cross_dev;
-        if (resolve.has(file::resolve_mode::no_magic_links))
-            uring_resolvemode |= resolve_mode::no_magic_links;
-        if (resolve.has(file::resolve_mode::no_symlinks))
-            uring_resolvemode |= resolve_mode::no_symlinks;
-        if (resolve.has(file::resolve_mode::beneath))
-            uring_resolvemode |= resolve_mode::beneath;
-        if (resolve.has(file::resolve_mode::in_root))
-            uring_resolvemode |= resolve_mode::in_root;
-        if (resolve.has(file::resolve_mode::cached))
-            uring_resolvemode |= resolve_mode::cached;
-    }
 
     auto &uring = RT::__worker::get_worker().get_uring();
     auto token = uring.submit(
@@ -96,7 +80,7 @@ future<std::expected<file, int>> open_file::open(
             if (*res < 0)
                 co_return std::unexpected{*res};
 
-            auto f = file{static_cast<int>(*res), std::move(path), opts, resolve};
+            auto f = file{static_cast<int>(*res), std::move(path), opts};
             if (opts.has(file::options::append)) {
                 f.seekg(0, seekpos::end);
                 f.seekp(0, seekpos::end);
@@ -106,19 +90,19 @@ future<std::expected<file, int>> open_file::open(
     }
 }
 
-future_void file::close() {
+future<void> file::close() {
     if (none)
-        co_return {};
+        co_return;
 
     none = true;
-    fd = -1;
+    fhandle = raw_handle_invalid;
 
     auto &uring = RT::__worker::get_worker().get_uring();
-    auto token = uring.submit(ioreq::close{fd});
+    auto token = uring.submit(ioreq::close{fhandle});
 
     do_suspend_while(true) {
         if (uring.peek(token.seq_num))
-            co_return {};
+            co_return;
     }
 }
 
@@ -130,7 +114,7 @@ future<std::optional<io::buffer<>>> file::write(buffer<> buf) {
         throw inner_exception("[ASCO] asco::io::file::write(): file not opened with option::write");
 
     auto &uring = RT::__worker::get_worker().get_uring();
-    auto token = uring.submit(ioreq::write{fd, std::move(buf), pwrite});
+    auto token = uring.submit(ioreq::write{fhandle, std::move(buf), pwrite});
 
     do_suspend_while(true) {
         if (auto res = uring.peek(token.seq_num)) {
@@ -145,7 +129,7 @@ future<std::optional<io::buffer<>>> file::write(buffer<> buf) {
     }
 }
 
-future<std::expected<buffer<>, file::read_result>> file::read(size_t nbytes) {
+future<std::expected<buffer<>, read_result>> file::read(size_t nbytes) {
     if (none)
         throw inner_exception("[ASCO] asco::io::file::read(): file not opened");
 
@@ -196,7 +180,7 @@ future<std::expected<buffer<>, file::read_result>> file::read(size_t nbytes) {
         throw base::coroutine_abort{};
     }
 
-    token = uring->submit(ioreq::read{fd, nbytes, pread});
+    token = uring->submit(ioreq::read{fhandle, nbytes, pread});
 
 after_submit:
 
@@ -210,13 +194,13 @@ after_submit:
 
         if (auto res = uring->peek(token.seq_num)) {
             if (*res == 0) {
-                co_return std::unexpected{file::read_result::eof};
+                co_return std::unexpected{read_result::eof};
             } else if (*res < 0) {
                 switch (-*res) {
                 case EINTR:
-                    co_return std::unexpected{file::read_result::interrupted};
+                    co_return std::unexpected{read_result::interrupted};
                 case EAGAIN:
-                    co_return std::unexpected{file::read_result::again};
+                    co_return std::unexpected{read_result::again};
                 default:
                     throw inner_exception(
                         std::format(

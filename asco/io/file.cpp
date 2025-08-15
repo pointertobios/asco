@@ -10,11 +10,10 @@ namespace asco::io {
 file::file(file &&rhs)
         : none{rhs.none}
 #ifdef __linux__
-        , fd{rhs.fd}
+        , fhandle{rhs.fhandle}
 #endif
         , path{std::move(rhs.path)}
         , opts{rhs.opts}
-        , resolve{rhs.resolve}
         , pread{rhs.pread}
         , pwrite{rhs.pwrite}
 #ifdef ASCO_IO_URING
@@ -22,9 +21,8 @@ file::file(file &&rhs)
 #endif
         , aborted_buffer{std::move(rhs.aborted_buffer)} {
     rhs.none = true;
-    rhs.fd = -1;
+    rhs.fhandle = raw_handle_invalid;
     rhs.opts.clear();
-    rhs.resolve.clear();
     rhs.pread = 0;
     rhs.pwrite = 0;
 }
@@ -34,14 +32,13 @@ file::~file() {
         close();
 }
 
-file::file(int fd, std::string path, flags<options> opts, flags<resolve_mode> resolve)
+file::file(int fd, std::string path, flags<options> opts)
         : none{false}
 #ifdef __linux__
-        , fd{fd}
+        , fhandle{fd}
 #endif
         , path{std::move(path)}
-        , opts{opts}
-        , resolve{resolve} {
+        , opts{opts} {
 }
 
 file &file::operator=(file &&rhs) {
@@ -50,11 +47,10 @@ file &file::operator=(file &&rhs) {
 
     none = rhs.none;
 #ifdef __linux__
-    fd = rhs.fd;
+    fhandle = rhs.fhandle;
 #endif
     path = std::move(rhs.path);
     opts = rhs.opts;
-    resolve = rhs.resolve;
     pread = rhs.pread;
     pwrite = rhs.pwrite;
 #ifdef ASCO_IO_URING
@@ -63,34 +59,67 @@ file &file::operator=(file &&rhs) {
     aborted_buffer = std::move(rhs.aborted_buffer);
 
     rhs.none = true;
-    rhs.fd = -1;
+    rhs.fhandle = raw_handle_invalid;
     rhs.opts.clear();
-    rhs.resolve.clear();
     rhs.pread = 0;
     rhs.pwrite = 0;
 
     return *this;
 }
 
-future_void_inline
-file::open(std::string path, flags<file::options> opts, uint64_t perm, flags<file::resolve_mode> resolve) {
+future_inline<void> file::open(std::string path, flags<file::options> opts, uint64_t perm) {
     if (!none)
         throw inner_exception("[ASCP] asco::io::file::open(): called while a file already opened.");
 
-    if (auto res = co_await open_file::open(std::move(path), opts, perm, resolve); res.has_value()) {
+    if (auto res = co_await open_file::open(std::move(path), opts, perm); res.has_value()) {
         *this = std::move(res.value());
     }
 
-    co_return {};
+    co_return;
 }
 
-future_void_inline file::reopen(opener &&o) {
+future_inline<void> file::reopen(opener &&o) {
     if (!none)
         co_await close();
     if (auto res = co_await std::move(o).open(); res.has_value()) {
         *this = std::move(res.value());
     }
-    co_return {};
+    co_return;
+}
+
+size_t file::_seek_fp(size_t &fp, ssize_t offset, seekpos whence) {
+    switch (whence) {
+    case seekpos::begin: {
+        if (offset < 0)
+            throw inner_exception(
+                "[ASCO] asco::io::file::_seek_fp(): offset cannot be negative when seeking from begin.");
+
+        fp = offset;
+        return fp;
+    }
+    case seekpos::current: {
+        if (offset < 0 && static_cast<size_t>(-offset) > fp)
+            throw inner_exception("[ASCO] asco::io::file::_seek_fp(): The file pointer is out of size.");
+        else if (offset < 0 || fp + offset <= static_cast<size_t>(state().size()))
+            fp += offset;
+        else
+            throw inner_exception("[ASCO] asco::io::file::_seek_fp(): The file pointer is out of size.");
+
+        return fp;
+    }
+    case seekpos::end: {
+        if (offset > 0)
+            throw inner_exception(
+                "[ASCO] asco::io::file::_seek_fp(): offset cannot be positive when seeking from end.");
+
+        if (auto fsize = state().size(); offset < 0 && static_cast<size_t>(-offset) > fsize)
+            throw inner_exception("[ASCO] asco::io::file::_seek_fp(): The file pointer is out of size.");
+        else
+            fp = fsize + offset;
+
+        return fp;
+    }
+    }
 }
 
 };  // namespace asco::io
