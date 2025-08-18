@@ -87,7 +87,7 @@ future_inline<void> file::reopen(opener &&o) {
     co_return;
 }
 
-size_t file::_seek_fp(size_t &fp, ssize_t offset, seekpos whence) {
+size_t file::_seek_fp(size_t &fp, ssize_t offset, seekpos whence, size_t fsize) {
     switch (whence) {
     case seekpos::begin: {
         if (offset < 0)
@@ -100,7 +100,7 @@ size_t file::_seek_fp(size_t &fp, ssize_t offset, seekpos whence) {
     case seekpos::current: {
         if (offset < 0 && static_cast<size_t>(-offset) > fp)
             throw inner_exception("[ASCO] asco::io::file::_seek_fp(): The file pointer is out of size.");
-        else if (offset < 0 || fp + offset <= static_cast<size_t>(state().size()))
+        else if (offset < 0 || fp + offset <= static_cast<size_t>(fsize))
             fp += offset;
         else
             throw inner_exception("[ASCO] asco::io::file::_seek_fp(): The file pointer is out of size.");
@@ -112,7 +112,7 @@ size_t file::_seek_fp(size_t &fp, ssize_t offset, seekpos whence) {
             throw inner_exception(
                 "[ASCO] asco::io::file::_seek_fp(): offset cannot be positive when seeking from end.");
 
-        if (auto fsize = state().size(); offset < 0 && static_cast<size_t>(-offset) > fsize)
+        if (offset < 0 && static_cast<size_t>(-offset) > fsize)
             throw inner_exception("[ASCO] asco::io::file::_seek_fp(): The file pointer is out of size.");
         else
             fp = fsize + offset;

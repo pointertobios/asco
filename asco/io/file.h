@@ -81,11 +81,11 @@ public:
     future<std::expected<buffer<>, read_result>> read(size_t nbytes);
 
     __asco_always_inline size_t seekg(ssize_t offset, seekpos whence = seekpos::current) {
-        return _seek_fp(pread, offset, whence);
+        return _seek_fp(pread, offset, whence, state().size());
     }
 
     __asco_always_inline size_t seekp(ssize_t offset, seekpos whence = seekpos::current) {
-        return _seek_fp(pwrite, offset, whence);
+        return _seek_fp(pwrite, offset, whence, state().size());
     }
 
     __asco_always_inline size_t tellg() const noexcept { return pread; }
@@ -93,13 +93,13 @@ public:
 
     __asco_always_inline file_raw_handle raw_handle() const noexcept { return fhandle; }
 
+    size_t _seek_fp(size_t &fp, ssize_t offset, seekpos whence, size_t fsize);
+
     // Platform related
     file_state state() const;
 
 private:
     file(int fhandle, std::string path, flags<file::options> opts);
-
-    size_t _seek_fp(size_t &fp, ssize_t offset, seekpos whence);
 
     static constexpr std::chrono::microseconds max_waiting_time = std::chrono::microseconds(10);
 

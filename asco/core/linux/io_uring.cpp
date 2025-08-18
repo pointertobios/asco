@@ -250,13 +250,16 @@ void uring::read_buffer::buffer_destroyer(char *ptr) noexcept { delete reinterpr
 io::buffer<> uring::read_buffers_iovec::to_buffer(this uring::read_buffers_iovec &&self, size_t size) {
     io::buffer<> res;
     for (size_t i{0}; i < self.nr_vecs; i++) {
-        res.push_raw_array_buffer(
-            reinterpret_cast<char *>(self.vec[i].iov_base), uring::read_buffer::unit_size,
-            std::min(uring::read_buffer::unit_size, size), &uring::read_buffer::buffer_destroyer);
+        if (!size) {
+            uring::read_buffer::buffer_destroyer(reinterpret_cast<char *>(self.vec[i].iov_base));
+        } else {
+            res.push_raw_array_buffer(
+                reinterpret_cast<char *>(self.vec[i].iov_base), uring::read_buffer::unit_size,
+                std::min(uring::read_buffer::unit_size, size), &uring::read_buffer::buffer_destroyer);
+            size -= std::min(uring::read_buffer::unit_size, size);
+        }
         self.vec[i].iov_base = nullptr;
         self.vec[i].iov_len = 0;
-
-        size -= uring::read_buffer::unit_size;
     }
 
     self.nr_vecs = 0;

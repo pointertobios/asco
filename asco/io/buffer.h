@@ -35,7 +35,9 @@ public:
     buffer(const buffer &rhs) = delete;
     buffer(buffer &&rhs)
             : buffer_chain(std::move(rhs.buffer_chain))
-            , size_sum(rhs.size_sum) {}
+            , size_sum(rhs.size_sum) {
+        rhs.size_sum = 0;
+    }
 
     buffer(CharT value)
             : buffer() {
@@ -156,9 +158,7 @@ public:
 
                 auto &node = buffer_chain.back();
                 node->size += first_section;
-                CharT arr[first_section];
-                std::memset(arr, 0, first_section * sizeof(CharT));
-                node->frame->push(arr, first_section);
+                node->frame->fill_zero(first_section);
             }
 
             size_t rest_size = n - first_section;
@@ -343,6 +343,26 @@ private:
                     } else {
                         throw runtime_error(
                             "[ASCO] asco::io::buffer::buffer_frame::push(CharT *, size_t): This frame is not a raw array.");
+                    }
+                },
+                buffer);
+        }
+
+        void fill_zero(size_t size) {
+            if (size > rest())
+                throw runtime_error(
+                    "[ASCO] asco::io::buffer::buffer_frame::fill_zero(size_t): This frame has not any more space for pushing.");
+
+            std::visit(
+                [&](auto &buf) {
+                    if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>) {
+                        std::memset(buf + this->size, 0, size);
+                        this->size += size;
+                        if (this->size == capacity)
+                            ends = true;
+                    } else {
+                        throw runtime_error(
+                            "[ASCO] asco::io::buffer::buffer_frame::fill_zero(size_t): This frame is not a raw array.");
                     }
                 },
                 buffer);
