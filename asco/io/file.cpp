@@ -28,8 +28,12 @@ file::file(file &&rhs)
 }
 
 file::~file() {
-    if (!none)
-        close();
+    if (none)
+        return;
+
+    is_destructor_close = true;
+    close();
+    while (!destructor_can_exit.test());
 }
 
 file::file(int fd, std::string path, flags<options> opts)

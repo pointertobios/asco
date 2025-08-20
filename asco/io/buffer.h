@@ -36,7 +36,7 @@ public:
     buffer(buffer &&rhs)
             : buffer_chain(std::move(rhs.buffer_chain))
             , size_sum(rhs.size_sum) {
-        rhs.size_sum = 0;
+        rhs.clear();
     }
 
     buffer(CharT value)
@@ -57,7 +57,7 @@ public:
     buffer &operator=(buffer &&rhs) {
         buffer_chain = std::move(rhs.buffer_chain);
         size_sum = rhs.size_sum;
-        rhs.size_sum = 0;
+        rhs.clear();
         return *this;
     }
 

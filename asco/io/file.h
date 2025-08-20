@@ -10,6 +10,7 @@
 #include <asco/io/bufio.h>
 #include <asco/utils/flags.h>
 
+#include <cerrno>
 #include <chrono>
 #include <expected>
 #include <optional>
@@ -50,6 +51,31 @@ public:
         sync = 1 << 11,
         dsync = 1 << 12,
         rsync = 1 << 13,
+    };
+
+    enum class open_result {
+        not_found = ENOENT,
+        not_directory = ENOTDIR,
+        loop_symlink = ELOOP,
+        name_too_long = ENAMETOOLONG,
+        cannot_access = EACCES,
+        permission_denied = EPERM,
+        is_directory = EISDIR,
+        read_only_fs = EROFS,
+        txtbsy = ETXTBSY,
+        max_file_process = EMFILE,
+        max_file_system = ENFILE,
+        cannot_specify_entry = ENOSPC,
+        quota_exceeded = EDQUOT,
+        no_memory = ENOMEM,
+        invalid_arg = EINVAL,
+        option_nosupport = EOPNOTSUPP,
+        overflow = EOVERFLOW,
+        nxio = ENXIO,  // fifo device unexist
+        no_device = ENODEV,
+        busy = EBUSY,
+        again = EAGAIN,
+        interrupted = EINTR,
     };
 
     file() = default;
@@ -113,6 +139,10 @@ private:
     size_t pread{0};
     size_t pwrite{0};
 
+    bool is_destructor_close{false};
+    // close() use this flag to inform the destructor that it can continue.
+    atomic_flag destructor_can_exit;
+
 #ifdef ASCO_IO_URING
     std::optional<core::_linux::uring::req_token> aborted_token{std::nullopt};
 #endif
@@ -121,7 +151,7 @@ private:
 
 struct open_file {
     // Platform related, unabortable
-    static future<std::expected<file, int>>
+    static future<std::expected<file, file::open_result>>
     open(std::string path, flags<file::options> opts, uint64_t perm = 0);
 };
 
@@ -242,7 +272,7 @@ struct opener {
         return std::move(self);
     }
 
-    inline future<std::expected<file, int>> open(this opener &&self) {
+    inline future<std::expected<file, file::open_result>> open(this opener &&self) {
         if (!self.perm && self.opts.has(file::options::create))
             throw inner_exception("[ASCO] opener::open(): file access mode not set while creating file.");
         return open_file::open(std::string(self._path), self.opts, self.perm);

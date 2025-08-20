@@ -70,7 +70,7 @@ struct write {
     size_t nr_vecs{0};
     ::iovec *vec{nullptr};
 
-    write(int fd, io::buffer<> buf, size_t offset)
+    write(int fd, io::buffer<> &&buf, size_t offset)
             : fd(fd)
             , buf(std::move(buf))
             , offset(offset) {}
@@ -153,7 +153,7 @@ private:
     // <req_token::seq_num, read_buffers_iovec>
     spin<std::unordered_map<size_t, read_buffers_iovec>> unpeeked_read_buffers;
 
-    constexpr static size_t iovec_cache_unit_max = 8;
+    constexpr static size_t iovec_cache_unit_max = 64;
     // <length of iovec array, iovec array object>
     spin<std::flat_map<size_t, slub::object<::iovec> *>> iovec_cache;
 

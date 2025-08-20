@@ -7,7 +7,6 @@
 #include <asco/io/file.h>
 
 #include <cassert>
-#include <cstring>
 #include <print>
 #include <string>
 #include <string_view>
@@ -222,7 +221,6 @@ future<int> async_main() {
                             .read()  //
                             .open();
             assert(!ores.has_value());
-            std::println("Open nonexistent file error: {}", std::strerror(-ores.error()));
         }
 
         if (::access("/etc/shadow", F_OK) == 0) {
@@ -230,7 +228,6 @@ future<int> async_main() {
                             .write()  //
                             .open();
             assert(!ores.has_value());
-            std::println("Open no-permission file error: {}", std::strerror(-ores.error()));
         }
 
         std::println("Error handling test passed.");

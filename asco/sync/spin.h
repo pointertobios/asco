@@ -36,7 +36,13 @@ public:
         guard(spin &s)
                 : s{s} {
             for (bool b{false}; !s.locked.compare_exchange_weak(b, true, morder::acquire, morder::relaxed);
-                 b = false);
+                 b = false) {
+                while (s.locked.load(morder::acquire)) {}
+            }
+            // We don't use std::this_thread::yield() because while we use spin locks, the competitors of this
+            // lock are largely (almost 100%, because we have cpu affinity for worker threads and task
+            // stealing) in different worker threads. There is no need to yield because either we yield or
+            // not, the probability of competitors releasing this lock is the same.
         }
 
         ~guard() { s.locked.store(false, morder::release); }

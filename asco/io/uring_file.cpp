@@ -6,6 +6,8 @@
 #include <asco/core/linux/io_uring.h>
 #include <asco/exception.h>
 
+#include <asm-generic/errno.h>
+#include <cerrno>
 #include <chrono>
 #include <coroutine>
 #include <cstring>
@@ -28,7 +30,8 @@ using clock = std::chrono::high_resolution_clock;
                  co_await std::suspend_always{};                     \
          }))
 
-future<std::expected<file, int>> open_file::open(std::string path, flags<file::options> opts, uint64_t perm) {
+future<std::expected<file, file::open_result>>
+open_file::open(std::string path, flags<file::options> opts, uint64_t perm) {
     flags<ioreq::open::open_mode> uring_openmode;
     {
         using open_mode = ioreq::open::open_mode;
@@ -77,8 +80,9 @@ future<std::expected<file, int>> open_file::open(std::string path, flags<file::o
 
     do_suspend_while(true) {
         if (auto res = uring.peek(token.seq_num)) {
-            if (*res < 0)
-                co_return std::unexpected{*res};
+            if (*res < 0) {
+                co_return std::unexpected{static_cast<file::open_result>(-*res)};
+            }
 
             auto f = file{static_cast<int>(*res), std::move(path), opts};
             if (opts.has(file::options::append)) {
@@ -95,10 +99,13 @@ future<void> file::close() {
         co_return;
 
     none = true;
+    auto fh = fhandle;
+    if (is_destructor_close)
+        destructor_can_exit.test_and_set();
     fhandle = raw_handle_invalid;
 
     auto &uring = RT::__worker::get_worker().get_uring();
-    auto token = uring.submit(ioreq::close{fhandle});
+    auto token = uring.submit(ioreq::close{fh});
 
     do_suspend_while(true) {
         if (uring.peek(token.seq_num))

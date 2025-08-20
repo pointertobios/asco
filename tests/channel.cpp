@@ -21,12 +21,8 @@ future<void> sending(asco::sender<int> tx) {
 future<int> async_main() {
     auto [tx, rx] = channel<int>();
     assert(!rx.try_recv());
-    assert(!rx.try_recv());
-    assert(!rx.try_recv());
-    assert(!rx.try_recv());
-    assert(!rx.try_recv());
     sending(std::move(tx));
-    for (std::optional<int> i = co_await rx.recv(); i.has_value(); i = co_await rx.recv()) {
+    for (std::optional<int> i{}; (i = co_await rx.recv());) {  //
         std::cout << *i << std::endl;
     }
     co_return 0;

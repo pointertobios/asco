@@ -22,6 +22,8 @@ constexpr size_t min_exp2_from(size_t n) {
 
 };  // namespace asco::math
 
+__asco_always_inline consteval size_t pow2(size_t base, size_t exp) noexcept { return base << exp; }
+
 namespace asco {
 
 using math::min_exp2_from;

@@ -8,6 +8,10 @@
 #include <chrono>
 #include <cstddef>
 
+#if __has_include(<cxxabi.h>)
+#    include <cxxabi.h>
+#endif
+
 #ifdef __linux__
 #    define __asco_always_inline __inline __attribute__((__always_inline__))
 #elifdef _WIN32
@@ -33,21 +37,24 @@ using morder = std::memory_order;
 
 };  // namespace asco::types
 
-namespace asco::literals {
+namespace asco::inner {
 
-using namespace types;
+inline const char *demangle(const char *s) {
+    if (!s)
+        return nullptr;
+#if __has_include(<cxxabi.h>)
+    int t;
+    auto res = ::abi::__cxa_demangle(s, 0, 0, &t);
+    if (res)
+        return res;
+    else
+        return s;
+#else
+    return s;
+#endif
+}
 
-consteval inline size_t operator""_B(unsigned long long n) { return n; }
-
-consteval inline size_t operator""_KB(unsigned long long n) { return n * 1024; }
-
-consteval inline size_t operator""_MB(unsigned long long n) { return n * 1024 * 1024; }
-
-consteval inline size_t operator""_GB(unsigned long long n) { return n * 1024 * 1024 * 1024; }
-
-consteval inline size_t operator""_TB(unsigned long long n) { return n * 1024 * 1024 * 1024 * 1024; }
-
-};  // namespace asco::literals
+};  // namespace asco::inner
 
 namespace std::this_thread {
 

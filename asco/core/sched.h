@@ -29,13 +29,15 @@ struct task {
 
     __coro_local_frame *coro_local_frame;
 
-    // A sort of task that blocking worker thread and don't be stolen to other workers.
-    bool is_blocking;
-    bool is_inline{false};
-
 #ifdef ASCO_PERF_RECORD
     perf::coro_recorder *perf_recorder{nullptr};
 #endif
+
+    std::atomic<task_id> waiting{0};
+
+    // A sort of task that blocking worker thread and don't be stolen to other workers.
+    bool is_blocking;
+    bool is_inline{false};
 
     // Use for timers. After related timer clocked, coroutine must start to run as fast as possible.
     // Set this to true to let this worker schedule this task earlier or let other worker thread steal this
@@ -43,7 +45,6 @@ struct task {
     bool real_time{false};
 
     bool aborted{false};
-    std::atomic<task_id> waiting{0};
 
     bool mutable destroyed{false};
 
@@ -60,17 +61,18 @@ struct task {
             : id(rhs.id)
             , handle(rhs.handle)
             , coro_local_frame(rhs.coro_local_frame)
-            , is_blocking(rhs.is_blocking)
-            , is_inline(rhs.is_inline)
 #ifdef ASCO_PERF_RECORD
             , perf_recorder(rhs.perf_recorder)
 #endif
+            , waiting(rhs.waiting.load())
+            , is_blocking(rhs.is_blocking)
+            , is_inline(rhs.is_inline)
             , real_time(rhs.real_time)
             , aborted(rhs.aborted)
-            , waiting(rhs.waiting.load())
             , destroyed(rhs.destroyed) {
     }
 
+    // The channel needs move assignment, this move assignment function just act as copy assignment function.
     task &operator=(task &&rhs) noexcept {
         if (this == &rhs)
             return *this;
@@ -113,27 +115,29 @@ struct task {
     }
 
     __asco_always_inline void destroy() {
-        if (!destroyed) {
+        if (destroyed)
+            return;
+
 #ifdef ASCO_PERF_RECORD
-            if (perf_recorder)
-                delete perf_recorder;
+        if (perf_recorder)
+            delete perf_recorder;
 #endif
-            coro_frame_exit();
-            handle.destroy();
-            destroyed = true;
-        }
+        coro_frame_exit();
+        handle.destroy();
+        destroyed = true;
     }
 
     __asco_always_inline void free_only() {
-        if (!destroyed) {
+        if (destroyed)
+            return;
+
 #ifdef ASCO_PERF_RECORD
-            if (perf_recorder)
-                delete perf_recorder;
+        if (perf_recorder)
+            delete perf_recorder;
 #endif
-            coro_frame_exit();
-            base::coroutine_allocator::deallocate(handle.address());
-            destroyed = true;
-        }
+        coro_frame_exit();
+        base::coroutine_allocator::deallocate(handle.address());
+        destroyed = true;
     }
 
     __asco_always_inline void set_real_time() { real_time = true; }

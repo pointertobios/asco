@@ -44,6 +44,8 @@ public:
     using task_id = sched::task::task_id;
 
     explicit worker(size_t id, const worker_fn &f, task_receiver rx);
+    ~worker();
+
     worker(const worker &) = delete;
     worker(worker &) = delete;
     worker(worker &&) = delete;
@@ -80,7 +82,7 @@ public:
     std::binary_semaphore worker_await_sem{0};
 
 private:
-    std::jthread thread;
+    std::thread thread;
 
 #ifdef ASCO_IO_URING
     _linux::uring io_uring;

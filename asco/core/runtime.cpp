@@ -31,6 +31,8 @@ worker::worker(size_t id, const worker_fn &f, task_receiver rx)
     workers[thread.get_id()] = this;
 }
 
+worker::~worker() { thread.join(); }
+
 std::thread::id worker::get_thread_id() const { return thread.get_id(); }
 
 void worker::conditional_suspend() {
@@ -143,8 +145,8 @@ void runtime::sys::set_env(const char **env) {
 static std::vector<cpu_set_t> get_cpus() {
     std::vector<cpu_set_t> cpus;
     cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
     for (size_t i{0}; i < std::thread::hardware_concurrency(); i++) {
+        CPU_ZERO(&cpuset);
         CPU_SET(i, &cpuset);
         cpus.push_back(cpuset);
     }
@@ -187,18 +189,13 @@ runtime::runtime(size_t nthread_)
                     self.running_task.pop();
 
                     if (task->done()) {
-                        if (!task->is_inline) {  // Inline task remove map relation themselves
-                            remove_task_map(task->handle.address());
-                            self.remove_task_map(task->id);
-                        }
-
                         if (self.is_calculator)
                             calcu_worker_load--;
                         else
                             io_worker_load--;
-
+                        remove_task_map(task->handle.address());
+                        self.remove_task_map(task->id);
                         self.sc.destroy(task->id);
-
                     } else {
                         if (self.task_schedulable(task->id))
                             self.sc.get_task(task->id).reset_real_time();

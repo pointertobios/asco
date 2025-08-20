@@ -76,7 +76,11 @@ public:
     block_read_writer(const T &ioo)
             : ioo{std::move(ioo)} {}
 
-    ~block_read_writer() { flush(); }
+    ~block_read_writer() {
+        is_destructor_flush = true;
+        flush();
+        while (!destructor_can_exit.test());
+    }
 
     // Abortable
     future<std::optional<buffer<>>> read(size_t nbytes) {
@@ -106,9 +110,6 @@ public:
 
                 auto b = co_await ioo.read(load_size);
 
-                if (this_coro::aborted())
-                    throw coroutine_abort{};
-
                 if (!b.has_value()) {
                     if (auto e = b.error(); e == read_result::eof)
                         co_return std::nullopt;
@@ -118,6 +119,9 @@ public:
                     break;
                 }
             }
+
+            if (this_coro::aborted())
+                throw coroutine_abort{};
         } else if (load_start < buffer_start) {
             while (true) {
                 ioo.seekg(load_start, seekpos::begin);
@@ -226,10 +230,15 @@ public:
 
     // Unabortable
     future<void> flush() {
-        if (!active_buffer.empty()) {
-            ioo.seekp(buffer_start, seekpos::begin);
-            co_await ioo.write(std::move(active_buffer));
-            buffer_start = 0;
+        auto bstart = buffer_start;
+        buffer_start = 0;
+        auto acbuf = std::move(active_buffer);
+        if (is_destructor_flush)
+            destructor_can_exit.test_and_set();
+
+        if (!acbuf.empty()) {
+            ioo.seekp(bstart, seekpos::begin);
+            co_await ioo.write(std::move(acbuf));
         }
         co_return;
     }
@@ -241,6 +250,10 @@ private:
     buffer<> active_buffer;
     size_t pread{0};
     size_t pwrite{0};
+
+    bool is_destructor_flush{false};
+    // flush() use this flag to inform the destructor that it can continue.
+    atomic_flag destructor_can_exit;
 
     // Abortable
     future<std::optional<buffer<>>> read_ioo_until_eof(size_t start, size_t nbytes) {

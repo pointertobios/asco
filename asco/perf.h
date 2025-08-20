@@ -58,8 +58,8 @@ public:
         }
 
         auto guard = record::global_record.lock();
-        if (guard->contains(coro_hash)) {
-            auto &r = guard->at(coro_hash);
+        if (auto it = guard->find(coro_hash); it != guard->end()) {
+            auto &r = it->second;
             r.total += total;
             r.active += active;
             r.counter++;

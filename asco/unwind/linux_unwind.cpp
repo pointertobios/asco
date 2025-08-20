@@ -3,7 +3,6 @@
 
 #include <asco/unwind/unwind.h>
 
-#include <cxxabi.h>
 #include <dwarf.h>
 #include <ranges>
 #include <unistd.h>
@@ -36,9 +35,7 @@ stack function_unwinder::resolve_address(size_t addr_) {
     if (!symname)
         symname = "??";
     const char *name{nullptr};
-    name = (symname ? abi::__cxa_demangle(symname, nullptr, nullptr, nullptr) : "??");
-    if (!name)
-        name = symname;
+    name = (symname ? inner::demangle(symname) : "??");
 
     const char *src_file = "??";
     int line_num = -1;

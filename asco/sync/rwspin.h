@@ -37,8 +37,12 @@ public:
                 : rw{rw} {
             size_t expected;
             do {
-                expected = rw.state.load(morder::relaxed);
-                while ((expected & write_mask) != 0) { expected = rw.state.load(morder::relaxed); }
+                for (expected = rw.state.load(morder::relaxed); (expected & write_mask) != 0;
+                     expected = rw.state.load(morder::relaxed)) {}
+                // We don't use std::this_thread::yield() because while we use spin locks, the competitors of
+                // this lock are largely (almost 100%, because we have cpu affinity for worker threads and
+                // task stealing) in different worker threads. There is no need to yield because either we
+                // yield or not, the probability of competitors releasing this lock is the same.
             } while (
                 !rw.state.compare_exchange_weak(expected, expected + 1, morder::acquire, morder::relaxed));
         }
@@ -58,7 +62,13 @@ public:
                 : rw{rw} {
             for (size_t expected = 0;
                  !rw.state.compare_exchange_weak(expected, write_mask, morder::acquire, morder::relaxed);
-                 expected = 0);
+                 expected = 0) {
+                while (rw.state.load(morder::acquire)) {}
+            }
+            // We don't use std::this_thread::yield() because while we use spin locks, the competitors of this
+            // lock are largely (almost 100%, because we have cpu affinity for worker threads and task
+            // stealing) in different worker threads. There is no need to yield because either we yield or
+            // not, the probability of competitors releasing this lock is the same.
         }
 
         ~write_guard() noexcept { rw.state.store(0, morder::release); }

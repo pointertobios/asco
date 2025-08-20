@@ -9,6 +9,7 @@
 
 #include <asco/future.h>
 #include <asco/sync/spin.h>
+#include <asco/utils/concurrency.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco::sync {
@@ -85,12 +86,15 @@ public:
 
         auto this_id = this_coro::get_id();
 
+        size_t read_count{0};
+
         while (true) {
             if (this_coro::aborted()) {
                 restorer.state = 0;
                 throw coroutine_abort{};
             }
 
+            read_count++;
             size_t val = counter.load(morder::acquire);
             if (val > 0) {
                 if (counter.compare_exchange_strong(val, val - 1, morder::acq_rel, morder::relaxed))
@@ -98,8 +102,47 @@ public:
                 continue;
             }
 
-            if (counter.load(morder::acquire) > 0)
+            if (auto _ = read_count++; counter.load(morder::acquire) > 0)
                 continue;
+
+            if (read_count < 10000)
+                continue;
+
+            if (read_count >= 10000 && read_count < 10010) {
+                switch (read_count - 10000) {
+                case 0:
+                    concurrency::withdraw<1>();
+                    break;
+                case 1:
+                    concurrency::withdraw<2>();
+                    break;
+                case 2:
+                    concurrency::withdraw<4>();
+                    break;
+                case 3:
+                    concurrency::withdraw<8>();
+                    break;
+                case 4:
+                    concurrency::withdraw<16>();
+                    break;
+                case 5:
+                    concurrency::withdraw<32>();
+                    break;
+                case 6:
+                    concurrency::withdraw<64>();
+                    break;
+                case 7:
+                    concurrency::withdraw<128>();
+                    break;
+                case 8:
+                    concurrency::withdraw<256>();
+                    break;
+                case 9:
+                    concurrency::withdraw<512>();
+                    break;
+                }
+                continue;
+            }
 
             with(auto guard = waiting_tasks.lock()) {
                 if (counter.load(morder::acquire) == 0) {

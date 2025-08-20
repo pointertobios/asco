@@ -69,7 +69,7 @@ struct future_base {
     struct promise_base {
         size_t future_type_hash{inner::type_hash<future_base<T, Inline, Blocking>>()};
 
-        size_t task_id{};
+        atomic_size_t task_id{0};
 
         std::shared_ptr<future_state> state{std::make_shared<future_state>()};
 
@@ -96,14 +96,14 @@ struct future_base {
 
             if constexpr (!Inline) {
                 if constexpr (Blocking)
-                    task_id = rt.spawn_blocking(coro, curr_clframe, trace);
+                    task_id.store(rt.spawn_blocking(coro, curr_clframe, trace));
                 else
-                    task_id = rt.spawn(coro, curr_clframe, trace);
+                    task_id.store(rt.spawn(coro, curr_clframe, trace));
             } else if (!worker::in_worker()) {
                 if constexpr (Blocking)
-                    task_id = rt.spawn_blocking(coro, curr_clframe, trace);
+                    task_id.store(rt.spawn_blocking(coro, curr_clframe, trace));
                 else
-                    task_id = rt.spawn(coro, curr_clframe, trace);
+                    task_id.store(rt.spawn(coro, curr_clframe, trace));
             } else {
                 using state = worker::scheduler::task_control::state;
                 auto &worker = worker::get_worker();
@@ -111,12 +111,12 @@ struct future_base {
                 if constexpr (Blocking) {
                     auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
                     t.is_inline = true;
-                    task_id = t.id;
+                    task_id.store(t.id);
                     worker.sc.push_task(t, state::ready);
                 } else {
                     auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
                     t.is_inline = true;
-                    task_id = t.id;
+                    task_id.store(t.id);
                     worker.sc.push_task(std::move(t), state::ready);
                 }
 
@@ -125,7 +125,7 @@ struct future_base {
                 else
                     rt.inc_io_load();
 
-                worker::insert_task_map(task_id, &worker);
+                worker::insert_task_map(task_id.load(), &worker);
             }
 
             if (worker::in_worker()) {
@@ -133,7 +133,7 @@ struct future_base {
                 auto currid = worker.current_task_id();
                 if (rt.in_group(currid) && rt.group(currid)->is_origin(currid)
                     && group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()) {
-                    rt.join_task_to_group(task_id, currid);
+                    rt.join_task_to_group(task_id.load(), currid);
                 }
             }
 
@@ -156,49 +156,27 @@ struct future_base {
             }
 
             auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
-            return future_base<T, Inline, Blocking>(coro, task_id, ani, state);
+            return future_base<T, Inline, Blocking>(coro, task_id.load(), ani, state);
         }
 
-        std::suspend_always initial_suspend() { return {}; }
+        std::suspend_always initial_suspend() noexcept { return {}; }
 
-        bool return_value_select_case_impl() {
-            auto &rt = RT::get_runtime();
-            task_id = worker::get_worker().current_task_id();
-            // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
-            // `__asco_select_sem__` for continue running
-            if (group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()
-                && !rt.group(task_id)->is_origin(task_id)) {
-                std::binary_semaphore group_local(__asco_select_sem__);
-                if (__asco_select_sem__.try_acquire()) {
-                    for (auto id : rt.group(task_id)->non_origin_tasks()) {
-                        if (id != task_id) {
-                            RT::get_runtime().abort(id);
-                            rt.awake(id);
-                        }
-                    }
-                } else {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // The inline future will return the caller_resumer to symmatrical transform to the caller task.
+        // Always returns suspend_always{}, we have to call .destroy() in scheduler.
         auto final_suspend() noexcept {
             auto caller_task_id = state->caller_task_id.load();
             // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
             // `__asco_select_sem__` for continue running
             if (group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()) {
                 auto &rt = RT::get_runtime();
-                rt.exit_group(task_id);
+                rt.exit_group(task_id.load());
                 if (caller_task_id)
                     rt.exit_group(caller_task_id);
 
-                if (!worker::task_available(task_id))
+                if (!worker::task_available(task_id.load()))
                     return std::suspend_always{};
 
-                if (auto &worker = worker::get_worker_from_task_id(task_id);
-                    worker.sc.get_task(task_id).aborted) {
+                if (auto &worker = worker::get_worker_from_task_id(task_id.load());
+                    worker.sc.get_task(task_id.load()).aborted) {
                     if (worker::task_available(caller_task_id)) {
                         auto &w = worker::get_worker_from_task_id(caller_task_id);
                         w.sc.free_only(caller_task_id, true);
@@ -215,26 +193,24 @@ struct future_base {
 
             if constexpr (!Inline) {
                 auto &rt = RT::get_runtime();
-                while (!task_id) {}
+                while (!task_id.load());
                 if (caller_task_id) {
-                    rt.awake(caller_task_id);
                     RT::__worker::get_worker_from_task_id(caller_task_id)
                         .sc.get_task(caller_task_id)
                         .waiting.store(0);
+                    rt.awake(caller_task_id);
                 }
 
-                if (worker::task_available(task_id))
-                    rt.suspend(task_id);
+                if (auto tid = task_id.load(); worker::task_available(tid))
+                    rt.suspend(tid);
 
                 return std::suspend_always{};
             } else {
                 auto &rt = RT::get_runtime();
 
-                if (worker::task_available(task_id))
-                    rt.suspend(task_id);
+                if (auto tid = task_id.load(); worker::task_available(tid))
+                    rt.suspend(tid);
 
-                rt.remove_task_map(corohandle_from_promise().address());
-                asco::core::worker::remove_task_map(task_id);
                 if (caller_task_id) {
                     rt.awake(caller_task_id);
                     worker::get_worker_from_task_id(caller_task_id)
@@ -262,13 +238,36 @@ struct future_base {
         }
 
         void set_abort_exception() { state->e = std::make_exception_ptr(coroutine_abort{}); }
+
+        bool handle_select_winner() {
+            auto &rt = RT::get_runtime();
+            task_id.store(worker::get_worker().current_task_id());
+            // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
+            // `__asco_select_sem__` for continue running
+            if (auto tid = task_id.load();
+                group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()
+                && !rt.group(tid)->is_origin(tid)) {
+                std::binary_semaphore group_local(__asco_select_sem__);
+                if (__asco_select_sem__.try_acquire()) {
+                    for (auto id : rt.group(tid)->non_origin_tasks()) {
+                        if (id != tid) {
+                            RT::get_runtime().abort(id);
+                            rt.awake(id);
+                        }
+                    }
+                } else {
+                    return true;
+                }
+            }
+            return false;
+        }
     };
 
     struct return_value_mixin_promise : promise_base {
         void return_value(std::conditional_t<std::is_void_v<T>, std::monostate, T> val)
             requires(!std::is_void_v<T>)
         {
-            if (promise_base::return_value_select_case_impl())
+            if (promise_base::handle_select_winner())
                 return;
 
             new (static_cast<void *>(&promise_base::state->return_value)) T(std::move(val));
@@ -280,7 +279,7 @@ struct future_base {
         void return_void()
             requires(std::is_void_v<T>)
         {
-            if (promise_base::return_value_select_case_impl())
+            if (promise_base::handle_select_winner())
                 return;
 
             promise_base::state->returned.store(true);
@@ -298,7 +297,6 @@ struct future_base {
         return state->returned.load();
     }
 
-    // The inline future will return current task corohandle to symmatrical transform to the callee task.
     auto await_suspend(std::coroutine_handle<> handle) {
         if constexpr (!Inline) {
             if (!state->returned.load()) {
@@ -348,9 +346,6 @@ struct future_base {
         if (none)
             throw asco::runtime_error("[ASCO] future didn't bind to a task");
 
-        if (worker::in_worker())
-            throw asco::runtime_error("[ASCO] Cannot use synchronized await in asco::runtime workers");
-
         if constexpr (!Inline) {
             if constexpr (!std::is_void_v<T>) {
                 if (state->returned.load())
@@ -368,6 +363,8 @@ struct future_base {
 
             if constexpr (!std::is_void_v<T>)
                 return std::move(*reinterpret_cast<T *>(&state->return_value));
+            else
+                return;
         } else {
             throw asco::runtime_error("[ASCO] future_inline<T> cannot be awaited in synchronized context.");
         }

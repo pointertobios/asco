@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <asco/core/sched.h>
+#include <asco/exception.h>
 
 namespace asco::core::sched {
 
@@ -187,7 +188,7 @@ task &std_scheduler::get_task(task::task_id id) {
     if (auto it = task_map.find(id); it != task_map.end()) {
         return it->second->t;
     } else {
-        throw asco::runtime_error(
+        throw asco::inner_exception(
             std::format(
                 "[ASCO] std_scheduler::get_task(): Task {} not found (maybe because you call this function in synchronous texture)",
                 id));
@@ -198,7 +199,7 @@ std_scheduler::task_control::state std_scheduler::get_state(task::task_id id) {
     if (auto it = task_map.find(id); it != task_map.end()) {
         return it->second->s;
     } else {
-        throw asco::runtime_error(std::format("[ASCO] std_scheduler::get_state(): Task {} not found", id));
+        throw asco::inner_exception(std::format("[ASCO] std_scheduler::get_state(): Task {} not found", id));
     }
 }
 
@@ -210,7 +211,7 @@ std::binary_semaphore &std_scheduler::get_sync_awaiter(task::task_id id) {
     if (auto it = sync_awaiters.find(id); it != sync_awaiters.end()) {
         return *it->second;
     } else {
-        throw asco::runtime_error(
+        throw asco::inner_exception(
             std::format("[ASCO] std_scheduler::get_sync_awaiter(): Sync awaiter of task {} not found", id));
     }
 }
