@@ -19,12 +19,12 @@
 #include <asco/core/taskgroup.h>
 #include <asco/coro_local.h>
 #include <asco/coroutine_allocator.h>
+#include <asco/io/buffer.h>
 #include <asco/perf.h>
 #include <asco/rterror.h>
 #include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
-#include <variant>
 
 #if defined(_MSC_VER) && !defined(__clang__)
 #    error "[ASCO] Compile with clang-cl instead of MSVC"
@@ -593,7 +593,16 @@ extern template struct future_base<std::string_view, false, false>;
 extern template struct future_base<std::string_view, true, false>;
 extern template struct future_base<std::string_view, false, true>;
 
+extern template struct future_base<io::buffer<>, false, false>;
+extern template struct future_base<io::buffer<>, true, false>;
+extern template struct future_base<io::buffer<>, false, true>;
+
+extern template struct future_base<std::optional<io::buffer<>>, false, false>;
+extern template struct future_base<std::optional<io::buffer<>>, true, false>;
+extern template struct future_base<std::optional<io::buffer<>>, false, true>;
+
 #endif
+
 };  // namespace asco::base
 
 namespace asco {

@@ -57,12 +57,12 @@ concept block_read_write = requires(T t) {
 template<typename T>
 concept stream_read = requires(T t) {
     { t.read(size_t{}) } -> same_as<future<std::expected<buffer<>, read_result>>>;
-} && !block_read<T> && move_secure<T>;
+} && move_secure<T>;
 
 template<typename T>
 concept stream_write = requires(T t) {
     { t.write(buffer<>{}) } -> same_as<future<std::optional<buffer<>>>>;
-} && !block_write<T> && move_secure<T>;
+} && move_secure<T>;
 
 template<typename T>
 concept stream_read_write = stream_read<T> && stream_write<T>;
@@ -71,9 +71,6 @@ template<block_read_write T>
 class block_read_writer {
 public:
     block_read_writer(T &&ioo)
-            : ioo{std::move(ioo)} {}
-
-    block_read_writer(const T &ioo)
             : ioo{std::move(ioo)} {}
 
     ~block_read_writer() {
@@ -289,7 +286,10 @@ private:
 };
 
 template<stream_read T>
-class stream_reader {};
+class stream_reader {
+public:
+private:
+};
 
 template<stream_write T>
 class stream_writer {};

@@ -288,6 +288,14 @@ constexpr opener file::at(std::string_view path) noexcept { return {path}; }
 
 constexpr opener file::at() noexcept { return {""}; }
 
+#ifndef BUFIO_IMPL
+
+extern template class block_read_writer<file>;
+extern template class stream_reader<file>;
+extern template class stream_writer<file>;
+
+#endif
+
 };  // namespace asco::io
 
 namespace asco {

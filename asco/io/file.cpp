@@ -73,7 +73,7 @@ file &file::operator=(file &&rhs) {
 
 future_inline<void> file::open(std::string path, flags<file::options> opts, uint64_t perm) {
     if (!none)
-        throw inner_exception("[ASCP] asco::io::file::open(): called while a file already opened.");
+        throw inner_exception("[ASCO] asco::io::file::open(): called while a file already opened.");
 
     if (auto res = co_await open_file::open(std::move(path), opts, perm); res.has_value()) {
         *this = std::move(res.value());
