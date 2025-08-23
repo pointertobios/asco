@@ -4,6 +4,7 @@
 #ifndef ASCO_UTILS_CONCEPTS_H
 #define ASCO_UTILS_CONCEPTS_H
 
+#include <chrono>
 #include <concepts>
 #include <coroutine>
 #include <exception>
@@ -110,6 +111,13 @@ concept exception_handler =
 
 template<exception_handler F>
 using exception_type = first_argument_t<F>;
+
+template<typename Ti>
+concept duration_type = std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>;
+
+template<typename Tp>
+concept time_point_type =
+    std::is_same_v<Tp, std::chrono::time_point<typename Tp::clock, typename Tp::duration>>;
 
 };  // namespace asco::concepts
 

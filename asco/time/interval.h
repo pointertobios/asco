@@ -8,17 +8,17 @@
 #include <coroutine>
 
 #include <asco/future.h>
+#include <asco/utils/concepts.h>
 
 namespace asco::time {
 
 using namespace std::chrono;
+using namespace concepts;
 
 template<typename R = RT>
 class interval {
 public:
-    template<typename Ti>
-        requires std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>
-    explicit interval(Ti t)
+    explicit interval(duration_type auto t)
             : duration(duration_cast<nanoseconds>(t)) {}
 
     future_inline<nanoseconds> tick() {

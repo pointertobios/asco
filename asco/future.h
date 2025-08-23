@@ -464,9 +464,8 @@ struct future_base {
         }
     }
 
-    template<async_function<return_type> F>
-    future_base<typename std::invoke_result_t<F, return_type>::return_type, false, Blocking>
-    then(this future_base self, F f) {
+    auto then(this future_base self, async_function<return_type> auto f) -> future_base<
+        typename std::invoke_result_t<decltype(f), return_type>::return_type, false, Blocking> {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
             auto &w = worker::get_worker();
@@ -495,9 +494,8 @@ struct future_base {
         std::is_void_v<std::invoke_result_t<F, exception_type<F>>>, std::monostate,
         std::invoke_result_t<F, exception_type<F>>>;
 
-    template<exception_handler F>
-    future_base<std::expected<return_type, exceptionally_expected_error_t<F>>, false, Blocking>
-    exceptionally(this future_base self, F f) {
+    auto exceptionally(this future_base self, exception_handler auto f) -> future_base<
+        std::expected<return_type, exceptionally_expected_error_t<decltype(f)>>, false, Blocking> {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
             auto &w = worker::get_worker();
@@ -515,8 +513,8 @@ struct future_base {
                 throw coroutine_abort{};
 
             co_return std::move(result);
-        } catch (first_argument_t<F> e) {
-            if constexpr (!std::is_void_v<std::invoke_result_t<F, exception_type<F>>>) {
+        } catch (exception_type<decltype(f)> e) {
+            if constexpr (!std::is_void_v<std::invoke_result_t<decltype(f), exception_type<decltype(f)>>>) {
                 co_return std::unexpected{f(e)};
             } else {
                 f(e);
@@ -528,9 +526,8 @@ struct future_base {
     template<typename U>
     using aborted_optional_value_t = std::conditional_t<std::is_void_v<U>, std::monostate, U>;
 
-    template<std::invocable F>
     future_base<std::optional<aborted_optional_value_t<return_type>>, false, Blocking>
-    aborted(this future_base self, F f) {
+    aborted(this future_base self, std::invocable auto f) {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
             auto &w = worker::get_worker();

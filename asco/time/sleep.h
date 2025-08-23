@@ -5,21 +5,18 @@
 #define ASCO_TIME_SLEEP_H 1
 
 #include <asco/time/interval.h>
+#include <asco/utils/concepts.h>
 
 namespace asco::this_coro {
 
-template<typename Ti>
-    requires std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>
-future_inline<void> sleep_for(Ti time) {
+future_inline<void> sleep_for(concepts::duration_type auto time) {
     interval in{time};
     co_await in.tick();
     co_return;
 }
 
-template<typename Tc>
-    requires std::is_same_v<Tc, std::chrono::time_point<typename Tc::clock, typename Tc::duration>>
-future_inline<void> sleep_until(Tc time) {
-    auto now = Tc::clock::now();
+future_inline<void> sleep_until(concepts::time_point_type auto time) {
+    auto now = decltype(time)::clock::now();
 
     if (now >= time)
         co_return;

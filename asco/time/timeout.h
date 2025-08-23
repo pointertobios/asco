@@ -4,7 +4,6 @@
 #ifndef ASCO_TIME_TIMEOUT_H
 #define ASCO_TIME_TIMEOUT_H 1
 
-#include <chrono>
 #include <optional>
 
 #include <asco/future.h>
@@ -16,14 +15,12 @@ namespace asco::time {
 
 using namespace concepts;
 
-template<typename Ti, async_function F>
-    requires std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>
-future_inline<std::optional<monostate_if_void<typename std::invoke_result_t<F>::return_type>>>
-timeout(Ti time, F f) {
+auto timeout(duration_type auto time, async_function auto f) -> future_inline<
+    std::optional<monostate_if_void<typename std::invoke_result_t<decltype(f)>::return_type>>> {
     interval in{time};
     switch (co_await select<2>{}) {
     case 0: {
-        if constexpr (std::is_void_v<typename std::invoke_result_t<F>::return_type>) {
+        if constexpr (std::is_void_v<typename std::invoke_result_t<decltype(f)>::return_type>) {
             co_await f();
             co_return std::monostate{};
         } else {
