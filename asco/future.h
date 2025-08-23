@@ -105,7 +105,7 @@ struct future_base {
                 else
                     task_id.store(rt.spawn(coro, curr_clframe, trace));
             } else {
-                using state = worker::scheduler::task_control::state;
+                using state = core::sched::task::state;
                 auto &worker = worker::get_worker();
 
                 if constexpr (Blocking) {
@@ -115,8 +115,8 @@ struct future_base {
                     worker.sc.push_task(t, state::ready);
                 } else {
                     auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
-                    t.is_inline = true;
-                    task_id.store(t.id);
+                    t->is_inline = true;
+                    task_id.store(t->id);
                     worker.sc.push_task(std::move(t), state::ready);
                 }
 
@@ -176,7 +176,7 @@ struct future_base {
                     return std::suspend_always{};
 
                 if (auto &worker = worker::get_worker_from_task_id(task_id.load());
-                    worker.sc.get_task(task_id.load()).aborted) {
+                    worker.sc.get_task(task_id.load())->aborted) {
                     if (worker::task_available(caller_task_id)) {
                         auto &w = worker::get_worker_from_task_id(caller_task_id);
                         w.sc.free_only(caller_task_id, true);
@@ -197,7 +197,7 @@ struct future_base {
                 if (caller_task_id) {
                     RT::__worker::get_worker_from_task_id(caller_task_id)
                         .sc.get_task(caller_task_id)
-                        .waiting.store(0);
+                        ->waiting.store(0);
                     rt.awake(caller_task_id);
                 }
 
@@ -215,7 +215,7 @@ struct future_base {
                     rt.awake(caller_task_id);
                     worker::get_worker_from_task_id(caller_task_id)
                         .sc.get_task(caller_task_id)
-                        .waiting.store(0);
+                        ->waiting.store(0);
                 }
 
                 return std::suspend_always{};
@@ -304,7 +304,7 @@ struct future_base {
                 auto id = rt.task_id_from_corohandle(handle);
                 state->caller_task = handle;
                 state->caller_task_id.store(id);
-                worker::get_worker_from_task_id(id).sc.get_task(id).waiting.store(task_id);
+                worker::get_worker_from_task_id(id).sc.get_task(id)->waiting.store(task_id);
                 rt.suspend(id);
                 return true;
             }
@@ -315,14 +315,14 @@ struct future_base {
             auto id = rt.task_id_from_corohandle(handle);
             state->caller_task = handle;
             state->caller_task_id.store(id);
-            worker::get_worker_from_task_id(id).sc.get_task(id).waiting.store(task_id);
+            worker::get_worker_from_task_id(id).sc.get_task(id)->waiting.store(task_id);
             rt.suspend(id);
 
-            auto &task_ = worker.sc.get_task(task_id);
+            auto task_ = worker.sc.get_task(task_id);
 #ifdef ASCO_PERF_RECORD
             task_.perf_recorder->record_once();
 #endif
-            worker.running_task.push(&task_);
+            worker.running_task.push(task_);
             worker.sc.awake(task_id);
             return task;
         }

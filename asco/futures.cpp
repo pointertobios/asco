@@ -24,16 +24,16 @@ size_t clone(std::coroutine_handle<> h) {
     // Spawn coroutine and clone coroutine local frame
     size_t src_id = rt.task_id_from_corohandle(h);
     auto &src_worker = RT::__worker::get_worker_from_task_id(src_id);
-    auto src_task = std::move(src_worker.sc.get_task(src_id));
-    auto src_frame = src_task.coro_local_frame;
+    auto src_task = src_worker.sc.get_task(src_id);
+    auto src_frame = src_task->coro_local_frame;
     size_t dst_id;
-    if (src_task.is_blocking)
-        dst_id = rt.spawn_blocking(coh, src_frame->prev, src_task.coro_local_frame->tracing_stack, src_id);
+    if (src_task->is_blocking)
+        dst_id = rt.spawn_blocking(coh, src_frame->prev, src_task->coro_local_frame->tracing_stack, src_id);
     else
-        dst_id = rt.spawn(coh, src_frame->prev, src_task.coro_local_frame->tracing_stack, src_id);
+        dst_id = rt.spawn(coh, src_frame->prev, src_task->coro_local_frame->tracing_stack, src_id);
 
     auto &dst_worker = RT::__worker::get_worker_from_task_id(dst_id);
-    auto dst_frame = dst_worker.sc.get_task(dst_id).coro_local_frame;
+    auto dst_frame = dst_worker.sc.get_task(dst_id)->coro_local_frame;
     dst_frame->vars = src_frame->vars;
 
     auto sem = src_worker.sc.clone_sync_awaiter(src_id);

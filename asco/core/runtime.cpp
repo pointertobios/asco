@@ -174,15 +174,15 @@ runtime::runtime(size_t nthread_)
         while (!(self.task_rx.is_stopped() && self.sc.currently_finished_all())) {
             while (true)
                 if (auto task = self.task_rx.try_recv(); task) {
-                    self.sc.push_task(std::move(*task), scheduler::task_control::state::ready);
-                    worker::insert_task_map(task->id, self_);
+                    self.sc.push_task(*task, sched::task::state::ready);
+                    worker::insert_task_map((*task)->id, self_);
                 } else
                     break;
 
             if (auto task = self.sc.sched(); task) {
-                self.running_task.push(*task);
-                if (!(*task)->done())
-                    (*task)->resume();
+                self.running_task.push(task);
+                if (!task->done())
+                    task->resume();
 
                 while (!self.running_task.empty()) {
                     auto task = self.running_task.top();
@@ -198,7 +198,7 @@ runtime::runtime(size_t nthread_)
                         self.sc.destroy(task->id);
                     } else {
                         if (self.task_schedulable(task->id))
-                            self.sc.get_task(task->id).reset_real_time();
+                            self.sc.get_task(task->id)->reset_real_time();
                     }
                 }
             } else if (self.sc.has_buffered_awakes()) {
@@ -237,10 +237,10 @@ runtime::runtime(size_t nthread_)
     }
 #endif
 
-    auto [io_tx, io_rx] = inner::ms::channel<sched::task>();
+    auto [io_tx, io_rx] = inner::ms::channel<sched::task *>();
     io_task_tx = std::move(io_tx);
 
-    auto [calcu_tx, calcu_rx] = inner::ms::channel<sched::task>();
+    auto [calcu_tx, calcu_rx] = inner::ms::channel<sched::task *>();
     calcu_task_tx = std::move(calcu_tx);
 
     for (size_t i{0}; i < nthread; i++) {
@@ -321,7 +321,7 @@ void runtime::awake_all() {
     for (auto worker : pool) { worker->awake(); }
 }
 
-void runtime::send_task(sched::task task) {
+void runtime::send_task(sched::task *task) {
     if (io_worker_count && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_load) {
         io_worker_load++;
         auto _ = io_task_tx->send(task);
@@ -332,7 +332,7 @@ void runtime::send_task(sched::task task) {
     awake_all();
 }
 
-void runtime::send_blocking_task(sched::task task) {
+void runtime::send_blocking_task(sched::task *task) {
     if (calcu_worker_count && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_load) {
         calcu_worker_load++;
         auto _ = calcu_task_tx->send(task);
@@ -346,7 +346,7 @@ void runtime::send_blocking_task(sched::task task) {
 runtime::task_id
 runtime::spawn(task_instance task_, __coro_local_frame *pframe, unwind::coro_trace trace, task_id gid) {
     auto task = to_task(task_, false, pframe, trace);
-    auto res = task.id;
+    auto res = task->id;
     if (gid)
         join_task_to_group(res, gid, true);
     send_task(std::move(task));
@@ -356,7 +356,7 @@ runtime::spawn(task_instance task_, __coro_local_frame *pframe, unwind::coro_tra
 runtime::task_id runtime::spawn_blocking(
     task_instance task_, __coro_local_frame *pframe, unwind::coro_trace trace, task_id gid) {
     auto task = to_task(task_, true, pframe, trace);
-    auto res = task.id;
+    auto res = task->id;
     if (gid)
         join_task_to_group(res, gid, true);
     send_blocking_task(std::move(task));
@@ -373,12 +373,12 @@ void runtime::suspend(task_id id) { worker::get_worker_from_task_id(id).sc.suspe
 
 void runtime::abort(task_id id) {
     auto &w = worker::get_worker_from_task_id(id);
-    auto &t = w.sc.get_task(id);
-    t.aborted = true;
-    if (auto wid = t.waiting.load(); wid) {
+    auto t = w.sc.get_task(id);
+    t->aborted = true;
+    if (auto wid = t->waiting.load(); wid) {
         abort(wid);
     } else {
-        if (w.sc.get_state(id) != sched::std_scheduler::task_control::state::ready)
+        if (w.sc.get_state(id) != sched::task::state::ready)
             awake(id);
     }
 }
@@ -399,15 +399,15 @@ runtime::task_id runtime::task_id_from_corohandle(std::coroutine_handle<> handle
     return guard->at(handle.address());
 }
 
-sched::task
+sched::task *
 runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe, unwind::coro_trace trace) {
     auto guard = coro_to_task_id.lock();
     auto id = task_counter.fetch_add(1, morder::relaxed);
     worker::set_task_sem(id);
     guard->insert(std::make_pair(task.address(), id));
-    auto res = sched::task{id, task, new __coro_local_frame(pframe, trace), is_blocking};
+    auto res = new sched::task{id, task, new __coro_local_frame(pframe, trace), is_blocking};
 #ifdef ASCO_PERF_RECORD
-    res.perf_recorder = new perf::coro_recorder;
+    res->perf_recorder = new perf::coro_recorder;
 #endif
     return res;
 }

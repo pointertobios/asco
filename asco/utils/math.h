@@ -13,7 +13,7 @@ namespace asco::math {
 
 using namespace types;
 
-constexpr size_t min_exp2_from(size_t n) {
+__asco_always_inline constexpr size_t min_exp2_from(size_t n) {
     assert(n > 0);
     if (n == 1)
         return 1;
@@ -22,7 +22,7 @@ constexpr size_t min_exp2_from(size_t n) {
 
 };  // namespace asco::math
 
-__asco_always_inline consteval size_t pow2(size_t base, size_t exp) noexcept { return base << exp; }
+__asco_always_inline constexpr size_t pow2(size_t base, size_t exp) noexcept { return base << exp; }
 
 namespace asco {
 

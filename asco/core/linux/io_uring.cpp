@@ -254,7 +254,7 @@ io::buffer<> uring::read_buffers_iovec::to_buffer(this uring::read_buffers_iovec
             uring::read_buffer::buffer_destroyer(reinterpret_cast<char *>(self.vec[i].iov_base));
         } else {
             res.push_raw_array_buffer(
-                reinterpret_cast<char *>(self.vec[i].iov_base), uring::read_buffer::unit_size,
+                static_cast<char *>(self.vec[i].iov_base), uring::read_buffer::unit_size,
                 std::min(uring::read_buffer::unit_size, size), &uring::read_buffer::buffer_destroyer);
             size -= std::min(uring::read_buffer::unit_size, size);
         }

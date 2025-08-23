@@ -35,8 +35,8 @@ class worker;
 using worker_fn = std::function<void(worker *)>;
 
 using task_instance = std::coroutine_handle<>;
-using task_sender = inner::ms::sender<sched::task>;
-using task_receiver = inner::ms::receiver<sched::task>;
+using task_sender = inner::ms::sender<sched::task *>;
+using task_receiver = inner::ms::receiver<sched::task *>;
 
 class worker {
 public:
@@ -127,8 +127,8 @@ public:
     explicit runtime(const runtime &&) = delete;
     ~runtime();
 
-    void send_task(sched::task task);
-    void send_blocking_task(sched::task task);
+    void send_task(sched::task *task);
+    void send_blocking_task(sched::task *task);
     task_id spawn(task_instance task, __coro_local_frame *pframe, unwind::coro_trace trace, task_id gid = 0);
     task_id
     spawn_blocking(task_instance task, __coro_local_frame *pframe, unwind::coro_trace trace, task_id gid = 0);
@@ -138,7 +138,7 @@ public:
 
     void register_sync_awaiter(task_id id);
     task_id task_id_from_corohandle(std::coroutine_handle<> handle);
-    sched::task
+    sched::task *
     to_task(task_instance task, bool is_blocking, __coro_local_frame *pframe, unwind::coro_trace trace);
 
     void remove_task_map(void *addr);

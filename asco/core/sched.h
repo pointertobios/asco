@@ -16,8 +16,11 @@
 #include <asco/perf.h>
 #include <asco/rterror.h>
 #include <asco/sync/spin.h>
+#include <asco/utils/pubusing.h>
 
 namespace asco::core::sched {
+
+using namespace types;
 
 using base::__coro_local_frame;
 
@@ -35,110 +38,35 @@ struct task {
 
     std::atomic<task_id> waiting{0};
 
+    enum class state {
+        ready,
+        running,
+        suspending,
+    } st{state::running};
+
     // A sort of task that blocking worker thread and don't be stolen to other workers.
     bool is_blocking;
     bool is_inline{false};
 
     // Use for timers. After related timer clocked, coroutine must start to run as fast as possible.
-    // Set this to true to let this worker schedule this task earlier or let other worker thread steal this
-    // task earlier.
+    // Set this to true to let this worker schedule this task earlier or let other worker thread steal
+    // this task earlier.
     bool real_time{false};
 
-    bool aborted{false};
+    atomic_bool aborted{false};
 
     bool mutable destroyed{false};
 
     task(
         task_id id, std::coroutine_handle<> handle, __coro_local_frame *coro_local_frame, bool is_blocking,
-        bool is_inline = false)
-            : id(id)
-            , handle(handle)
-            , coro_local_frame(coro_local_frame)
-            , is_blocking(is_blocking)
-            , is_inline(is_inline) {}
+        bool is_inline = false);
 
-    task(task &&rhs) noexcept
-            : id(rhs.id)
-            , handle(rhs.handle)
-            , coro_local_frame(rhs.coro_local_frame)
-#ifdef ASCO_PERF_RECORD
-            , perf_recorder(rhs.perf_recorder)
-#endif
-            , waiting(rhs.waiting.load())
-            , is_blocking(rhs.is_blocking)
-            , is_inline(rhs.is_inline)
-            , real_time(rhs.real_time)
-            , aborted(rhs.aborted)
-            , destroyed(rhs.destroyed) {
-    }
-
-    // The channel needs move assignment, this move assignment function just act as copy assignment function.
-    task &operator=(task &&rhs) noexcept {
-        if (this == &rhs)
-            return *this;
-
-        id = rhs.id;
-        handle = rhs.handle;
-        coro_local_frame = rhs.coro_local_frame;
-        is_blocking = rhs.is_blocking;
-        is_inline = rhs.is_inline;
-#ifdef ASCO_PERF_RECORD
-        perf_recorder = rhs.perf_recorder;
-#endif
-        real_time = rhs.real_time;
-        aborted = rhs.aborted;
-        waiting.store(rhs.waiting.load());
-        destroyed = rhs.destroyed;
-
-        return *this;
-    }
-
-    __asco_always_inline void coro_frame_exit() {
-        coro_local_frame->subframe_exit();
-        if (!coro_local_frame->get_ref_count())
-            delete coro_local_frame;
-    }
-
-    __asco_always_inline bool operator==(task &rhs) const { return id == rhs.id; }
-
-    __asco_always_inline void resume() const {
-        if (handle.done())
-            throw asco::runtime_error("[ASCO] task::resume() Inner error: task is done but not destroyed.");
-        handle.resume();
-    }
-
-    __asco_always_inline bool done() const {
-        if (destroyed)
-            return true;
-        bool b = handle.done();
-        return b;
-    }
-
-    __asco_always_inline void destroy() {
-        if (destroyed)
-            return;
-
-#ifdef ASCO_PERF_RECORD
-        if (perf_recorder)
-            delete perf_recorder;
-#endif
-        coro_frame_exit();
-        handle.destroy();
-        destroyed = true;
-    }
-
-    __asco_always_inline void free_only() {
-        if (destroyed)
-            return;
-
-#ifdef ASCO_PERF_RECORD
-        if (perf_recorder)
-            delete perf_recorder;
-#endif
-        coro_frame_exit();
-        base::coroutine_allocator::deallocate(handle.address());
-        destroyed = true;
-    }
+    bool operator==(const task &rhs) const;
+    void resume() const;
+    bool done() const;
+    void destroy();
+    void free_only();
+    void coro_frame_exit();
 
     __asco_always_inline void set_real_time() { real_time = true; }
 
@@ -150,22 +78,11 @@ struct task {
 
 class std_scheduler {
 public:
-    using task = task;
-
-    struct task_control {
-        task t;
-        enum class state {
-            ready,
-            running,
-            suspending,
-        } s{state::running};
-    };
-
-    void push_task(task t, task_control::state initial_state);
-    std::optional<task *> sched();
+    void push_task(task *t, task::state initial_state);
+    task *sched();
     void try_reawake_buffered();
-    std::optional<std::tuple<task_control *, std::binary_semaphore *>> steal(task::task_id id);
-    void steal_from(task_control *, std::binary_semaphore *);
+    std::optional<std::tuple<task *, std::binary_semaphore *>> steal(task::task_id id);
+    void steal_from(task *, std::binary_semaphore *);
     bool currently_finished_all();
     bool has_buffered_awakes();
 
@@ -175,8 +92,8 @@ public:
     void free_only(task::task_id id, bool no_sync_awake = false);
 
     bool task_exists(task::task_id id);
-    task &get_task(task::task_id id);
-    task_control::state get_state(task::task_id id);
+    task *get_task(task::task_id id);
+    task::state get_state(task::task_id id);
 
     void register_sync_awaiter(task::task_id id);
     std::binary_semaphore &get_sync_awaiter(task::task_id id);
@@ -184,13 +101,13 @@ public:
     void emplace_sync_awaiter(task::task_id id, std::binary_semaphore *sem);
 
 private:
-    spin<std::vector<task_control *>> active_tasks;
-    spin<std::unordered_map<task::task_id, task_control *>> suspended_tasks;
+    spin<std::vector<task *>> active_tasks;
+    spin<std::unordered_map<task::task_id, task *>> suspended_tasks;
 
     std::set<task::task_id> not_in_suspended_but_awake_tasks;
     std::set<task::task_id> stealed_but_active_tasks;
 
-    std::unordered_map<task::task_id, task_control *> task_map;
+    std::unordered_map<task::task_id, task *> task_map;
     std::unordered_map<task::task_id, std::binary_semaphore *> sync_awaiters;
 };
 

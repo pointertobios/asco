@@ -6,37 +6,92 @@
 
 namespace asco::core::sched {
 
-void std_scheduler::push_task(task t, task_control::state initial_state) {
-    auto p = new task_control{std::move(t)};
-    task_map.emplace(t.id, p);
-    p->s = initial_state;
-    if (initial_state == task_control::state::running)
-        active_tasks.lock()->push_back(p);
+task::task(
+    task_id id, std::coroutine_handle<> handle, __coro_local_frame *coro_local_frame, bool is_blocking,
+    bool is_inline)
+        : id(id)
+        , handle(handle)
+        , coro_local_frame(coro_local_frame)
+        , is_blocking(is_blocking)
+        , is_inline(is_inline) {}
+
+void std_scheduler::push_task(task *t, task::state initial_state) {
+    task_map.emplace(t->id, t);
+    t->st = initial_state;
+    if (initial_state == task::state::running)
+        active_tasks.lock()->push_back(t);
     else
-        suspended_tasks.lock()->emplace(t.id, p);
+        suspended_tasks.lock()->emplace(t->id, t);
 }
 
-std::optional<task *> std_scheduler::sched() {
+bool task::operator==(const task &rhs) const { return id == rhs.id; }
+
+void task::resume() const {
+    if (handle.done())
+        throw asco::runtime_error("[ASCO] task::resume() Inner error: task is done but not destroyed.");
+    handle.resume();
+}
+
+bool task::done() const {
+    if (destroyed)
+        return true;
+    bool b = handle.done();
+    return b;
+}
+
+void task::destroy() {
+    if (destroyed)
+        return;
+
+#ifdef ASCO_PERF_RECORD
+    if (perf_recorder)
+        delete perf_recorder;
+#endif
+    coro_frame_exit();
+    handle.destroy();
+    destroyed = true;
+}
+
+void task::free_only() {
+    if (destroyed)
+        return;
+
+#ifdef ASCO_PERF_RECORD
+    if (perf_recorder)
+        delete perf_recorder;
+#endif
+    coro_frame_exit();
+    base::coroutine_allocator::deallocate(handle.address());
+    destroyed = true;
+}
+
+void task::coro_frame_exit() {
+    coro_local_frame->subframe_exit();
+    if (!coro_local_frame->get_ref_count())
+        delete coro_local_frame;
+}
+
+task *std_scheduler::sched() {
     auto guard = active_tasks.lock();
     if (guard->empty()) {
-        return std::nullopt;
+        return nullptr;
     }
     while (!guard->empty()) {
         auto task = *guard->begin();
         guard->erase(guard->begin());
 
-        if (stealed_but_active_tasks.contains(task->t.id))
+        if (stealed_but_active_tasks.contains(task->id))
             continue;
 
-        if (task->s == task_control::state::suspending) {
-            (*suspended_tasks.lock())[task->t.id] = task;
+        if (task->st == task::state::suspending) {
+            (*suspended_tasks.lock())[task->id] = task;
             continue;
         }
 
         guard->push_back(task);
-        return &task->t;
+        return task;
     }
-    return std::nullopt;
+    return nullptr;
 }
 
 void std_scheduler::try_reawake_buffered() {
@@ -44,7 +99,7 @@ void std_scheduler::try_reawake_buffered() {
         auto guard = active_tasks.lock();
         auto susg = suspended_tasks.lock();
         if (auto it = susg->find(id); it != susg->end()) {
-            it->second->s = task_control::state::running;
+            it->second->st = task::state::running;
             guard->push_back(it->second);
             susg->erase(it);
             not_in_suspended_but_awake_tasks.erase(id);
@@ -53,8 +108,7 @@ void std_scheduler::try_reawake_buffered() {
     }
 }
 
-std::optional<std::tuple<std_scheduler::task_control *, std::binary_semaphore *>>
-std_scheduler::steal(task::task_id id) {
+std::optional<std::tuple<task *, std::binary_semaphore *>> std_scheduler::steal(task::task_id id) {
     if (!task_map.contains(id))
         return std::nullopt;
 
@@ -74,20 +128,20 @@ std_scheduler::steal(task::task_id id) {
     return std::make_tuple(task, awaiter);
 }
 
-void std_scheduler::steal_from(task_control *task, std::binary_semaphore *awaiter) {
-    task_map[task->t.id] = task;
+void std_scheduler::steal_from(task *task, std::binary_semaphore *awaiter) {
+    task_map[task->id] = task;
     if (awaiter)
-        sync_awaiters[task->t.id] = awaiter;
+        sync_awaiters[task->id] = awaiter;
 
-    if (task->s == task_control::state::running)
+    if (task->st == task::state::running)
         active_tasks.lock()->push_back(task);
     else
-        suspended_tasks.lock()->emplace(task->t.id, task);
+        suspended_tasks.lock()->emplace(task->id, task);
 }
 
 bool std_scheduler::currently_finished_all() {
     auto guard = suspended_tasks.lock();
-    std::erase_if(*guard, [](auto &p) { return p.second->t.done(); });
+    std::erase_if(*guard, [](auto &p) { return p.second->done(); });
     return active_tasks.lock()->empty() && guard->empty();
 }
 
@@ -97,7 +151,7 @@ void std_scheduler::awake(task::task_id id) {
     auto guard = active_tasks.lock();
     auto susg = suspended_tasks.lock();
     if (auto it = susg->find(id); it != susg->end()) {
-        it->second->s = task_control::state::running;
+        it->second->st = task::state::running;
         guard->push_back(it->second);
         susg->erase(it);
     } else {
@@ -112,9 +166,9 @@ void std_scheduler::suspend(task::task_id id) {
     }
 
     auto guard = active_tasks.lock();
-    if (auto it = std::find_if(guard->begin(), guard->end(), [id](task_control *t) { return t->t.id == id; });
+    if (auto it = std::find_if(guard->begin(), guard->end(), [id](task *t) { return t->id == id; });
         it != guard->end()) {
-        (*it)->s = task_control::state::suspending;
+        (*it)->st = task::state::suspending;
         (*suspended_tasks.lock())[id] = *it;
         guard->erase(it);
     }
@@ -128,9 +182,9 @@ void std_scheduler::destroy(task::task_id id, bool no_sync_awake) {
 
     auto guard = active_tasks.lock();
     task_map.erase(id);
-    if (auto it = std::find_if(guard->begin(), guard->end(), [id](task_control *t) { return t->t.id == id; });
+    if (auto it = std::find_if(guard->begin(), guard->end(), [id](task *t) { return t->id == id; });
         it != guard->end()) {
-        (*it)->t.destroy();
+        (*it)->destroy();
         delete *it;
 
         guard->erase(it);
@@ -142,7 +196,7 @@ void std_scheduler::destroy(task::task_id id, bool no_sync_awake) {
     if (iter == susg->end())
         return;
 
-    iter->second->t.destroy();
+    iter->second->destroy();
     delete iter->second;
 
     susg->erase(iter);
@@ -156,9 +210,9 @@ void std_scheduler::free_only(task::task_id id, bool no_sync_awake) {
 
     auto guard = active_tasks.lock();
     task_map.erase(id);
-    if (auto it = std::find_if(guard->begin(), guard->end(), [id](task_control *t) { return t->t.id == id; });
+    if (auto it = std::find_if(guard->begin(), guard->end(), [id](task *t) { return t->id == id; });
         it != guard->end()) {
-        (*it)->t.free_only();
+        (*it)->free_only();
         delete *it;
 
         guard->erase(it);
@@ -170,7 +224,7 @@ void std_scheduler::free_only(task::task_id id, bool no_sync_awake) {
     if (iter == susg->end())
         return;
 
-    iter->second->t.free_only();
+    iter->second->free_only();
     delete iter->second;
 
     susg->erase(iter);
@@ -179,14 +233,13 @@ void std_scheduler::free_only(task::task_id id, bool no_sync_awake) {
 bool std_scheduler::task_exists(task::task_id id) {
     auto guard = active_tasks.lock();
     auto susg = suspended_tasks.lock();
-    return std::find_if(guard->begin(), guard->end(), [id](task_control *t) { return t->t.id == id; })
-               != guard->end()
+    return std::find_if(guard->begin(), guard->end(), [id](task *t) { return t->id == id; }) != guard->end()
            || susg->find(id) != susg->end();
 }
 
-task &std_scheduler::get_task(task::task_id id) {
+task *std_scheduler::get_task(task::task_id id) {
     if (auto it = task_map.find(id); it != task_map.end()) {
-        return it->second->t;
+        return it->second;
     } else {
         throw asco::inner_exception(
             std::format(
@@ -195,9 +248,9 @@ task &std_scheduler::get_task(task::task_id id) {
     }
 }
 
-std_scheduler::task_control::state std_scheduler::get_state(task::task_id id) {
+task::state std_scheduler::get_state(task::task_id id) {
     if (auto it = task_map.find(id); it != task_map.end()) {
-        return it->second->s;
+        return it->second->st;
     } else {
         throw asco::inner_exception(std::format("[ASCO] std_scheduler::get_state(): Task {} not found", id));
     }
