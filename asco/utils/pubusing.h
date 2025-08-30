@@ -28,6 +28,8 @@ using atomic_int64_t = std::atomic_int64_t;
 using atomic_bool = std::atomic_bool;
 using atomic_flag = std::atomic_flag;
 
+using atomic_uint8_t = std::atomic_uint8_t;
+
 using offset_t = std::ptrdiff_t;
 
 template<typename T>

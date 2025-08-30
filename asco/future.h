@@ -320,7 +320,7 @@ struct future_base {
 
             auto task_ = worker.sc.get_task(task_id);
 #ifdef ASCO_PERF_RECORD
-            task_.perf_recorder->record_once();
+            task_->perf_recorder->record_once();
 #endif
             worker.running_task.push(task_);
             worker.sc.awake(task_id);

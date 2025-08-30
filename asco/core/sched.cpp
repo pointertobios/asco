@@ -56,10 +56,6 @@ void task::free_only() {
     if (destroyed)
         return;
 
-#ifdef ASCO_PERF_RECORD
-    if (perf_recorder)
-        delete perf_recorder;
-#endif
     coro_frame_exit();
     base::coroutine_allocator::deallocate(handle.address());
     destroyed = true;

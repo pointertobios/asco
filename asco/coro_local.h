@@ -6,6 +6,7 @@
 
 #include <unordered_map>
 
+#include <asco/core/slub.h>
 #include <asco/perf.h>
 #include <asco/rterror.h>
 #include <asco/unwind/unwind.h>
@@ -101,7 +102,15 @@ struct __coro_local_frame {
     T &decl_var(const char *name) {
         return decl_var<T, Hash>(name, new T);
     }
+
+    void *operator new(std::size_t) noexcept { return slub_cache.allocate(); }
+    void operator delete(void *p) noexcept { slub_cache.deallocate(static_cast<__coro_local_frame *>(p)); }
+
+private:
+    static core::slub::cache<__coro_local_frame> slub_cache;
 };
+
+inline core::slub::cache<__coro_local_frame> __coro_local_frame::slub_cache{};
 
 };  // namespace asco::base
 

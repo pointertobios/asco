@@ -9,6 +9,7 @@
 #include <asco/exception.h>
 #include <asco/future.h>
 #include <asco/lazy_delete.h>
+#include <asco/perf.h>
 #include <asco/utils/pubusing.h>
 
 using asco::future, asco::lazy_delete;
@@ -35,6 +36,7 @@ lazy_delete<runtime> __rt([] {
 #ifndef __ASCORT__
 
 int main(int argc, const char **argv, const char **env) {
+    auto _ = func_perf();
     runtime::sys::set_args(argc, argv);
     runtime::sys::set_env(env);
     try {

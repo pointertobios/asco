@@ -217,34 +217,6 @@ uring::req_token uring::submit(ioreq::read req) {
     return req_token{this->worker_id, reqn};
 }
 
-thread_local spin<slub::object<uring::read_buffer> *> uring::read_buffer::slub;
-
-void *uring::read_buffer::operator new(size_t) noexcept {
-    if (auto guard = slub.lock(); *guard) {
-        auto res = *guard;
-        *guard = res->next;
-        return res->obj();
-    }
-
-    return new char[unit_size];
-}
-
-void uring::read_buffer::operator delete(void *ptr_) noexcept {
-    auto ptr = static_cast<read_buffer *>(ptr_);
-    auto obj = slub::object<read_buffer>::from(ptr);
-
-    with(auto guard = slub.lock()) {
-        if (*guard && (*guard)->len == slub_max) {
-            delete[] static_cast<char *>(ptr_);
-        }
-
-        obj->next = *guard;
-        if (*guard)
-            obj->len = (*guard)->len + 1;
-        *guard = obj;
-    }
-}
-
 void uring::read_buffer::buffer_destroyer(char *ptr) noexcept { delete reinterpret_cast<read_buffer *>(ptr); }
 
 io::buffer<> uring::read_buffers_iovec::to_buffer(this uring::read_buffers_iovec &&self, size_t size) {

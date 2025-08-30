@@ -14,6 +14,10 @@
 #    include <sched.h>
 #endif
 
+#ifdef ASCO_PERF_RECORD
+#    include <print>
+#endif
+
 namespace asco::core {
 
 rwspin<std::unordered_map<worker::task_id, std::binary_semaphore *>> worker::workers_by_task_id_sem;
@@ -300,18 +304,18 @@ runtime::~runtime() {
     current_runtime = nullptr;
 
 #ifdef ASCO_PERF_RECORD
-    std::cout << std::format(
-        "[ASCO] Flag 'ASCO_PERF_RECORD' is enabled, please disable it if you are building your program for releasing.\n");
+    std::println(
+        "[ASCO] Flag 'ASCO_PERF_RECORD' is enabled, please disable it if you are building your program for releasing.");
 
-    std::cout << "\nactive\ttotal\tcounter\tname\n";
+    std::println("\nactive\ttotal\tcounter\tname");
     auto record = perf::record::collect();
     std::vector<perf::record> res;
     for (auto &[id, rec] : record) { res.push_back(rec); }
     std::sort(res.begin(), res.end());
     for (auto rec : res) {
         auto &[name, total, active, counter] = rec;
-        std::cout << std::format(
-            "{}\t{}\t{}\t{}\n", std::chrono::duration_cast<std::chrono::milliseconds>(active),
+        std::println(
+            "{}\t{}\t{}\t{}", std::chrono::duration_cast<std::chrono::milliseconds>(active),
             std::chrono::duration_cast<std::chrono::milliseconds>(total), counter, name);
     }
 #endif
@@ -407,7 +411,7 @@ runtime::to_task(task_instance task, bool is_blocking, __coro_local_frame *pfram
     guard->insert(std::make_pair(task.address(), id));
     auto res = new sched::task{id, task, new __coro_local_frame(pframe, trace), is_blocking};
 #ifdef ASCO_PERF_RECORD
-    res->perf_recorder = new perf::coro_recorder;
+    res->perf_recorder = new perf::coro_recorder{};
 #endif
     return res;
 }

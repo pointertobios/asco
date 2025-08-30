@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <asco/core/slub.h>
 #include <asco/coro_local.h>
 #include <asco/coroutine_allocator.h>
 #include <asco/perf.h>
@@ -74,7 +75,15 @@ struct task {
         if (real_time)
             real_time = false;
     }
+
+    void *operator new(std::size_t) noexcept { return slub_cache.allocate(); }
+    void operator delete(void *p) noexcept { slub_cache.deallocate(static_cast<task *>(p)); }
+
+private:
+    static slub::cache<task> slub_cache;
 };
+
+inline slub::cache<task> task::slub_cache{};
 
 class std_scheduler {
 public:

@@ -10,7 +10,7 @@ if (NOT WIN32)
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-gnu-statement-expression -Wno-gnu-statement-expression-from-macro-expansion)
 endif()
-add_compile_options(-Wno-vla-cxx-extension)
+add_compile_options(-Wno-vla-cxx-extension -Wno-zero-length-array)
 
 enable_testing()
 

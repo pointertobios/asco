@@ -288,14 +288,54 @@ private:
 template<stream_read T>
 class stream_reader {
 public:
+    stream_reader(T &&ioo)
+            : ioo{std::move(ioo)}
+            , reader_ioo{const_cast<T &>(this->ioo.value())} {}
+
 private:
+    std::optional<T> ioo{std::nullopt};
+
+protected:
+    stream_reader(T &ioo)
+            : reader_ioo{ioo} {}
+
+    T &reader_ioo;
 };
 
 template<stream_write T>
-class stream_writer {};
+class stream_writer {
+public:
+    stream_writer(T &&ioo)
+            : ioo{std::move(ioo)}
+            , writer_ioo{const_cast<T &>(this->ioo.value())} {}
+
+private:
+    std::optional<T> ioo{std::nullopt};
+
+protected:
+    stream_writer(T &ioo)
+            : writer_ioo{ioo} {}
+
+    T &writer_ioo;
+};
 
 template<stream_read_write T>
-class stream_read_writer {};
+class stream_read_writer : public stream_reader<T>, public stream_writer<T> {
+public:
+    stream_read_writer(T &&ioo)
+            : stream_reader<T>{this->ioo}
+            , stream_writer<T>{this->ioo}
+            , ioo{std::move(ioo)} {}
+
+    constexpr stream_reader<T> &reader(this stream_read_writer &self) { return self; }
+    constexpr const stream_reader<T> &reader(this const stream_read_writer &self) { return self; }
+
+    constexpr stream_writer<T> &writer(this stream_read_writer &self) { return self; }
+    constexpr const stream_writer<T> &writer(this const stream_read_writer &self) { return self; }
+
+private:
+    T ioo;
+};
 
 };  // namespace asco::io
 

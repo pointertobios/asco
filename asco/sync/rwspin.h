@@ -10,24 +10,15 @@ namespace asco::sync {
 
 using namespace types;
 
-template<typename T>
-class rwspin {
-public:
-    rwspin()
-            : value{} {}
+template<typename T = void>
+class rwspin;
 
+template<>
+class rwspin<void> {
+public:
+    rwspin() = default;
     rwspin(const rwspin &) = delete;
     rwspin(rwspin &&) = delete;
-
-    explicit rwspin(const T &val)
-            : value{val} {}
-
-    explicit rwspin(T &&val)
-            : value{std::move(val)} {}
-
-    template<typename... Args>
-    explicit rwspin(Args &&...args)
-            : value(std::forward<Args>(args)...) {}
 
     class read_guard {
         rwspin &rw;
@@ -39,19 +30,11 @@ public:
             do {
                 for (expected = rw.state.load(morder::relaxed); (expected & write_mask) != 0;
                      expected = rw.state.load(morder::relaxed)) {}
-                // We don't use std::this_thread::yield() because while we use spin locks, the competitors of
-                // this lock are largely (almost 100%, because we have cpu affinity for worker threads and
-                // task stealing) in different worker threads. There is no need to yield because either we
-                // yield or not, the probability of competitors releasing this lock is the same.
             } while (
                 !rw.state.compare_exchange_weak(expected, expected + 1, morder::acquire, morder::relaxed));
         }
 
         ~read_guard() noexcept { rw.state.fetch_sub(1, morder::release); }
-
-        const T &operator*() const noexcept { return rw.value; }
-
-        const T *operator->() const noexcept { return &rw.value; }
     };
 
     class write_guard {
@@ -72,6 +55,53 @@ public:
         }
 
         ~write_guard() noexcept { rw.state.store(0, morder::release); }
+    };
+
+    read_guard read() noexcept { return {*this}; }
+    write_guard write() noexcept { return {*this}; }
+
+private:
+    static constexpr size_t write_mask = 1ull << 63;
+    atomic_size_t state{0};
+};
+
+template<typename T>
+class rwspin {
+public:
+    rwspin() = default;
+    rwspin(const rwspin &) = delete;
+    rwspin(rwspin &&) = delete;
+
+    explicit rwspin(const T &val)
+            : value{val} {}
+    explicit rwspin(T &&val)
+            : value{std::move(val)} {}
+
+    template<typename... Args>
+    explicit rwspin(Args &&...args)
+            : value(std::forward<Args>(args)...) {}
+
+    class read_guard {
+        rwspin<void>::read_guard g;
+        rwspin &rw;
+
+    public:
+        read_guard(rwspin &rw) noexcept
+                : g{rw._lock.read()}
+                , rw{rw} {}
+
+        const T &operator*() const noexcept { return rw.value; }
+        const T *operator->() const noexcept { return &rw.value; }
+    };
+
+    class write_guard {
+        rwspin<void>::write_guard g;
+        rwspin &rw;
+
+    public:
+        write_guard(rwspin &rw) noexcept
+                : g{rw._lock.write()}
+                , rw{rw} {}
 
         T &operator*() noexcept { return rw.value; }
         const T &operator*() const noexcept { return rw.value; }
@@ -80,13 +110,12 @@ public:
         const T *operator->() const noexcept { return &rw.value; }
     };
 
-    read_guard read() noexcept { return read_guard{*this}; }
-    write_guard write() noexcept { return write_guard{*this}; }
+    read_guard read() noexcept { return {*this}; }
+    write_guard write() noexcept { return {*this}; }
 
 private:
-    T value;
-    static constexpr size_t write_mask = 1ull << 63;
-    atomic_size_t state{0};
+    T value{};
+    rwspin<void> _lock;
 };
 
 };  // namespace asco::sync

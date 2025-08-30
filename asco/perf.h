@@ -36,9 +36,11 @@ struct record {
         return a < b;
     }
 
-    inline static spin<std::unordered_map<size_t, record>> global_record;
+    static spin<std::unordered_map<size_t, record>> global_record;
     inline static std::unordered_map<size_t, record> &&collect() { return global_record.get(); }
 };
+
+inline spin<std::unordered_map<size_t, record>> record::global_record;
 
 class coro_recorder {
 public:
@@ -74,7 +76,7 @@ public:
         coro_name = name;
     }
 
-    inline void record_once() { awake_suspend_queue.push_back(std::chrono::high_resolution_clock::now()); }
+    void record_once() { awake_suspend_queue.push_back(std::chrono::high_resolution_clock::now()); }
 
 private:
     size_t coro_hash{0};
@@ -117,21 +119,23 @@ private:
 
 #ifdef ASCO_PERF_RECORD
 #    if defined(__clang__) || defined(__GNUC__)
-#        define coro_perf()                                                                       \
-            RT::__worker::get_worker()                                                            \
-                .current_task()                                                                   \
-                .perf_recorder->enable_recorder<asco::__consteval_str_hash(__PRETTY_FUNCTION__)>( \
+#        define coro_perf()                                                                              \
+            RT::__worker::get_worker()                                                                   \
+                .current_task()                                                                          \
+                .perf_recorder->enable_recorder<asco::inner::__consteval_str_hash(__PRETTY_FUNCTION__)>( \
                     __PRETTY_FUNCTION__)
 
-#        define func_perf() \
-            asco::perf::func_recorder(asco::__consteval_str_hash(__PRETTY_FUNCTION__), __PRETTY_FUNCTION__)
+#        define func_perf()            \
+            asco::perf::func_recorder( \
+                asco::inner::__consteval_str_hash(__PRETTY_FUNCTION__), __PRETTY_FUNCTION__)
 #    else
 #        define coro_perf()            \
             RT::__worker::get_worker() \
                 .current_task()        \
-                .perf_recorder->enable_recorder<asco::__consteval_str_hash(__FUNCSIG__)>(__FUNCSIG__)
+                .perf_recorder->enable_recorder<asco::inner::__consteval_str_hash(__FUNCSIG__)>(__FUNCSIG__)
 
-#        define func_perf() asco::perf::func_recorder(asco::__consteval_str_hash(__FUNCSIG__), __FUNCSIG__)
+#        define func_perf() \
+            asco::perf::func_recorder(asco::inner::__consteval_str_hash(__FUNCSIG__), __FUNCSIG__)
 #    endif
 #else
 #    define coro_perf()

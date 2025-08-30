@@ -133,10 +133,10 @@ private:
         constexpr static size_t unit_size = 1024;
         constexpr static size_t slub_max = 64;
 
-        static thread_local spin<slub::object<read_buffer> *> slub;
+        static slub::cache<read_buffer> slub_cache;
 
-        void *operator new(size_t) noexcept;
-        void operator delete(void *ptr_) noexcept;
+        void *operator new(size_t) noexcept { return slub_cache.allocate(); }
+        void operator delete(void *ptr) noexcept { slub_cache.deallocate(static_cast<read_buffer *>(ptr)); }
 
         static void buffer_destroyer(char *ptr) noexcept;
 
@@ -162,6 +162,8 @@ private:
 
     constexpr static size_t io_uring_entries = 1024;
 };
+
+inline slub::cache<uring::read_buffer> uring::read_buffer::slub_cache{};
 
 };  // namespace asco::core::_linux
 
