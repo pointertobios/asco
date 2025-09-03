@@ -49,6 +49,9 @@ class page {
 public:
     constexpr static size_t size = 4096;
     constexpr static size_t obj_size = align_to<16>(sizeof(T));
+    constexpr static size_t largest_obj_size = 1024;
+
+    static_assert(sizeof(T) <= largest_obj_size, "[ASCO] SLUB only supports object size <= 1024 bytes.");
 
     struct group {
         const object<page> *base;
@@ -122,7 +125,7 @@ public:
         auto res = freelist;
         if (freelist)
             freelist = freelist->next;
-        return res;
+        return res->obj();
     }
 
     void deallocate(T *ptr) noexcept {
@@ -190,7 +193,7 @@ public:
         if (freelist) {
             auto res = freelist;
             freelist = freelist->next;
-            return res;
+            return res->obj();
         }
 
         if (current_page && !current_page->is_full()) {
@@ -301,7 +304,7 @@ public:
                 next = res ? res->next : nullptr;
             } while (!freelist.compare_exchange_weak(res, next));
             if (res)
-                return res;
+                return res->obj();
         }
 
         if (partial_pages.length() > 0) {
@@ -342,12 +345,10 @@ public:
             empty_pages.push_front(new_page);
         }
 
-        {
-            auto p = empty_pages.pop_front();
-            auto res = p->allocate();
-            local.push_page(p);
-            return res;
-        }
+        auto pg = empty_pages.pop_front();
+        auto res = pg->allocate();
+        local.push_page(pg);
+        return res;
     }
 
     void deallocate(T *ptr) noexcept {

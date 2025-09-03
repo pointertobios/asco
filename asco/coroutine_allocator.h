@@ -4,6 +4,9 @@
 #ifndef ASCO_COROUTINE_ALLOCATOR_H
 #define ASCO_COROUTINE_ALLOCATOR_H 1
 
+#include <unordered_map>
+
+#include <asco/core/slub.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco::base {
@@ -11,18 +14,15 @@ namespace asco::base {
 using namespace types;
 
 struct coroutine_allocator {
-    constexpr inline static size_t header_size = 2;
+public:
+    constexpr static size_t header_size = 2 * sizeof(size_t);
 
-    static inline void *allocate(std::size_t n) noexcept {
-        auto *p = static_cast<size_t *>(::operator new(n + header_size * sizeof(size_t)));
-        *p = n;
-        return p + header_size;
-    }
+    static void *allocate(std::size_t n) noexcept;
+    static void deallocate(void *p) noexcept;
 
-    static inline void deallocate(void *p) noexcept {
-        size_t *q = static_cast<size_t *>(p) - header_size;
-        ::operator delete(q);
-    }
+private:
+    thread_local static std::unordered_map<size_t, core::slub::object<size_t> *> freelist;
+    constexpr static size_t freelist_max = 1024;
 };
 
 };  // namespace asco::base

@@ -6,6 +6,7 @@ set(ASCO_SOURCES
     core/runtime.cpp
     core/sched.cpp
     core/timer.cpp
+    coroutine_allocator.cpp
     future.cpp
     futures.cpp
     io/file.cpp

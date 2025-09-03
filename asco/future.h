@@ -9,7 +9,6 @@
 #include <exception>
 #include <expected>
 #include <functional>
-#include <memory>
 #include <optional>
 #include <semaphore>
 #include <type_traits>
@@ -56,6 +55,7 @@ struct future_base {
     struct return_value_storage<void> {};
 
     struct future_state {
+    public:
         std::exception_ptr e;
 
         atomic_size_t caller_task_id{0};
@@ -63,7 +63,42 @@ struct future_base {
 
         atomic_bool returned{false};
         atomic_bool moved_back{false};
+
+    private:
+        atomic_bool refcount{true};  // Count can only be handled by promise and future. true: 2, false: 1
+
+    public:
         return_value_storage<> return_value;
+
+        future_state(const future_state &) = delete;
+        future_state &operator=(const future_state &) = delete;
+
+        future_state(future_state &&) = default;
+        future_state &operator=(future_state &&) = default;
+
+        static future_state *create() noexcept { return new future_state; }
+
+        void unlink() noexcept {
+            if (auto rc = true; !refcount.compare_exchange_strong(rc, false))
+                delete this;
+        }
+
+    private:
+        future_state() = default;
+
+        void *operator new(std::size_t) noexcept {
+            if constexpr (!std::is_same_v<decltype(future_base::future_state_slub_cache), std::monostate>)
+                return future_base::future_state_slub_cache.allocate();
+            else
+                return ::operator new(sizeof(future_state));
+        }
+
+        void operator delete(void *ptr) noexcept {
+            if constexpr (!std::is_same_v<decltype(future_base::future_state_slub_cache), std::monostate>)
+                future_base::future_state_slub_cache.deallocate(static_cast<future_state *>(ptr));
+            else
+                ::operator delete(ptr);
+        }
     };
 
     struct promise_base {
@@ -71,11 +106,13 @@ struct future_base {
 
         atomic_size_t task_id{0};
 
-        std::shared_ptr<future_state> state{std::make_shared<future_state>()};
+        future_state *state{future_state::create()};
 
         void *operator new(std::size_t n) noexcept { return coroutine_allocator::allocate(n); }
 
         void operator delete(void *p) noexcept { coroutine_allocator::deallocate(p); }
+
+        ~promise_base() noexcept { state->unlink(); }
 
         virtual corohandle corohandle_from_promise() = 0;
 
@@ -110,7 +147,7 @@ struct future_base {
 
                 if constexpr (Blocking) {
                     auto t = rt.to_task(coro, Blocking, curr_clframe, trace);
-                    t.is_inline = true;
+                    t->is_inline = true;
                     task_id.store(t.id);
                     worker.sc.push_task(t, state::ready);
                 } else {
@@ -393,7 +430,7 @@ struct future_base {
         rhs.none = true;
     }
 
-    future_base(corohandle task, size_t task_id, bool ani, std::shared_ptr<future_state> state)
+    future_base(corohandle task, size_t task_id, bool ani, future_state *state)
             : task(task)
             , task_id(task_id)
             , actually_non_inline(ani)
@@ -410,9 +447,14 @@ struct future_base {
         if (!state->returned.load()) {
             state->caller_task = nullptr;
             state->caller_task_id.store(0);
+        } else if constexpr (!std::is_void_v<T>) {
+            reinterpret_cast<T *>(&state->return_value)->~T();
         }
 
-        if (auto &e = state->e) {
+        auto e = state->e;
+        state->unlink();
+
+        if (e) {
             try {
                 std::rethrow_exception(e);
             } catch (coroutine_abort &) {
@@ -556,10 +598,22 @@ private:
     // thread.
     bool actually_non_inline;
 
-    std::shared_ptr<future_state> state;
+    future_state *state;
 
     bool none{true};
+
+    static std::conditional_t<
+        sizeof(future_state) <= core::slub::page<future_state>::largest_obj_size,
+        core::slub::cache<future_state>, std::monostate>
+        future_state_slub_cache;
 };  // namespace asco::base
+
+template<move_secure T, bool Inline, bool Blocking>
+inline std::conditional_t<
+    sizeof(typename future_base<T, Inline, Blocking>::future_state)
+        <= core::slub::page<typename future_base<T, Inline, Blocking>::future_state>::largest_obj_size,
+    core::slub::cache<typename future_base<T, Inline, Blocking>::future_state>, std::monostate>
+    future_base<T, Inline, Blocking>::future_state_slub_cache{};
 
 template<move_secure T>
 using future = future_base<T, false, false>;
