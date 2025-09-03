@@ -28,10 +28,10 @@ void timer::attach(task_id id, high_resolution_clock::time_point time) {
             });
         it != guard->end()) {
         it->id.insert(id);
+    } else {
+        guard->push_back({time, {id}});
+        std::push_heap(guard->begin(), guard->end(), std::greater<awake_point>());
     }
-
-    guard->push_back({time, {id}});
-    std::push_heap(guard->begin(), guard->end(), std::greater<awake_point>());
     daemon::awake();
 }
 
