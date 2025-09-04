@@ -43,10 +43,10 @@ private:
     spin<std::unordered_set<task_id>> attaching_tasks;
 
     // Too short for both sleep or spin wait under this duration, merge two awake_point into one.
-    constexpr static nanoseconds approx_time = 30ns;
+    constexpr static nanoseconds approx_time = 200ns;
 
     // Too short for sleep under this duration, just spin wait to ensure the precision.
-    constexpr static microseconds nonsleep_time = 1ms;
+    constexpr static microseconds nonsleep_time = 200us;
 };
 
 };  // namespace asco::core::timer
