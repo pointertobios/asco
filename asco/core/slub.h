@@ -6,6 +6,7 @@
 
 #include <asco/perf.h>
 #include <asco/sync/rwspin.h>
+#include <asco/utils/concurrency.h>
 #include <asco/utils/placement_list.h>
 #include <asco/utils/pubusing.h>
 
@@ -16,6 +17,8 @@ namespace asco::core::slub {
 
 using namespace types;
 using namespace std::chrono_literals;
+
+using concurrency::atomic_ptr;
 
 template<size_t A>
 inline constexpr size_t align_to(size_t size) noexcept {
@@ -298,11 +301,12 @@ public:
             return local.allocate();
 
         {
-            object<T> *res, *next;
+            typename atomic_ptr<object<T>>::versioned_ptr res;
+            object<T> *next;
             do {
-                res = freelist.load();
+                res = freelist.load(morder::acquire);
                 next = res ? res->next : nullptr;
-            } while (!freelist.compare_exchange_weak(res, next));
+            } while (!freelist.compare_exchange_weak(res, next, morder::acq_rel, morder::acquire));
             if (res)
                 return res->obj();
         }
@@ -370,15 +374,15 @@ public:
         }
 
         {
-            object<T> *old_head;
+            typename atomic_ptr<object<T>>::versioned_ptr old_head;
             do {
-                old_head = freelist.load();
+                old_head = freelist.load(morder::acquire);
                 if (old_head && old_head->len >= object_cache_max)
                     break;
                 obj->next = old_head;
                 obj->len = old_head ? old_head->len + 1 : 1;
             } while (({
-                auto cond = !freelist.compare_exchange_weak(old_head, obj);
+                auto cond = !freelist.compare_exchange_weak(old_head, obj, morder::acq_rel, morder::acquire);
                 if (!cond)
                     return;
                 cond;
@@ -415,7 +419,7 @@ public:
 private:
     thread_local static local_cache<T> local;
 
-    atomic<object<T> *> freelist{nullptr};
+    atomic_ptr<object<T>> freelist{};
 
     plmlist_head<page<T>> empty_pages{};    // All objects are not allocated
     plmlist_head<page<T>> partial_pages{};  // Some objects are allocated
