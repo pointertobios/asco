@@ -20,7 +20,8 @@ size_t clone(std::coroutine_handle<> h) {
     size_t *dst = reinterpret_cast<size_t *>(coroutine_allocator::allocate(n))
                   - (coroutine_allocator::header_size / sizeof(size_t));
     std::memcpy(dst, src, n + coroutine_allocator::header_size);
-    auto coh = std::coroutine_handle<>::from_address(dst + coroutine_allocator::header_size);
+    auto coh =
+        std::coroutine_handle<>::from_address(dst + (coroutine_allocator::header_size / sizeof(size_t)));
 
     // Spawn coroutine and clone coroutine local frame
     size_t src_id = rt.task_id_from_corohandle(h);
