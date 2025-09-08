@@ -68,12 +68,13 @@ uring::~uring() {
 }
 
 std::optional<int> uring::peek(size_t seq_num) {
-    ::io_uring_cqe *cqe;
+    ::io_uring_cqe local_cqe_cache;
+    ::io_uring_cqe *cqe{nullptr};
 
     if (auto guard = this->compeleted_queue.lock(); !guard->empty()) {
         for (auto it = guard->begin(); it != guard->end(); it++) {
-            if ((*it)->user_data == seq_num) {
-                cqe = *it;
+            if ((*it).user_data == seq_num) {
+                local_cqe_cache = *it;
                 guard->erase(it);
                 goto finish;
             }
@@ -84,20 +85,23 @@ std::optional<int> uring::peek(size_t seq_num) {
     do {
         cqe = nullptr;
         if (ret = ::io_uring_peek_cqe(&this->ring, &cqe);
-            ret == 0 && cqe && cqe->user_data != seq_num && !(cqe->flags & IORING_CQE_F_NOTIF))
-            this->compeleted_queue.lock()->push_back(cqe);
+            ret == 0 && cqe && cqe->user_data != seq_num && !(cqe->flags & IORING_CQE_F_NOTIF)) {
+            this->compeleted_queue.lock()->push_back(*cqe);
+            ::io_uring_cqe_seen(&this->ring, cqe);
+        }
     } while (cqe && (cqe->user_data != seq_num || cqe->flags & IORING_CQE_F_NOTIF));
 
     if (!cqe)
         return std::nullopt;
 
 finish:
-    int res = cqe->res;
-    auto ud = ::io_uring_cqe_get_data64(cqe);
+    int res = cqe ? cqe->res : local_cqe_cache.res;
+    auto ud = ::io_uring_cqe_get_data64(cqe ? cqe : &local_cqe_cache);
     if (auto guard = unpeeked_opens.lock(); guard->contains(ud)) {
         guard->erase(ud);
     }
-    ::io_uring_cqe_seen(&this->ring, cqe);
+    if (cqe)
+        ::io_uring_cqe_seen(&this->ring, cqe);
     this->iotask_count.fetch_sub(1);
     return res;
 }

@@ -155,9 +155,10 @@ public:
             if (!_head.load(morder::relaxed))
                 return nullptr;
 
-            auto res = _head.load(morder::relaxed)->container();
-            auto p = _head.load(morder::relaxed)->_next;
-            _head.load(morder::relaxed)->remove();
+            auto h = _head.load(morder::relaxed);
+            auto res = h->container();
+            auto p = h->_next;
+            h->remove();
             _head.store(p, morder::relaxed);
             if (!_head.load(morder::relaxed))
                 _tail.store(nullptr, morder::relaxed);
@@ -168,9 +169,10 @@ public:
             if (!_tail.load(morder::relaxed))
                 return nullptr;
 
-            auto res = _tail.load(morder::relaxed)->container();
-            auto p = _tail.load(morder::relaxed)->_prev;
-            _tail.load(morder::relaxed)->remove();
+            auto h = _tail.load(morder::relaxed);
+            auto res = h->container();
+            auto p = h->_prev;
+            h->remove();
             _tail.store(p, morder::relaxed);
             if (!_tail.load(morder::relaxed))
                 _head.store(nullptr, morder::relaxed);

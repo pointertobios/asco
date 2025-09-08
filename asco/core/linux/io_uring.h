@@ -121,7 +121,7 @@ private:
 
     atomic_size_t iotask_count{0};
 
-    spin<std::deque<::io_uring_cqe *>> compeleted_queue;
+    spin<std::deque<::io_uring_cqe>> compeleted_queue;
 
     // <req_token::seq_num, ioreq::open>
     spin<std::unordered_map<size_t, ioreq::open>> unpeeked_opens;

@@ -252,7 +252,8 @@ public:
     }
 
     bool allocable() const noexcept {
-        return freelist || (current_page && !current_page->is_full()) || pages.length() > 0;
+        return freelist || (current_page && !current_page->is_full())
+               || (pages.length() > 0 && !pages.begin()->is_full());
     }
 
     bool contains_page(page<T> *p) const noexcept {

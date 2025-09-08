@@ -27,14 +27,14 @@ struct __coro_local_frame {
 
     atomic_size_t ref_count{1};
 
-    inline __coro_local_frame(__coro_local_frame *prev, unwind::coro_trace trace)
+    __asco_always_inline __coro_local_frame(__coro_local_frame *prev, unwind::coro_trace trace)
             : prev(prev)
             , tracing_stack(trace) {
         if (prev)
             prev->subframe_enter();
     }
 
-    inline ~__coro_local_frame() {
+    __asco_always_inline ~__coro_local_frame() {
         if (prev && !prev->get_ref_count()) {
             delete prev;
         }
@@ -42,15 +42,15 @@ struct __coro_local_frame {
         for (auto &[_, v] : vars) { v.deconstruct(v.p); }
     }
 
-    inline size_t get_ref_count() { return ref_count.load(morder::acquire); }
+    __asco_always_inline size_t get_ref_count() { return ref_count.load(morder::acquire); }
 
-    inline void subframe_exit() {
+    __asco_always_inline void subframe_exit() {
         ref_count.fetch_sub(1, morder::seq_cst);
         if (prev)
             prev->subframe_exit();
     }
 
-    inline void subframe_enter() {
+    __asco_always_inline void subframe_enter() {
         ref_count.fetch_add(1, morder::seq_cst);
         if (prev)
             prev->subframe_enter();
