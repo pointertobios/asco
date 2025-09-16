@@ -4,6 +4,7 @@
 #include <asco/core/runtime.h>
 
 #include <cassert>
+#include <chrono>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -20,6 +21,8 @@
 
 namespace asco::core {
 
+using namespace std::chrono_literals;
+
 rwspin<std::unordered_map<worker::task_id, std::binary_semaphore *>> worker::workers_by_task_id_sem;
 std::unordered_map<worker::task_id, worker *> worker::workers_by_task_id;
 std::unordered_map<std::thread::id, worker *> worker::workers;
@@ -29,7 +32,7 @@ runtime *runtime::current_runtime{nullptr};
 worker::worker(size_t id, const worker_fn &f, task_receiver rx)
         : id(id)
         , is_calculator(false)
-        , task_rx(rx)
+        , task_rx(std::move(rx))
         , thread([f, this] { f(this); })
         , io_uring(id) {
     workers[thread.get_id()] = this;
@@ -177,7 +180,7 @@ runtime::runtime(size_t nthread_)
 
         while (!(self.task_rx.is_stopped() && self.sc.currently_finished_all())) {
             while (true)
-                if (auto task = self.task_rx.try_recv(); task) {
+                if (auto task = self.task_rx.pop(); task) {
                     self.sc.push_task(*task, sched::task::state::ready);
                     worker::insert_task_map((*task)->id, self_);
                 } else
@@ -241,10 +244,10 @@ runtime::runtime(size_t nthread_)
     }
 #endif
 
-    auto [io_tx, io_rx] = inner::ms::channel<sched::task *>();
+    auto [io_tx, io_rx] = continuous_queue::create<sched::task *>();
     io_task_tx = std::move(io_tx);
 
-    auto [calcu_tx, calcu_rx] = inner::ms::channel<sched::task *>();
+    auto [calcu_tx, calcu_rx] = continuous_queue::create<sched::task *>();
     calcu_task_tx = std::move(calcu_tx);
 
     for (size_t i{0}; i < nthread; i++) {
@@ -278,7 +281,7 @@ runtime::runtime(size_t nthread_)
         } else {
             rx = io_rx;
         }
-        auto *p = new worker(i, worker_lambda, rx);
+        auto *p = new worker(i, worker_lambda, std::move(rx));
         if (!p)
             throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to create worker");
         pool.push_back(p);
@@ -328,10 +331,10 @@ void runtime::awake_all() {
 void runtime::send_task(sched::task *task) {
     if (io_worker_count && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_load) {
         io_worker_load++;
-        auto _ = io_task_tx->send(task);
+        auto _ = io_task_tx->push(task);
     } else {
         calcu_worker_load++;
-        auto _ = calcu_task_tx->send(task);
+        auto _ = calcu_task_tx->push(task);
     }
     awake_all();
 }
@@ -339,10 +342,10 @@ void runtime::send_task(sched::task *task) {
 void runtime::send_blocking_task(sched::task *task) {
     if (calcu_worker_count && io_worker_count * calcu_worker_load <= calcu_worker_count * io_worker_load) {
         calcu_worker_load++;
-        auto _ = calcu_task_tx->send(task);
+        auto _ = calcu_task_tx->push(task);
     } else {
         io_worker_load++;
-        auto _ = io_task_tx->send(task);
+        auto _ = io_task_tx->push(task);
     }
     awake_all();
 }

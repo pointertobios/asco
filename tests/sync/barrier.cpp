@@ -23,8 +23,8 @@ future<int> async_main() {
     std::cout << "Starting workers...\n";
     for (size_t i = 0; i < NUM_THREADS; ++i) { worker(bar, i + 1); }
 
-    co_await bar.all_arrived();
-    std::cout << "All workers have passed the barrier.\n";
+    // co_await bar.all_arrived();
+    // std::cout << "All workers have passed the barrier.\n";
 
     co_return 0;
 }

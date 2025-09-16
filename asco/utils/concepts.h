@@ -30,6 +30,10 @@ concept move_secure =
     || (std::is_move_constructible_v<monostate_if_void<T>>
         && std::is_move_assignable_v<monostate_if_void<T>>);
 
+template<typename T>
+concept base_type =
+    std::is_void_v<T> || std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_pointer_v<T>;
+
 template<typename F>
 concept future_type = requires(F f) {
     typename F::corohandle;

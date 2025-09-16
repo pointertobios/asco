@@ -5,7 +5,6 @@
 #define ASCO_IO_THREAD_H 1
 
 #include <asco/core/daemon.h>
-#include <asco/utils/channel.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco::core {

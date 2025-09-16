@@ -47,7 +47,7 @@ template<typename T>
 class atomic_ptr {
 public:
     struct versioned_ptr {
-        T *ptr{nullptr};
+        T *ptr;
         size_t version{0};
 
         __asco_always_inline operator T *() noexcept { return ptr; }
@@ -72,6 +72,9 @@ public:
 
     __asco_always_inline atomic_ptr() noexcept = default;
     __asco_always_inline ~atomic_ptr() noexcept = default;
+
+    __asco_always_inline atomic_ptr(T *ptr) noexcept
+            : ptr{{ptr}} {}
 
     atomic_ptr(const atomic_ptr &) = delete;
     atomic_ptr &operator=(const atomic_ptr &) = delete;
@@ -119,7 +122,7 @@ public:
     }
 
 private:
-    atomic<versioned_ptr> ptr{};
+    atomic<versioned_ptr> ptr{{nullptr}};
 };
 
 };  // namespace asco::concurrency

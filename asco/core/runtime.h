@@ -18,10 +18,10 @@
 #include <asco/core/sched.h>
 #include <asco/core/taskgroup.h>
 #include <asco/core/timer.h>
+#include <asco/nolock/continuous_queue.h>
 #include <asco/rterror.h>
 #include <asco/sync/rwspin.h>
 #include <asco/sync/spin.h>
-#include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 
 namespace asco::core {
@@ -35,8 +35,8 @@ class worker;
 using worker_fn = std::function<void(worker *)>;
 
 using task_instance = std::coroutine_handle<>;
-using task_sender = inner::ms::sender<sched::task *>;
-using task_receiver = inner::ms::receiver<sched::task *>;
+using task_sender = continuous_queue::sender<sched::task *>;
+using task_receiver = continuous_queue::receiver<sched::task *>;
 
 class worker {
 public:

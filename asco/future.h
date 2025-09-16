@@ -21,7 +21,6 @@
 #include <asco/io/buffer.h>
 #include <asco/perf.h>
 #include <asco/rterror.h>
-#include <asco/utils/channel.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
 
