@@ -10,7 +10,6 @@
 #include <tuple>
 
 #include <asco/core/slub.h>
-#include <asco/perf.h>
 #include <asco/rterror.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/concurrency.h>
@@ -104,6 +103,7 @@ private:
 
     void *operator new(std::size_t) noexcept {
         auto curr = freelist.load(morder::acquire);
+
         if (auto next = curr ? curr->next : nullptr; curr) {
             do {
                 curr = freelist.load(morder::acquire);
@@ -244,29 +244,27 @@ public:
                 index = frame_type::index_nullopt;
             }
 
-            if (index >= frame_type::length) {
-                auto next = f->next.load(morder::acquire);
-                if (!next) {
-                    auto newf = frame_type::create();
-                    if (!f->next.compare_exchange_strong(next, newf, morder::acq_rel, morder::acquire)) {
-                        newf->unlink();
-                    } else {
-                        next = newf;
-                    }
+            if (index < frame_type::length)
+                break;
+
+            auto next = f->next.load(morder::acquire);
+            if (!next) {
+                auto newf = frame_type::create();
+                if (!f->next.compare_exchange_strong(next, newf, morder::acq_rel, morder::acquire)) {
+                    newf->unlink();
+                } else {
+                    next = newf;
                 }
-
-                // Frame always create with refcount 1, so the current frame's next pointer handle
-                // this 1.
-                // So we have to link next only once.
-
-                next->link();
-                f->unlink();
-                f = next;
-
-                continue;
             }
 
-            break;
+            // Frame always create with refcount 1, so the current frame's next pointer handle
+            // this 1.
+            // So we have to link next only once.
+
+            next->link();
+            f->unlink();
+            f = next;
+
         } while (true);
 
         if constexpr (passing_element_type_is_rvalue)

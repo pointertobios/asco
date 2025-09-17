@@ -48,7 +48,8 @@ target_link_libraries(<your-target> PRIVATE asco-shared asco-main-shared)
 - [ ] Async IO
   - [x] Async file IO
   - [ ] Async TCP/UDP stream
-- [ ] No lock data structures and algorithms
+- [ ] No lock data structures and parallel algorithms
+  - [x] continuous_queue
 
 ## Compilers
 
