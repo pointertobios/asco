@@ -12,11 +12,13 @@
 #include <asco/unwind/unwind.h>
 #include <asco/utils/dynvar.h>
 #include <asco/utils/pubusing.h>
+#include <asco/utils/templates.h>
 #include <asco/utils/type_hash.h>
 
 namespace asco::base {
 
 using namespace types;
+using namespace templates;
 
 struct __coro_local_frame {
     __coro_local_frame *prev{nullptr};
@@ -67,40 +69,47 @@ struct __coro_local_frame {
         }
     }
 
-    template<typename T, size_t Hash>
-    T &get_var(const char *name) {
-        if (auto it = vars.find(Hash); it != vars.end()) {
+    template<typename T, literal_string Name>
+    T &get_var() {
+        constexpr auto hash = inner::__consteval_str_hash(Name);
+
+        if (auto it = vars.find(hash); it != vars.end()) {
             if (it->second.type != inner::type_hash<T>())
                 throw asco::runtime_error(
                     "[ASCO] __coro_local_frame::get_var(): Coroutine local variable type mismatch");
             return *reinterpret_cast<T *>(it->second.p);
         } else if (prev) {
-            return prev->get_var<T, Hash>(name);
+            return prev->get_var<T, Name>();
         } else {
             throw asco::runtime_error(
                 std::format(
-                    "[ASCO] __coro_local_frame::get_var(): Coroutine local variable \'{}\' not found", name));
+                    "[ASCO] __coro_local_frame::get_var(): Coroutine local variable \'{}\' not found",
+                    static_cast<const char *>(Name)));
         }
     }
 
-    template<typename T, size_t Hash>
-    T &decl_var(const char *name, T *pt, inner::dynvar::destructor destructor) {
-        if (auto it = vars.find(Hash); it != vars.end())
-            throw asco::runtime_error(
-                std::format("[ASCO] Coroutine local variable \'{}\' already declared", name));
+    template<typename T, literal_string Name>
+    T &decl_var(T *pt, inner::dynvar::destructor destructor) {
+        constexpr auto hash = inner::__consteval_str_hash(Name);
 
-        vars[Hash] = inner::dynvar{inner::type_hash<T>(), pt, destructor};
+        if (auto it = vars.find(hash); it != vars.end())
+            throw asco::runtime_error(
+                std::format(
+                    "[ASCO] Coroutine local variable \'{}\' already declared",
+                    static_cast<const char *>(Name)));
+
+        vars[hash] = inner::dynvar{inner::type_hash<T>(), pt, destructor};
         return *pt;
     }
 
-    template<typename T, size_t Hash>
-    T &decl_var(const char *name, T *pt) {
-        return decl_var<T, Hash>(name, pt, [](void *p) { delete reinterpret_cast<T *>(p); });
+    template<typename T, literal_string Name>
+    T &decl_var(T *pt) {
+        return decl_var<T, Name>(pt, [](void *p) { delete reinterpret_cast<T *>(p); });
     }
 
-    template<typename T, size_t Hash>
-    T &decl_var(const char *name) {
-        return decl_var<T, Hash>(name, new T);
+    template<typename T, literal_string Name>
+    T &decl_var() {
+        return decl_var<T, Name>(new T);
     }
 
     void *operator new(std::size_t) noexcept { return slub_cache.allocate(); }
@@ -114,37 +123,25 @@ inline core::slub::cache<__coro_local_frame> __coro_local_frame::slub_cache{};
 
 };  // namespace asco::base
 
-#define coro_local(name)                                                                                  \
-    &name =                                                                                               \
-        RT::__worker::get_worker()                                                                        \
-            .current_task()                                                                               \
-            .coro_local_frame                                                                             \
-            ->get_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
-                #name)
+#define coro_local(name)               \
+    &name = RT::__worker::get_worker() \
+                .current_task()        \
+                .coro_local_frame->get_var<std::remove_reference_t<decltype(name)>, #name>()
 
-#define decl_local_1arg(name)                                                                              \
-    &name =                                                                                                \
-        RT::__worker::get_worker()                                                                         \
-            .current_task()                                                                                \
-            .coro_local_frame                                                                              \
-            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
-                #name)
+#define decl_local_1arg(name)          \
+    &name = RT::__worker::get_worker() \
+                .current_task()        \
+                .coro_local_frame->decl_var<std::remove_reference_t<decltype(name)>, #name>()
 
-#define decl_local_2arg(name, ptr)                                                                         \
-    &name =                                                                                                \
-        RT::__worker::get_worker()                                                                         \
-            .current_task()                                                                                \
-            .coro_local_frame                                                                              \
-            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
-                #name, ptr)
+#define decl_local_2arg(name, ptr)     \
+    &name = RT::__worker::get_worker() \
+                .current_task()        \
+                .coro_local_frame->decl_var<std::remove_reference_t<decltype(name)>, #name>(ptr)
 
-#define decl_local_3arg(name, ptr, destructor)                                                             \
-    &name =                                                                                                \
-        RT::__worker::get_worker()                                                                         \
-            .current_task()                                                                                \
-            .coro_local_frame                                                                              \
-            ->decl_var<std::remove_reference_t<decltype(name)>, asco::inner::__consteval_str_hash(#name)>( \
-                #name, ptr, destructor)
+#define decl_local_3arg(name, ptr, destructor) \
+    &name = RT::__worker::get_worker()         \
+                .current_task()                \
+                .coro_local_frame->decl_var<std::remove_reference_t<decltype(name)>, #name>(ptr, destructor)
 
 #define decl_local(...) \
     __dispatch(__VA_ARGS__, decl_local_3arg, decl_local_2arg, decl_local_1arg)(__VA_ARGS__)

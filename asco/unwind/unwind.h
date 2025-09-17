@@ -72,7 +72,7 @@ struct coro_trace {
 };  // namespace asco::unwind
 
 template<>
-struct std::formatter<asco::unwind::stacktrace, char> {
+struct std::formatter<asco::unwind::stacktrace> {
     bool color = false;
     constexpr auto parse(std::format_parse_context &ctx) {
         auto it = ctx.begin();

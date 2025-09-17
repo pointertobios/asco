@@ -4,6 +4,7 @@
 #ifndef ASCO_FUTURE_H
 #define ASCO_FUTURE_H
 
+#include "asco/utils/type_hash.h"
 #include <coroutine>
 #include <cstring>
 #include <exception>
@@ -23,6 +24,7 @@
 #include <asco/rterror.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
+#include <asco/utils/templates.h>
 
 #if defined(_MSC_VER) && !defined(__clang__)
 #    error "[ASCO] Compile with clang-cl instead of MSVC"
@@ -32,6 +34,7 @@ namespace asco::base {
 
 using namespace types;
 using namespace concepts;
+using namespace templates;
 
 struct coroutine_abort : std::exception {};
 
@@ -115,15 +118,16 @@ struct future_base {
 
         virtual corohandle corohandle_from_promise() = 0;
 
-        template<size_t Hash>
+        template<literal_string Name>
         static bool group_local_exists() {
+            constexpr auto hash = inner::__consteval_str_hash(Name);
             if (!worker::in_worker())
                 return false;
             auto &rt = RT::get_runtime();
             auto curid = worker::get_worker().current_task_id();
             if (!rt.in_group(curid))
                 return false;
-            return rt.group(curid)->var_exists<Hash>();
+            return rt.group(curid)->var_exists<hash>();
         }
 
         corohandle spawn(__coro_local_frame *curr_clframe, unwind::coro_trace trace) {
@@ -168,7 +172,7 @@ struct future_base {
                 auto &worker = worker::get_worker();
                 auto currid = worker.current_task_id();
                 if (rt.in_group(currid) && rt.group(currid)->is_origin(currid)
-                    && group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()) {
+                    && group_local_exists<"__asco_select_sem__">()) {
                     rt.join_task_to_group(task_id.load(), currid);
                 }
             }
@@ -202,7 +206,7 @@ struct future_base {
             auto caller_task_id = state->caller_task_id.load();
             // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
             // `__asco_select_sem__` for continue running
-            if (group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()) {
+            if (group_local_exists<"__asco_select_sem__">()) {
                 auto &rt = RT::get_runtime();
                 rt.exit_group(task_id.load());
                 if (caller_task_id)
@@ -281,8 +285,7 @@ struct future_base {
             // Do NOT ONLY assert if this task is in a group, the origin coroutine do not need
             // `__asco_select_sem__` for continue running
             if (auto tid = task_id.load();
-                group_local_exists<inner::__consteval_str_hash("__asco_select_sem__")>()
-                && !rt.group(tid)->is_origin(tid)) {
+                group_local_exists<"__asco_select_sem__">() && !rt.group(tid)->is_origin(tid)) {
                 std::binary_semaphore group_local(__asco_select_sem__);
                 if (__asco_select_sem__.try_acquire()) {
                     for (auto id : rt.group(tid)->non_origin_tasks()) {
