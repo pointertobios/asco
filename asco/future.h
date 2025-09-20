@@ -25,6 +25,7 @@
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
 #include <asco/utils/templates.h>
+#include <variant>
 
 #if defined(_MSC_VER) && !defined(__clang__)
 #    error "[ASCO] Compile with clang-cl instead of MSVC"
@@ -104,7 +105,7 @@ struct future_base {
     };
 
     struct promise_base {
-        size_t future_type_hash{inner::type_hash<future_base<T, Inline, Blocking>>()};
+        size_t future_type_hash{inner::type_hash<future_base<return_type, Inline, Blocking>>()};
 
         atomic_size_t task_id{0};
 
@@ -180,7 +181,7 @@ struct future_base {
             return coro;
         }
 
-        future_base<T, Inline, Blocking> get_return_object() {
+        future_base<return_type, Inline, Blocking> get_return_object() {
             void *trace_addr = unwind::unwind_index(2);  // This addr is only correct when compile with -O0
             unwind::coro_trace *trace_prev_addr = nullptr;
             __coro_local_frame *curr_clframe = nullptr;
@@ -196,7 +197,7 @@ struct future_base {
             }
 
             auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
-            return future_base<T, Inline, Blocking>(coro, task_id.load(), ani, state);
+            return future_base<return_type, Inline, Blocking>(coro, task_id.load(), ani, state);
         }
 
         std::suspend_always initial_suspend() noexcept { return {}; }
@@ -267,14 +268,14 @@ struct future_base {
             state->returned.store(true);
         }
 
-        T retval_move_out() {
+        return_type retval_move_out() {
             if (!state->returned)
                 throw asco::runtime_error(
                     "[ASCO] Can't move back return value bacause coroutine didn't return.");
 
             state->moved_back.store(true);
-            if constexpr (!std::is_void_v<T>)
-                return std::move(*reinterpret_cast<T *>(&state->return_value));
+            if constexpr (!std::is_void_v<return_type>)
+                return std::move(*reinterpret_cast<return_type *>(&state->return_value));
         }
 
         void set_abort_exception() { state->e = std::make_exception_ptr(coroutine_abort{}); }
@@ -289,10 +290,8 @@ struct future_base {
                 std::binary_semaphore group_local(__asco_select_sem__);
                 if (__asco_select_sem__.try_acquire()) {
                     for (auto id : rt.group(tid)->non_origin_tasks()) {
-                        if (id != tid) {
+                        if (id != tid)
                             RT::get_runtime().abort(id);
-                            rt.awake(id);
-                        }
                     }
                 } else {
                     return true;
@@ -303,20 +302,20 @@ struct future_base {
     };
 
     struct return_value_mixin_promise : promise_base {
-        void return_value(std::conditional_t<std::is_void_v<T>, std::monostate, T> val)
-            requires(!std::is_void_v<T>)
+        void return_value(std::conditional_t<std::is_void_v<return_type>, std::monostate, return_type> &&val)
+            requires(!std::is_void_v<return_type>)
         {
             if (promise_base::handle_select_winner())
                 return;
 
-            new (static_cast<void *>(&promise_base::state->return_value)) T(std::move(val));
+            new (static_cast<void *>(&promise_base::state->return_value)) return_type(std::move(val));
             promise_base::state->returned.store(true);
         }
     };
 
     struct return_void_mixin_promise : promise_base {
         void return_void()
-            requires(std::is_void_v<T>)
+            requires(std::is_void_v<return_type>)
         {
             if (promise_base::handle_select_winner())
                 return;
@@ -326,7 +325,8 @@ struct future_base {
     };
 
     struct promise_type
-            : std::conditional_t<std::is_void_v<T>, return_void_mixin_promise, return_value_mixin_promise> {
+            : std::conditional_t<
+                  std::is_void_v<return_type>, return_void_mixin_promise, return_value_mixin_promise> {
         corohandle corohandle_from_promise() override { return corohandle::from_promise(*this); }
     };
 
@@ -367,7 +367,7 @@ struct future_base {
         }
     }
 
-    T await_resume() {
+    return_type await_resume() {
         if (none)
             throw asco::runtime_error("[ASCO] future didn't bind to a task");
 
@@ -377,18 +377,20 @@ struct future_base {
             std::rethrow_exception(tmp);
         }
 
-        if constexpr (!std::is_void_v<T>)
-            return std::move(*reinterpret_cast<T *>(&state->return_value));
+        if constexpr (!std::is_void_v<return_type>)
+            return std::move(*reinterpret_cast<return_type *>(&state->return_value));
+        else
+            return;
     }
 
-    T await() {
+    return_type await() {
         if (none)
             throw asco::runtime_error("[ASCO] future didn't bind to a task");
 
         if constexpr (!Inline) {
-            if constexpr (!std::is_void_v<T>) {
+            if constexpr (!std::is_void_v<return_type>) {
                 if (state->returned.load())
-                    return std::move(*reinterpret_cast<T *>(&state->return_value));
+                    return std::move(*reinterpret_cast<return_type *>(&state->return_value));
             }
 
             RT::get_runtime().register_sync_awaiter(task_id);
@@ -400,8 +402,8 @@ struct future_base {
                 std::rethrow_exception(tmp);
             }
 
-            if constexpr (!std::is_void_v<T>)
-                return std::move(*reinterpret_cast<T *>(&state->return_value));
+            if constexpr (!std::is_void_v<return_type>)
+                return std::move(*reinterpret_cast<return_type *>(&state->return_value));
             else
                 return;
         } else {
@@ -428,6 +430,7 @@ struct future_base {
         std::swap(task, rhs.task);
         std::swap(task_id, rhs.task_id);
         std::swap(state, rhs.state);
+        std::swap(actually_non_inline, rhs.actually_non_inline);
         none = false;
         rhs.none = true;
     }
@@ -449,8 +452,8 @@ struct future_base {
         if (!state->returned.load()) {
             state->caller_task = nullptr;
             state->caller_task_id.store(0);
-        } else if constexpr (!std::is_void_v<T>) {
-            reinterpret_cast<T *>(&state->return_value)->~T();
+        } else if constexpr (!std::is_void_v<return_type>) {
+            reinterpret_cast<return_type *>(&state->return_value)->~return_type();
         }
 
         auto e = state->e;
@@ -475,6 +478,7 @@ struct future_base {
             std::swap(task, rhs.task);
             std::swap(task_id, rhs.task_id);
             std::swap(state, rhs.state);
+            std::swap(actually_non_inline, rhs.actually_non_inline);
             none = false;
             rhs.none = true;
         }
@@ -493,7 +497,7 @@ struct future_base {
         if (worker::get_worker().current_task().aborted)
             throw coroutine_abort{};
 
-        if constexpr (!std::is_void_v<T>) {
+        if constexpr (!std::is_void_v<return_type>) {
             auto res = co_await self;
 
             if (worker::get_worker().current_task().aborted)
@@ -520,17 +524,31 @@ struct future_base {
         if (worker::get_worker().current_task().aborted)
             throw coroutine_abort{};
 
-        auto last_result = co_await self;
+        if constexpr (!std::is_void_v<return_type>) {
+            auto last_result = co_await self;
 
-        if (worker::get_worker().current_task().aborted)
-            throw coroutine_abort{};
+            if (worker::get_worker().current_task().aborted)
+                throw coroutine_abort{};
 
-        auto current_result = co_await f(std::move(last_result));
+            auto current_result = co_await f(std::move(last_result));
 
-        if (worker::get_worker().current_task().aborted)
-            throw coroutine_abort{};
+            if (worker::get_worker().current_task().aborted)
+                throw coroutine_abort{};
 
-        co_return std::move(current_result);
+            co_return std::move(current_result);
+        } else {
+            co_await self;
+
+            if (worker::get_worker().current_task().aborted)
+                throw coroutine_abort{};
+
+            auto current_result = co_await f();
+
+            if (worker::get_worker().current_task().aborted)
+                throw coroutine_abort{};
+
+            co_return std::move(current_result);
+        }
     }
 
     template<exception_handler F>
@@ -539,7 +557,8 @@ struct future_base {
         std::invoke_result_t<F, exception_type<F>>>;
 
     auto exceptionally(this future_base self, exception_handler auto f) -> future_base<
-        std::expected<return_type, exceptionally_expected_error_t<decltype(f)>>, false, Blocking> {
+        std::expected<monostate_if_void<return_type>, exceptionally_expected_error_t<decltype(f)>>, false,
+        Blocking> {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
             auto &w = worker::get_worker();
@@ -550,13 +569,21 @@ struct future_base {
         try {
             if (worker::get_worker().current_task().aborted)
                 throw coroutine_abort{};
+            if constexpr (!std::is_void_v<return_type>) {
+                auto result = co_await self;
 
-            auto result = co_await self;
+                if (worker::get_worker().current_task().aborted)
+                    throw coroutine_abort{};
 
-            if (worker::get_worker().current_task().aborted)
-                throw coroutine_abort{};
+                co_return std::move(result);
+            } else {
+                co_await self;
 
-            co_return std::move(result);
+                if (worker::get_worker().current_task().aborted)
+                    throw coroutine_abort{};
+
+                co_return;
+            }
         } catch (exception_type<decltype(f)> e) {
             if constexpr (!std::is_void_v<std::invoke_result_t<decltype(f), exception_type<decltype(f)>>>) {
                 co_return std::unexpected{f(e)};
@@ -567,10 +594,7 @@ struct future_base {
         } catch (...) { std::rethrow_exception(std::current_exception()); }
     }
 
-    template<typename U>
-    using aborted_optional_value_t = std::conditional_t<std::is_void_v<U>, std::monostate, U>;
-
-    future_base<std::optional<aborted_optional_value_t<return_type>>, false, Blocking>
+    future_base<std::optional<monostate_if_void<return_type>>, false, Blocking>
     aborted(this future_base self, std::invocable auto f) {
         if (Inline) {
             auto [task, awaiter] = *worker::get_worker_from_task_id(self.task_id).sc.steal(self.task_id);
@@ -580,7 +604,7 @@ struct future_base {
         }
 
         try {
-            if constexpr (!std::is_void_v<T>)
+            if constexpr (!std::is_void_v<return_type>)
                 co_return co_await self;
             else {
                 co_await self;
@@ -608,7 +632,7 @@ private:
         sizeof(future_state) <= core::slub::page<future_state>::largest_obj_size,
         core::slub::cache<future_state>, std::monostate>
         future_state_slub_cache;
-};  // namespace asco::base
+};
 
 template<move_secure T, bool Inline, bool Blocking>
 inline std::conditional_t<

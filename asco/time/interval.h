@@ -72,7 +72,7 @@ public:
                 }
 
             restorer.state = 1;
-            co_return duration;
+            co_return nanoseconds{duration};
         }
 
         auto &worker = this_coro::get_worker();
