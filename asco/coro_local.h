@@ -6,19 +6,18 @@
 
 #include <unordered_map>
 
+#include <asco/compile_time/string.h>
 #include <asco/core/slub.h>
 #include <asco/perf.h>
 #include <asco/rterror.h>
 #include <asco/unwind/unwind.h>
 #include <asco/utils/dynvar.h>
 #include <asco/utils/pubusing.h>
-#include <asco/utils/templates.h>
 #include <asco/utils/type_hash.h>
 
 namespace asco::base {
 
 using namespace types;
-using namespace templates;
 
 struct __coro_local_frame {
     __coro_local_frame *prev{nullptr};
@@ -69,7 +68,7 @@ struct __coro_local_frame {
         }
     }
 
-    template<typename T, literal_string Name>
+    template<typename T, compile_time::string Name>
     T &get_var() {
         constexpr auto hash = inner::__consteval_str_hash(Name);
 
@@ -88,7 +87,7 @@ struct __coro_local_frame {
         }
     }
 
-    template<typename T, literal_string Name>
+    template<typename T, compile_time::string Name>
     T &decl_var(T *pt, inner::dynvar::destructor destructor) {
         constexpr auto hash = inner::__consteval_str_hash(Name);
 
@@ -102,12 +101,12 @@ struct __coro_local_frame {
         return *pt;
     }
 
-    template<typename T, literal_string Name>
+    template<typename T, compile_time::string Name>
     T &decl_var(T *pt) {
         return decl_var<T, Name>(pt, [](void *p) { delete reinterpret_cast<T *>(p); });
     }
 
-    template<typename T, literal_string Name>
+    template<typename T, compile_time::string Name>
     T &decl_var() {
         return decl_var<T, Name>(new T);
     }

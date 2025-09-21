@@ -10,16 +10,14 @@
 #include <unordered_set>
 #include <vector>
 
+#include <asco/compile_time/string.h>
 #include <asco/core/sched.h>
 #include <asco/rterror.h>
 #include <asco/utils/dynvar.h>
 #include <asco/utils/pubusing.h>
-#include <asco/utils/templates.h>
 #include <asco/utils/type_hash.h>
 
 namespace asco::core {
-
-using namespace templates;
 
 using task_id = sched::task::task_id;
 
@@ -57,7 +55,7 @@ public:
         return vars.contains(Hash);
     }
 
-    template<typename T, literal_string Name>
+    template<typename T, compile_time::string Name>
     T &get_var() {
         constexpr auto hash = inner::__consteval_str_hash(Name);
 
@@ -74,7 +72,7 @@ public:
         return *reinterpret_cast<T *>(vars[hash].p);
     }
 
-    template<typename T, literal_string Name>
+    template<typename T, compile_time::string Name>
     T &decl_var(T *pt, inner::dynvar::destructor destructor) {
         constexpr auto hash = inner::__consteval_str_hash(Name);
 
@@ -88,17 +86,17 @@ public:
         return *pt;
     }
 
-    template<typename T, literal_string Name>
+    template<typename T, compile_time::string Name>
     T &decl_var(T *pt) {
         return decl_var<T, Name>(pt, [](void *p) { delete reinterpret_cast<T *>(p); });
     }
 
-    template<typename T, literal_string Name>
+    template<typename T, compile_time::string Name>
     T &decl_var() {
         return decl_var<T, Name>(new T);
     }
 
-    template<literal_string Name>
+    template<compile_time::string Name>
     void del_var() {
         if (auto it = vars.find(inner::__consteval_str_hash(Name)); it != vars.end()) {
             it->second.deconstruct(it->second.p);
