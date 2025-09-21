@@ -4,7 +4,6 @@
 #ifndef ASCO_FUTURE_H
 #define ASCO_FUTURE_H
 
-#include "asco/utils/type_hash.h"
 #include <coroutine>
 #include <cstring>
 #include <exception>
@@ -15,6 +14,7 @@
 #include <type_traits>
 #include <utility>
 
+#include <asco/compile_time/string.h>
 #include <asco/core/runtime.h>
 #include <asco/core/taskgroup.h>
 #include <asco/coro_local.h>
@@ -24,7 +24,6 @@
 #include <asco/rterror.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/pubusing.h>
-#include <asco/utils/templates.h>
 #include <variant>
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -35,11 +34,10 @@ namespace asco::base {
 
 using namespace types;
 using namespace concepts;
-using namespace templates;
 
 struct coroutine_abort : std::exception {};
 
-template<move_secure T, bool Inline, bool Blocking>
+template<move_secure T, bool Inline, bool Blocking, size_t ExtraSpace = 0>
 struct future_base {
     static_assert(!Inline || !Blocking, "[ASCO] Inline coroutine cannot be blocking.");
 
@@ -49,13 +47,15 @@ struct future_base {
     using corohandle = std::coroutine_handle<promise_type>;
     using return_type = T;
 
-    template<move_secure U = T>
+    template<move_secure U = return_type>
     struct return_value_storage {
         char value[sizeof(U)];
     };
 
     template<>
     struct return_value_storage<void> {};
+
+    using extra_space_destructor = void (*)(void *);
 
     struct future_state {
     public:
@@ -73,6 +73,10 @@ struct future_base {
     public:
         return_value_storage<> return_value;
 
+        char extra_space[ExtraSpace];
+
+        extra_space_destructor extra_space_dtor{nullptr};
+
         future_state(const future_state &) = delete;
         future_state &operator=(const future_state &) = delete;
 
@@ -88,6 +92,11 @@ struct future_base {
 
     private:
         future_state() = default;
+
+        ~future_state() noexcept {
+            if (extra_space_dtor)
+                extra_space_dtor(extra_space);
+        }
 
         void *operator new(std::size_t) noexcept {
             if constexpr (!std::is_same_v<decltype(future_base::future_state_slub_cache), std::monostate>)
@@ -119,7 +128,7 @@ struct future_base {
 
         virtual corohandle corohandle_from_promise() = 0;
 
-        template<literal_string Name>
+        template<compile_time::string Name>
         static bool group_local_exists() {
             constexpr auto hash = inner::__consteval_str_hash(Name);
             if (!worker::in_worker())
@@ -181,7 +190,7 @@ struct future_base {
             return coro;
         }
 
-        future_base<return_type, Inline, Blocking> get_return_object() {
+        future_base get_return_object() {
             void *trace_addr = unwind::unwind_index(2);  // This addr is only correct when compile with -O0
             unwind::coro_trace *trace_prev_addr = nullptr;
             __coro_local_frame *curr_clframe = nullptr;
@@ -197,7 +206,7 @@ struct future_base {
             }
 
             auto coro = spawn(curr_clframe, {trace_addr, trace_prev_addr});
-            return future_base<return_type, Inline, Blocking>(coro, task_id.load(), ani, state);
+            return future_base(coro, task_id.load(), ani, state);
         }
 
         std::suspend_always initial_suspend() noexcept { return {}; }
@@ -468,20 +477,11 @@ struct future_base {
     }
 
     future_base &operator=(future_base &&rhs) {
-        if (!none) {
-            if (auto &e = state->e)
-                std::rethrow_exception(e);
-            none = true;
-        }
+        if (this == &rhs)
+            return *this;
 
-        if (!rhs.none) {
-            std::swap(task, rhs.task);
-            std::swap(task_id, rhs.task_id);
-            std::swap(state, rhs.state);
-            std::swap(actually_non_inline, rhs.actually_non_inline);
-            none = false;
-            rhs.none = true;
-        }
+        this->~future_base();
+        new (this) future_base(std::move(rhs));
         return *this;
     }
 
@@ -620,26 +620,28 @@ private:
     corohandle task;
     size_t task_id;
 
-    // If a inline future function called at where it is not worker thread, it actually will spawn to a worker
-    // thread.
+    // If a inline future function called at where it is not worker thread, it shall be spawned to a worker
+    // thread through calling dispatch().
     bool actually_non_inline;
 
-    future_state *state;
+    future_state *state{nullptr};
 
+protected:
     bool none{true};
 
+private:
     static std::conditional_t<
         sizeof(future_state) <= core::slub::page<future_state>::largest_obj_size,
         core::slub::cache<future_state>, std::monostate>
         future_state_slub_cache;
 };
 
-template<move_secure T, bool Inline, bool Blocking>
+template<move_secure T, bool Inline, bool Blocking, size_t ExtraSpace>
 inline std::conditional_t<
-    sizeof(typename future_base<T, Inline, Blocking>::future_state)
-        <= core::slub::page<typename future_base<T, Inline, Blocking>::future_state>::largest_obj_size,
-    core::slub::cache<typename future_base<T, Inline, Blocking>::future_state>, std::monostate>
-    future_base<T, Inline, Blocking>::future_state_slub_cache{};
+    sizeof(typename future_base<T, Inline, Blocking, ExtraSpace>::future_state) <= core::slub::page<
+        typename future_base<T, Inline, Blocking, ExtraSpace>::future_state>::largest_obj_size,
+    core::slub::cache<typename future_base<T, Inline, Blocking, ExtraSpace>::future_state>, std::monostate>
+    future_base<T, Inline, Blocking, ExtraSpace>::future_state_slub_cache{};
 
 template<move_secure T>
 using future = future_base<T, false, false>;
