@@ -188,6 +188,8 @@ private:
 
 using binary_semaphore = semaphore_base<1>;
 
+using unlimited_semaphore = semaphore_base<std::numeric_limits<size_t>::max()>;
+
 template<size_t MaxCount>
 using semaphore = semaphore_base<MaxCount>;
 
@@ -197,6 +199,7 @@ namespace asco {
 
 using sync::binary_semaphore;
 using sync::semaphore;
+using sync::unlimited_semaphore;
 
 };  // namespace asco
 

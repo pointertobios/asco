@@ -59,7 +59,7 @@ private:
     atomic_size_t count{0};
     atomic_size_t generation{0};
     semaphore<N - 1> sem{0};
-    semaphore<std::numeric_limits<size_t>::max()> arrived_sem{0};
+    unlimited_semaphore arrived_sem{0};
 };
 
 };  // namespace asco::sync
