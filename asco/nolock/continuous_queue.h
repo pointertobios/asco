@@ -147,7 +147,7 @@ static_assert(sizeof(frame<void>) == 4096);
 template<move_secure T>
 inline atomic_ptr<core::slub::object<frame<T>>> frame<T>::freelist{nullptr};
 
-// Sender is not thread-safe, but multiple senders can work on same continuous_queue.
+// Always thread-safe.
 template<move_secure T>
 class sender {
     using frame_type = frame<T>;
@@ -293,7 +293,12 @@ private:
     frame_type *f{nullptr};
 };
 
-// Receiver is not thread-safe, but multiple receivers can work on same continuous_queue.
+enum class pop_fail {
+    non_object,  // No object available now.
+    closed       // This queue is closed.
+};
+
+// Always thread-safe.
 template<move_secure T>
 class receiver {
     using frame_type = frame<T>;
@@ -302,11 +307,6 @@ class receiver {
     static constexpr bool passing_element_type_is_rvalue = frame<T>::passing_element_type_is_rvalue;
 
 public:
-    enum class pop_fail {
-        non_object,  // No object available now.
-        closed       // This queue is closed.
-    };
-
     receiver() noexcept = default;
 
     receiver(frame_type *f) noexcept
@@ -463,6 +463,7 @@ std::tuple<sender<T>, receiver<T>> create() {
 namespace asco::continuous_queue {
 
 using nolock::continuous_queue::create;
+using nolock::continuous_queue::pop_fail;
 using nolock::continuous_queue::receiver;
 using nolock::continuous_queue::sender;
 

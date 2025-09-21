@@ -20,7 +20,7 @@ static void test_spsc_basic() {
     auto [tx, rx] = cq::create<int>();
 
     auto p0 = rx.pop();
-    assert(!p0.has_value() && p0.error() == decltype(rx)::pop_fail::non_object);
+    assert(!p0.has_value() && p0.error() == cq::pop_fail::non_object);
 
     const int N = 10000;
     for (int i = 0; i < N; ++i) {
@@ -35,7 +35,7 @@ static void test_spsc_basic() {
     }
 
     auto p1 = rx.pop();
-    assert(!p1.has_value() && p1.error() == decltype(rx)::pop_fail::non_object);
+    assert(!p1.has_value() && p1.error() == cq::pop_fail::non_object);
 }
 
 static void test_stop_semantics() {
@@ -57,7 +57,7 @@ static void test_stop_semantics() {
 
         for (int i = 0; i < 5; ++i) {
             auto v = rx.pop();
-            while (!v.has_value() && v.error() == decltype(rx)::pop_fail::non_object) {
+            while (!v.has_value() && v.error() == cq::pop_fail::non_object) {
                 std::this_thread::yield();
                 v = rx.pop();
             }
@@ -66,13 +66,12 @@ static void test_stop_semantics() {
 
         auto p = rx.pop();
         int spin = 0;
-        while (!p.has_value() && p.error() == decltype(rx)::pop_fail::non_object && spin++ < 100000) {
+        while (!p.has_value() && p.error() == cq::pop_fail::non_object && spin++ < 100000) {
             std::this_thread::yield();
             p = rx.pop();
         }
         assert(!p.has_value());
-        assert(
-            p.error() == decltype(rx)::pop_fail::closed || p.error() == decltype(rx)::pop_fail::non_object);
+        assert(p.error() == cq::pop_fail::closed || p.error() == cq::pop_fail::non_object);
     }
 }
 
@@ -92,14 +91,13 @@ static asco::future<void> mpmc_producer_task(cq::sender<std::int64_t> tx, int p,
 static asco::future<void> mpmc_consumer_task(
     cq::receiver<std::int64_t> rx, std::vector<std::int64_t> &bucket, std::atomic<std::int64_t> &consumed,
     std::int64_t total) {
-    using Rx = cq::receiver<std::int64_t>;
     bucket.reserve(static_cast<size_t>(total / 4 + 8));
     while (true) {
         auto v = rx.pop();
         if (v.has_value()) {
             bucket.push_back(*v);
             consumed.fetch_add(1, std::memory_order_relaxed);
-        } else if (v.error() == Rx::pop_fail::non_object) {
+        } else if (v.error() == cq::pop_fail::non_object) {
             co_await asco::yield<>();
         } else {  // closed
             break;
