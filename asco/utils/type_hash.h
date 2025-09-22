@@ -4,32 +4,20 @@
 #ifndef ASCO_UTILS_TYPE_HASH_H
 #define ASCO_UTILS_TYPE_HASH_H 1
 
+#include <asco/compile_time/string.h>
 #include <asco/utils/pubusing.h>
 
 namespace asco::inner {
-
-consteval size_t __consteval_str_hash(const char *name) {
-    constexpr size_t offset_basis = 0xcbf29ce484222325ULL;
-    constexpr size_t prime = 0x100000001b3ULL;
-    size_t hash = offset_basis;
-    for (const char *p = name; *p != '\0'; ++p) {
-        hash ^= static_cast<size_t>(*p);
-        hash *= prime;
-    }
-    return hash;
-}
 
 // The type hash only have to be different with different types, so just calculate the hash of function
 // signature.
 template<typename T>
 consteval size_t type_hash() {
 #if defined(__clang__) || defined(__GNUC__)
-    constexpr auto name = __PRETTY_FUNCTION__;
+    return compile_time::string{__PRETTY_FUNCTION__}.hash();
 #elif defined(_MSC_VER)
-    constexpr auto name = __FUNCSIG__;
+    return compile_time::string{__FUNCSIG__}.hash();
 #endif
-    constexpr auto p = __consteval_str_hash(name);
-    return p;
 }
 
 };  // namespace asco::inner

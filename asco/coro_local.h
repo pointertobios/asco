@@ -57,12 +57,13 @@ struct __coro_local_frame {
             prev->subframe_enter();
     }
 
-    template<size_t Hash>
+    template<compile_time::string Name>
     bool var_exists() {
-        if (vars.contains(Hash)) {
+        constexpr auto hash = Name.hash();
+        if (vars.contains(hash)) {
             return true;
         } else if (prev) {
-            return prev->var_exists<Hash>();
+            return prev->var_exists<Name>();
         } else {
             return false;
         }
@@ -70,9 +71,7 @@ struct __coro_local_frame {
 
     template<typename T, compile_time::string Name>
     T &get_var() {
-        constexpr auto hash = inner::__consteval_str_hash(Name);
-
-        if (auto it = vars.find(hash); it != vars.end()) {
+        if (auto it = vars.find(Name.hash()); it != vars.end()) {
             if (it->second.type != inner::type_hash<T>())
                 throw asco::runtime_error(
                     "[ASCO] __coro_local_frame::get_var(): Coroutine local variable type mismatch");
@@ -89,7 +88,7 @@ struct __coro_local_frame {
 
     template<typename T, compile_time::string Name>
     T &decl_var(T *pt, inner::dynvar::destructor destructor) {
-        constexpr auto hash = inner::__consteval_str_hash(Name);
+        constexpr auto hash = Name.hash();
 
         if (auto it = vars.find(hash); it != vars.end())
             throw asco::runtime_error(

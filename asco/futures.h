@@ -4,6 +4,7 @@
 #ifndef ASCO_FUTURES_H
 #define ASCO_FUTURES_H 1
 
+#include <asco/compile_time/string.h>
 #include <asco/core/taskgroup.h>
 #include <asco/coro_local.h>
 #include <asco/future.h>
@@ -39,16 +40,16 @@ constexpr size_t get_id() { return RT::__worker::get_worker().current_task_id();
 
 constexpr RT::__worker &get_worker() { return RT::__worker::get_worker(); }
 
-template<size_t Hash>
+template<compile_time::string Name>
 bool coro_local_exists() {
-    return RT::__worker::get_worker().current_task().coro_local_frame->var_exists<Hash>();
+    return RT::__worker::get_worker().current_task().coro_local_frame->var_exists<Name>();
 }
 
 namespace inner {
 
-template<size_t Hash>
+template<compile_time::string Name>
 bool group_local_exists() {
-    return RT::get_runtime().group(RT::__worker::get_worker().current_task_id())->var_exists<Hash>();
+    return RT::get_runtime().group(RT::__worker::get_worker().current_task_id())->var_exists<Name>();
 }
 
 // Do **NOT** let all the cloned coroutines co_return!!!!!

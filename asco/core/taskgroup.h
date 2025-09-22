@@ -50,14 +50,14 @@ public:
         return view | std::ranges::to<std::vector>();
     }
 
-    template<size_t Hash>
+    template<compile_time::string Name>
     bool var_exists() {
-        return vars.contains(Hash);
+        return vars.contains(Name.hash());
     }
 
     template<typename T, compile_time::string Name>
     T &get_var() {
-        constexpr auto hash = inner::__consteval_str_hash(Name);
+        constexpr auto hash = Name.hash();
 
         if (auto it = vars.find(hash); it == vars.end())
             throw asco::runtime_error(
@@ -74,7 +74,7 @@ public:
 
     template<typename T, compile_time::string Name>
     T &decl_var(T *pt, inner::dynvar::destructor destructor) {
-        constexpr auto hash = inner::__consteval_str_hash(Name);
+        constexpr auto hash = Name.hash();
 
         if (auto it = vars.find(hash); it != vars.end())
             throw asco::runtime_error(
@@ -98,7 +98,7 @@ public:
 
     template<compile_time::string Name>
     void del_var() {
-        if (auto it = vars.find(inner::__consteval_str_hash(Name)); it != vars.end()) {
+        if (auto it = vars.find(Name.hash()); it != vars.end()) {
             it->second.deconstruct(it->second.p);
             vars.erase(it);
         }

@@ -49,7 +49,7 @@ struct future_base {
 
     template<move_secure U = return_type>
     struct return_value_storage {
-        char value[sizeof(U)];
+        char value[ExtraSpace ? 0 : sizeof(U)];
     };
 
     template<>
@@ -72,6 +72,7 @@ struct future_base {
 
     public:
         return_value_storage<> return_value;
+        bool has_return_value{true};
 
         char extra_space[ExtraSpace];
 
@@ -130,14 +131,13 @@ struct future_base {
 
         template<compile_time::string Name>
         static bool group_local_exists() {
-            constexpr auto hash = inner::__consteval_str_hash(Name);
             if (!worker::in_worker())
                 return false;
             auto &rt = RT::get_runtime();
             auto curid = worker::get_worker().current_task_id();
             if (!rt.in_group(curid))
                 return false;
-            return rt.group(curid)->var_exists<hash>();
+            return rt.group(curid)->var_exists<Name>();
         }
 
         corohandle spawn(__coro_local_frame *curr_clframe, unwind::coro_trace trace) {
@@ -462,7 +462,8 @@ struct future_base {
             state->caller_task = nullptr;
             state->caller_task_id.store(0);
         } else if constexpr (!std::is_void_v<return_type>) {
-            reinterpret_cast<return_type *>(&state->return_value)->~return_type();
+            if (state->has_return_value)
+                reinterpret_cast<return_type *>(&state->return_value)->~return_type();
         }
 
         auto e = state->e;
