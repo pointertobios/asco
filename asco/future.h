@@ -44,7 +44,7 @@ struct future_base {
     using worker = RT::__worker;
 
     struct promise_type;
-    using corohandle = std::coroutine_handle<promise_type>;
+    using corohandle = std::coroutine_handle<>;
     using return_type = T;
 
     template<move_secure U = return_type>
@@ -336,7 +336,9 @@ struct future_base {
     struct promise_type
             : std::conditional_t<
                   std::is_void_v<return_type>, return_void_mixin_promise, return_value_mixin_promise> {
-        corohandle corohandle_from_promise() override { return corohandle::from_promise(*this); }
+        corohandle corohandle_from_promise() override {
+            return std::coroutine_handle<promise_type>::from_promise(*this);
+        }
     };
 
     bool await_ready() {
@@ -625,9 +627,9 @@ private:
     // thread through calling dispatch().
     bool actually_non_inline;
 
+protected:
     future_state *state{nullptr};
 
-protected:
     bool none{true};
 
 private:
