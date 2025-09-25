@@ -136,9 +136,10 @@ void std_scheduler::steal_from(task *task, std::binary_semaphore *awaiter) {
 }
 
 bool std_scheduler::currently_finished_all() {
-    auto guard = suspended_tasks.lock();
-    std::erase_if(*guard, [](auto &p) { return p.second->done(); });
-    return active_tasks.lock()->empty() && guard->empty();
+    auto guard = active_tasks.lock();
+    auto susg = suspended_tasks.lock();
+    std::erase_if(*susg, [](auto &p) { return p.second->done(); });
+    return guard->empty() && susg->empty();
 }
 
 bool std_scheduler::has_buffered_awakes() { return !not_in_suspended_but_awake_tasks.empty(); }
