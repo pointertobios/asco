@@ -15,7 +15,7 @@ namespace asco::base::this_coro {
 
 constexpr bool aborted() { return RT::__worker::get_worker().current_task().aborted; }
 
-template<future_type F>
+template<typename F>
 F::return_type move_back_return_value() {
     auto h_ = RT::__worker::get_worker().current_task().handle;
     auto h = *(std::coroutine_handle<typename F::promise_type> *)(&h_);
@@ -26,7 +26,7 @@ F::return_type move_back_return_value() {
     return h.promise().retval_move_out();
 }
 
-template<future_type F>
+template<typename F>
 void throw_coroutine_abort() {
     auto h_ = RT::__worker::get_worker().current_task().handle;
     auto h = *(std::coroutine_handle<typename F::promise_type> *)(&h_);

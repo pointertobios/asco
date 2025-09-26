@@ -23,10 +23,7 @@ generator<int> gen_then_throw() {
 
 future_inline<int> consume_sum(generator<int> &g) {
     int sum = 0;
-    while (g) {
-        auto e = co_await g();
-        sum += e;
-    }
+    while (auto e = co_await g()) { sum += *e; }
     co_return sum;
 }
 
@@ -54,14 +51,11 @@ future<int> async_main() {
         auto g1 = gen_count(10);
         for (int i = 1; i <= 3; ++i) {
             auto e = co_await g1();
-            assert(e == i);
+            assert(*e == i);
         }
         auto g2 = std::move(g1);
         int next_expected = 4;
-        while (g2) {
-            auto e = co_await g2();
-            assert(e == next_expected++);
-        }
+        while (auto e = co_await g2()) { assert(*e == next_expected++); }
         assert(next_expected == 11);
     }
 

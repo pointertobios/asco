@@ -89,9 +89,14 @@ struct generator_base : public future_base<T, false, Blocking, sizeof(generator_
         }
     };
 
-    operator bool() const { return !yield_rx.is_stopped(); }
+    operator bool() const {
+        if (base_future::none)
+            return false;
 
-    auto operator()() -> future_inline<return_type> {
+        return !yield_rx.is_stopped();
+    }
+
+    auto operator()() -> future_inline<std::optional<return_type>> {
         co_await gextra->yield_sem.acquire();
         if (gextra->throwed.load(morder::acquire) && gextra->yield_count.load(morder::acquire) == 0) {
             if (auto &e = base_future::state->e) {
@@ -105,7 +110,7 @@ struct generator_base : public future_base<T, false, Blocking, sizeof(generator_
         if (auto res = yield_rx.pop())
             co_return std::move(res.value());
         else
-            throw runtime_error("[ASCO] generator fetch failed: generator ends");
+            co_return std::nullopt;
     }
 
     bool await_ready() = delete;
