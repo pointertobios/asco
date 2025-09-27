@@ -153,11 +153,13 @@ future<std::expected<buffer<>, read_result>> file::read(size_t nbytes) {
             if (!this_coro::aborted())
                 return;
 
-            this_coro::throw_coroutine_abort<future<io::buffer<>>>();
+            this_coro::throw_coroutine_abort<future<std::expected<buffer<>, read_result>>>();
 
             switch (state) {
             case 1: {
-                self.aborted_buffer = this_coro::move_back_return_value<future<io::buffer<>>>();
+                auto val = this_coro::move_back_return_value<future<std::expected<buffer<>, read_result>>>();
+                if (val)
+                    self.aborted_buffer = std::move(*val);
                 self.pread -= pread_inc;
             } break;
             default:
