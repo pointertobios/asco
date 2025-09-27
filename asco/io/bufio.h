@@ -4,7 +4,9 @@
 #ifndef ASCO_IO_STREAM_H
 #define ASCO_IO_STREAM_H 1
 
+#include <asco/compile_time/platform.h>
 #include <asco/future.h>
+#include <asco/generator.h>
 #include <asco/io/buffer.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/math.h>
@@ -285,6 +287,12 @@ private:
     }
 };
 
+enum class newline {
+    cr,    // Apple
+    lf,    // Linux, Unix, etc.
+    crlf,  // Windows
+};
+
 template<stream_read T>
 class stream_reader {
 public:
@@ -292,8 +300,300 @@ public:
             : ioo{std::move(ioo)}
             , reader_ioo{const_cast<T &>(this->ioo.value())} {}
 
+    // Always read nbytes, return nbytes buffer.
+    // Only if EOF is reached, return buffer with size < nbytes.
+    future<buffer<>> read(size_t nbytes) {
+        if (eof)
+            co_return {};
+
+        struct re {
+            stream_reader &self;
+            int state{0};
+
+            ~re() {
+                if (!this_coro::aborted())
+                    return;
+
+                if (state == 0) {
+                    self.cache.push(this_coro::move_back_return_value<future<buffer<>>>());
+                    this_coro::throw_coroutine_abort<future<buffer<>>>();
+                }
+            }
+        } restorer{*this};
+
+        if (this_coro::aborted()) {
+            restorer.state = 1;
+            throw coroutine_abort{};
+        }
+
+        if (cache.size() == nbytes) {
+            co_return std::move(cache);
+        } else if (cache.size() > nbytes) {
+            auto [left, right] = std::move(cache).split(nbytes);
+            cache = std::move(right);
+            co_return std::move(left);
+        }
+
+        buffer res{std::move(cache)};
+
+        while (res.size() < nbytes) {
+            if (this_coro::aborted()) {
+                cache.push(std::move(res));
+                restorer.state = 1;
+                throw coroutine_abort{};
+            }
+
+            auto chunk = co_await reader_ioo.read(nbytes - res.size());
+
+            if (this_coro::aborted()) {
+                cache.push(std::move(res));
+                if (chunk)
+                    cache.push(std::move(*chunk));
+                restorer.state = 1;
+                throw coroutine_abort{};
+            }
+
+            if (!chunk) {
+                switch (chunk.error()) {
+                case read_result::eof:
+                    eof = true;
+                    co_return std::move(res);
+                case read_result::interrupted:
+                    continue;
+                case read_result::again:
+                    co_await std::suspend_always{};
+                    continue;
+                }
+            }
+            res.push(std::move(*chunk));
+        }
+
+        if (this_coro::aborted()) {
+            cache.push(std::move(res));
+            restorer.state = 1;
+            throw coroutine_abort{};
+        }
+
+        co_return std::move(res);
+    }
+
+    future<buffer<>> read_all() {
+        if (eof)
+            co_return {};
+
+        struct re {
+            stream_reader &self;
+            int state{0};
+
+            ~re() {
+                if (!this_coro::aborted())
+                    return;
+
+                if (state == 0) {
+                    self.cache.push(this_coro::move_back_return_value<future<buffer<>>>());
+                    this_coro::throw_coroutine_abort<future<buffer<>>>();
+                }
+            }
+        } restorer{*this};
+
+        if (this_coro::aborted()) {
+            restorer.state = 1;
+            throw coroutine_abort{};
+        }
+
+        buffer res{std::move(cache)};
+
+        while (true) {
+            if (this_coro::aborted()) {
+                cache.push(std::move(res));
+                restorer.state = 1;
+                throw coroutine_abort{};
+            }
+
+            auto chunk = co_await reader_ioo.read(4096);
+
+            if (this_coro::aborted()) {
+                cache.push(std::move(res));
+                if (chunk)
+                    cache.push(std::move(*chunk));
+                restorer.state = 1;
+                throw coroutine_abort{};
+            }
+
+            if (!chunk) {
+                switch (chunk.error()) {
+                case read_result::eof:
+                    eof = true;
+                    co_return std::move(res);
+                case read_result::interrupted:
+                    continue;
+                case read_result::again:
+                    co_await std::suspend_always{};
+                    continue;
+                }
+            }
+            res.push(std::move(*chunk));
+        }
+    }
+
+    generator<std::string> read_lines(newline nl = [] consteval {
+        using compile_time::platform::platform;
+        using compile_time::platform::os;
+        newline res;
+        if constexpr (platform::os_is(os::linux))
+            res = newline::lf;
+        else if constexpr (platform::os_is(os::windows))
+            res = newline::crlf;
+        else if constexpr (platform::os_is(os::apple))
+            res = newline::cr;
+        return res;
+    }()) {
+        if (eof)
+            co_return;
+
+        struct re {
+            int state{0};
+
+            ~re() {
+                if (!this_coro::aborted())
+                    return;
+
+                if (state == 0)
+                    this_coro::throw_coroutine_abort<generator<std::string>>();
+            }
+        } restorer;
+
+        buffer<> pending{std::move(cache)};
+        bool prev_cr = false;
+
+        // Copy the range [start, start+len) in `pending` to a std::string (single allocation, multiple
+        // memcpy)
+        auto copy_range = [&pending](size_t start, size_t len) -> std::string {
+            std::string out;
+            out.resize(len);
+            size_t written = 0;
+            size_t abs = 0;
+            for (auto it = pending.rawbuffers(); !it.is_end() && written < len; ++it) {
+                auto rb = *it;
+                const char *seg = static_cast<const char *>(rb.buffer);
+                size_t seg_len = rb.size;
+
+                if (start >= abs + seg_len) {
+                    abs += seg_len;
+                    continue;
+                }
+
+                size_t seg_off = start > abs ? (start - abs) : 0;
+                size_t avail = seg_len - seg_off;
+                size_t tocopy = std::min(avail, len - written);
+
+                std::memcpy(out.data() + written, seg + seg_off, tocopy);
+                written += tocopy;
+                abs += seg_len;
+            }
+            return out;
+        };
+
+        while (true) {
+            if (this_coro::aborted()) {
+                cache.push(std::move(pending));
+                restorer.state = 1;
+                throw coroutine_abort{};
+            }
+
+            size_t line_start = 0;
+            size_t consume_to = 0;
+            size_t abs = 0;  // Absolute position in `pending`
+
+            for (auto it = pending.rawbuffers(); !it.is_end(); ++it) {
+                auto rb = *it;
+                const char *seg = static_cast<const char *>(rb.buffer);
+                size_t n = rb.size;
+
+                for (size_t i = 0; i < n; ++i, ++abs) {
+                    char c = seg[i];
+
+                    if (nl == newline::lf) {
+                        if (c == '\n') {
+                            size_t line_len = (abs)-line_start;
+                            co_yield copy_range(line_start, line_len);
+                            line_start = abs + 1;
+                            consume_to = line_start;
+                        }
+                    } else if (nl == newline::cr) {
+                        if (c == '\r') {
+                            size_t line_len = (abs)-line_start;
+                            co_yield copy_range(line_start, line_len);
+                            line_start = abs + 1;
+                            consume_to = line_start;
+                        }
+                    } else {  // newline::CRLF
+                        if (prev_cr) {
+                            if (c == '\n') {
+                                // Hit "\r\n"
+                                size_t line_len = (abs - 1) - line_start;
+                                co_yield copy_range(line_start, line_len);
+                                line_start = abs + 1;
+                                consume_to = line_start;
+                                prev_cr = false;
+                                continue;
+                            } else {
+                                // Previous '\r' is a single CR
+                                prev_cr = false;
+                            }
+                        }
+                        if (c == '\r') {
+                            prev_cr = true;
+                        }
+                    }
+                }
+            }
+
+            if (consume_to > 0) {
+                pending = std::get<1>(std::move(pending).split(consume_to));
+            }
+
+            if (this_coro::aborted()) {
+                cache.push(std::move(pending));
+                restorer.state = 1;
+                throw coroutine_abort{};
+            }
+
+            auto chunk = co_await reader_ioo.read(128);
+
+            if (this_coro::aborted()) {
+                cache.push(std::move(pending));
+                if (chunk)
+                    cache.push(std::move(*chunk));
+                restorer.state = 1;
+                throw coroutine_abort{};
+            }
+
+            if (!chunk) {
+                switch (chunk.error()) {
+                case read_result::eof: {
+                    eof = true;
+                    if (pending.size() > 0) {
+                        co_yield copy_range(0, pending.size());
+                    }
+                    co_return;
+                }
+                case read_result::interrupted:
+                    continue;
+                case read_result::again:
+                    co_await std::suspend_always{};
+                    continue;
+                }
+            }
+
+            pending.push(std::move(*chunk));
+        }
+    }
+
 private:
+    buffer<> cache{};
     std::optional<T> ioo{std::nullopt};
+    bool eof{false};
 
 protected:
     stream_reader(T &ioo)
@@ -310,6 +610,7 @@ public:
             , writer_ioo{const_cast<T &>(this->ioo.value())} {}
 
 private:
+    buffer<> cache{};
     std::optional<T> ioo{std::nullopt};
 
 protected:
@@ -327,11 +628,11 @@ public:
             , stream_writer<T>{this->ioo}
             , ioo{std::move(ioo)} {}
 
-    constexpr stream_reader<T> &reader(this stream_read_writer &self) { return self; }
-    constexpr const stream_reader<T> &reader(this const stream_read_writer &self) { return self; }
+    stream_reader<T> &reader(this stream_read_writer &self) { return self; }
+    const stream_reader<T> &reader(this const stream_read_writer &self) { return self; }
 
-    constexpr stream_writer<T> &writer(this stream_read_writer &self) { return self; }
-    constexpr const stream_writer<T> &writer(this const stream_read_writer &self) { return self; }
+    stream_writer<T> &writer(this stream_read_writer &self) { return self; }
+    const stream_writer<T> &writer(this const stream_read_writer &self) { return self; }
 
 private:
     T ioo;
@@ -343,6 +644,7 @@ namespace asco {
 
 using io::block_read, io::block_write, io::block_read_write;
 using io::block_read_writer;
+using io::newline;
 using io::seekpos;
 using io::stream_read, io::stream_write, io::stream_read_write;
 using io::stream_reader, io::stream_writer, io::stream_read_writer;
