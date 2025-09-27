@@ -9,9 +9,7 @@ namespace asco::io {
 
 file::file(file &&rhs)
         : none{rhs.none}
-#ifdef __linux__
         , fhandle{rhs.fhandle}
-#endif
         , path{std::move(rhs.path)}
         , opts{rhs.opts}
         , pread{rhs.pread}
@@ -38,21 +36,16 @@ file::~file() {
 
 file::file(int fd, std::string path, flags<options> opts)
         : none{false}
-#ifdef __linux__
         , fhandle{fd}
-#endif
         , path{std::move(path)}
-        , opts{opts} {
-}
+        , opts{opts} {}
 
 file &file::operator=(file &&rhs) {
     if (!none)
         close();
 
     none = rhs.none;
-#ifdef __linux__
     fhandle = rhs.fhandle;
-#endif
     path = std::move(rhs.path);
     opts = rhs.opts;
     pread = rhs.pread;

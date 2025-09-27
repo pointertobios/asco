@@ -1,6 +1,7 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include <asco/compile_time/platform.h>
 #include <asco/core/runtime.h>
 
 #include <cassert>
@@ -22,6 +23,8 @@
 namespace asco::core {
 
 using namespace std::chrono_literals;
+
+using compile_time::platform::platform, compile_time::platform::os;
 
 rwspin<std::unordered_map<worker::task_id, std::binary_semaphore *>> worker::workers_by_task_id_sem;
 std::unordered_map<worker::task_id, worker *> worker::workers_by_task_id;
@@ -255,19 +258,19 @@ runtime::runtime(size_t nthread_)
 
         // The hyper thread cores are usually the high frequency cores
         // Use them as calculator workers
-#ifdef __linux__
-        std::string path = std::format("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list", i);
-        std::ifstream f(path);
-        if (!f.is_open())
-            throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to detect CPU hyperthreading");
-        std::string buf;
-        std::vector<int> siblings;
-        while (std::getline(f, buf, '-')) { siblings.push_back(std::atoi(buf.c_str())); }
-        f.close();
-        if (siblings.size() > 1) {
-            is_calculator = true;
+        if constexpr (platform::os_is(os::linux)) {
+            std::string path = std::format("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list", i);
+            std::ifstream f(path);
+            if (!f.is_open())
+                throw asco::runtime_error("[ASCO] runtime::runtime(): Failed to detect CPU hyperthreading");
+            std::string buf;
+            std::vector<int> siblings;
+            while (std::getline(f, buf, '-')) { siblings.push_back(std::atoi(buf.c_str())); }
+            f.close();
+            if (siblings.size() > 1) {
+                is_calculator = true;
+            }
         }
-#endif
 
         if (is_calculator) {
             calcu_worker_count++;
