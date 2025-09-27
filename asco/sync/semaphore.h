@@ -41,14 +41,17 @@ public:
         if (counter.load(morder::relaxed) >= CounterMax)
             return;
 
-        size_t old_count;
-        size_t new_count;
+        // size_t old_count;
+        // size_t new_count;
 
-        do {
-            old_count = counter.load(morder::relaxed);
-            new_count = std::min(old_count + update, CounterMax);
+        // do {
+        //     old_count = counter.load(morder::relaxed);
+        //     new_count = std::min(old_count + update, CounterMax);
 
-        } while (!counter.compare_exchange_weak(old_count, new_count, morder::seq_cst, morder::relaxed));
+        // } while (!counter.compare_exchange_weak(old_count, new_count, morder::release, morder::release));
+
+        size_t old_count = counter.fetch_add(update, morder::release);
+        size_t new_count = std::min(old_count + update, CounterMax);
 
         const size_t awake_x = new_count - old_count;
 

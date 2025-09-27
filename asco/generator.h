@@ -18,7 +18,6 @@ namespace cq = continuous_queue;
 
 struct generator_extra {
     unlimited_semaphore yield_sem{0};
-    atomic_size_t yield_count{0};
     atomic_bool throwed{false};
 };
 
@@ -65,7 +64,6 @@ struct generator_base : public future_base<T, false, Blocking, sizeof(generator_
                 throw runtime_error("[ASCO] generator yield failed: receiver unexpectedly closed");
             }
             gextra->yield_sem.release();
-            gextra->yield_count.fetch_add(1, morder::release);
 
             return std::suspend_never{};
         }
@@ -98,19 +96,33 @@ struct generator_base : public future_base<T, false, Blocking, sizeof(generator_
 
     auto operator()() -> future_inline<std::optional<return_type>> {
         co_await gextra->yield_sem.acquire();
-        if (gextra->throwed.load(morder::acquire) && gextra->yield_count.load(morder::acquire) == 0) {
+
+        if (gextra->throwed.load(morder::acquire) && gextra->yield_sem.get_counter() == 0) {
             if (auto &e = base_future::state->e) {
                 auto tmp = e;
                 e = nullptr;
                 std::rethrow_exception(tmp);
             }
-        } else {
-            gextra->yield_count.fetch_sub(1, morder::release);
         }
-        if (auto res = yield_rx.pop())
-            co_return std::move(res.value());
-        else
-            co_return std::nullopt;
+
+        // FIXME It is so strange that we also cannot receive correct result without this loop.
+        // The memory order is correct now, but the result is still incorrect sometimes.
+        // yield_value():
+        // 1. push value to cq::sender
+        // 2. release semaphore
+        // operator()():
+        // 1. acquire semaphore
+        // 2. pop value from cq::receiver
+        // This pop should always get a value instead of cq::pop_fail::non_object.
+        for (size_t i{0}; true; ++i) {
+            if (auto res = yield_rx.pop())
+                co_return std::move(*res);
+            else if (res.error() == cq::pop_fail::closed)
+                co_return std::nullopt;
+
+            if (i > 100)
+                co_await std::suspend_always{};
+        }
     }
 
     bool await_ready() = delete;
