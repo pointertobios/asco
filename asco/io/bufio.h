@@ -9,6 +9,7 @@
 #include <asco/generator.h>
 #include <asco/io/buffer.h>
 #include <asco/utils/concepts.h>
+#include <asco/utils/concurrency.h>
 #include <asco/utils/math.h>
 #include <asco/utils/pubusing.h>
 
@@ -76,9 +77,9 @@ public:
             : ioo{std::move(ioo)} {}
 
     ~block_read_writer() {
-        is_destructor_flush = true;
+        is_destructor_flush.store(true, morder::release);
         flush();
-        while (!destructor_can_exit.test());
+        while (!destructor_can_exit.test()) concurrency::cpu_relax();
     }
 
     // Abortable
@@ -232,13 +233,14 @@ public:
         auto bstart = buffer_start;
         buffer_start = 0;
         auto acbuf = std::move(active_buffer);
-        if (is_destructor_flush)
-            destructor_can_exit.test_and_set();
-
         if (!acbuf.empty()) {
             ioo.seekp(bstart, seekpos::begin);
-            co_await ioo.write(std::move(acbuf));
+            while (auto rest = co_await ioo.write(std::move(acbuf))) { acbuf = std::move(*rest); }
         }
+
+        if (is_destructor_flush.load(morder::acquire))
+            destructor_can_exit.test_and_set();
+
         co_return;
     }
 
@@ -250,7 +252,7 @@ private:
     size_t pread{0};
     size_t pwrite{0};
 
-    bool is_destructor_flush{false};
+    atomic_bool is_destructor_flush{false};
     // flush() use this flag to inform the destructor that it can continue.
     atomic_flag destructor_can_exit;
 
@@ -293,6 +295,8 @@ enum class newline {
     crlf,  // Windows
 };
 
+struct borrow {};
+
 template<stream_read T>
 class stream_reader {
 public:
@@ -304,7 +308,7 @@ public:
     // Only if EOF is reached, return buffer with size < nbytes.
     future<buffer<>> read(size_t nbytes) {
         if (eof)
-            co_return {};
+            co_return buffer{};
 
         struct re {
             stream_reader &self;
@@ -379,7 +383,7 @@ public:
 
     future<buffer<>> read_all() {
         if (eof)
-            co_return {};
+            co_return buffer{};
 
         struct re {
             stream_reader &self;
@@ -475,7 +479,7 @@ public:
             size_t abs = 0;
             for (auto it = pending.rawbuffers(); !it.is_end() && written < len; ++it) {
                 auto rb = *it;
-                const char *seg = static_cast<const char *>(rb.buffer);
+                const char *seg = rb.data();
                 size_t seg_len = rb.size;
 
                 if (start >= abs + seg_len) {
@@ -507,7 +511,7 @@ public:
 
             for (auto it = pending.rawbuffers(); !it.is_end(); ++it) {
                 auto rb = *it;
-                const char *seg = static_cast<const char *>(rb.buffer);
+                const char *seg = rb.data();
                 size_t n = rb.size;
 
                 for (size_t i = 0; i < n; ++i, ++abs) {
@@ -596,7 +600,7 @@ private:
     bool eof{false};
 
 protected:
-    stream_reader(T &ioo)
+    stream_reader(T &ioo, borrow)
             : reader_ioo{ioo} {}
 
     T &reader_ioo;
@@ -609,12 +613,85 @@ public:
             : ioo{std::move(ioo)}
             , writer_ioo{const_cast<T &>(this->ioo.value())} {}
 
+    ~stream_writer() {
+        is_destructor_flush.store(true, morder::release);
+        flush();
+        while (!destructor_can_exit.test()) concurrency::cpu_relax();
+
+        if (!ioo) {
+            // The IO object reference is from stream_read_writer. But this ioo in stream_read_writer is a raw
+            // array, stream_read_writer never destruct it.
+            writer_ioo.~T();
+        }
+    }
+
+    // Unabortable
+    future_inline<void> write(buffer<> buf) {
+        if (buf.empty())
+            co_return;
+
+        auto buf_size = buf.size();
+        auto ln_index{buf_size};
+        size_t rsum{0};
+        for (auto it = buf.raw_buffers_reversed(); !it.is_rend(); it++) {
+            auto rb = *it;
+            for (auto i = rb.end(); i != rb.data();) {
+                i--;
+                if (*i == '\n') {
+                    ln_index -= rb.end() - i + rsum;
+                    break;
+                }
+            }
+
+            if (ln_index != buf_size)
+                break;
+
+            rsum += rb.size;
+        }
+
+        if (buf_size == ln_index) {
+            // No '\n' found
+            cache.push(std::move(buf));
+            co_return;
+        }
+
+        auto [left, right] = std::move(buf).split(ln_index + 1);
+        cache.push(std::move(left));
+        co_await flush();
+        cache = std::move(right);
+        co_return;
+    }
+
+    // Unabortable
+    future_inline<void> write_all(buffer<> buf) {
+        cache.push(std::move(buf));
+        co_await flush();
+        co_return;
+    }
+
+    // Unabortable
+    future<void> flush() {
+        auto c = std::move(cache);
+
+        if (!c.empty()) {
+            while (auto rest = co_await writer_ioo.write(std::move(c))) { c = std::move(*rest); }
+        }
+
+        if (is_destructor_flush.load(morder::acquire))
+            destructor_can_exit.test_and_set();
+        co_return;
+    }
+
 private:
     buffer<> cache{};
     std::optional<T> ioo{std::nullopt};
 
+    atomic_bool is_destructor_flush{false};
+    // flush() use this flag to inform the destructor that it can continue.
+    atomic_flag destructor_can_exit;
+
 protected:
-    stream_writer(T &ioo)
+    stream_writer(T &ioo, borrow)
             : writer_ioo{ioo} {}
 
     T &writer_ioo;
@@ -624,18 +701,13 @@ template<stream_read_write T>
 class stream_read_writer : public stream_reader<T>, public stream_writer<T> {
 public:
     stream_read_writer(T &&ioo)
-            : stream_reader<T>{this->ioo}
-            , stream_writer<T>{this->ioo}
-            , ioo{std::move(ioo)} {}
-
-    stream_reader<T> &reader(this stream_read_writer &self) { return self; }
-    const stream_reader<T> &reader(this const stream_read_writer &self) { return self; }
-
-    stream_writer<T> &writer(this stream_read_writer &self) { return self; }
-    const stream_writer<T> &writer(this const stream_read_writer &self) { return self; }
+            : stream_reader<T>{*reinterpret_cast<T *>(this->ioo), borrow{}}
+            , stream_writer<T>{*reinterpret_cast<T *>(this->ioo), borrow{}} {
+        new (this->ioo) T{std::move(ioo)};
+    }
 
 private:
-    T ioo;
+    alignas(alignof(T)) char ioo[sizeof(T)];
 };
 
 };  // namespace asco::io

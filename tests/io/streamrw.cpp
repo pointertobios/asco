@@ -21,6 +21,7 @@ using asco::io::buffer;
 using asco::io::file;
 using asco::io::newline;
 using asco::io::stream_reader;
+using asco::io::stream_writer;
 
 static future<void> write_file(std::string_view path, const std::string &content) {
     auto r = co_await file::at(path).read().write().create().truncate().mode(0644).open();
@@ -213,6 +214,149 @@ future<int> async_main() {
         assert(b2.size() == 0);
         std::filesystem::remove(path);
         std::cout << "streamrw Test 8 passed\n";
+    }
+
+    // --- stream_writer tests ---
+    {
+        const auto path = "streamrw_writer_basic.txt"sv;
+        auto r = co_await file::at(path).read().write().create().truncate().mode(0644).open();
+        assert(r.has_value());
+        {
+            stream_writer<file> sw(std::move(*r));
+            co_await sw.write(buffer<>(std::string_view{"Hello"}));
+            co_await sw.flush();
+            {
+                auto rf = co_await open_read_only(path);
+                stream_reader<file> sr(std::move(rf));
+                auto all = co_await sr.read_all();
+                assert(std::move(all).to_string() == "Hello");
+            }
+
+            co_await sw.write(buffer<>(std::string_view{"World\nTail"}));
+            {
+                auto rf = co_await open_read_only(path);
+                stream_reader<file> sr(std::move(rf));
+                auto all = co_await sr.read_all();
+                assert(std::move(all).to_string() == "HelloWorld\n");
+            }
+            // Flush 后应追加 Tail
+            co_await sw.flush();
+            {
+                auto rf = co_await open_read_only(path);
+                stream_reader<file> sr(std::move(rf));
+                auto all = co_await sr.read_all();
+                assert(std::move(all).to_string() == "HelloWorld\nTail");
+            }
+        }
+        std::filesystem::remove(path);
+        std::cout << "streamrw Test 9 (writer basic) passed\n";
+    }
+
+    struct test_partial_state {
+        size_t expected{0};
+        size_t written{0};
+        std::string collected;
+        int step{0};
+    };
+
+    struct partial_mock {
+        test_partial_state *st;
+
+        future<std::optional<buffer<>>> write(buffer<> buf) {
+            if (buf.empty())
+                co_return std::nullopt;
+            if (st->step == 0 && buf.size() > 1) {
+                // 第一次写：只写前半，返回后半 remainder，模拟部分写
+                size_t half = buf.size() / 2;
+                auto [left, right] = std::move(buf).split(half);
+                st->written += left.size();
+                st->collected += std::move(left).to_string();
+                st->step = 1;
+                co_return std::optional<buffer<>>{std::move(right)};
+            } else {
+                st->written += buf.size();
+                st->collected += std::move(buf).to_string();
+                co_return std::nullopt;
+            }
+        }
+    };
+
+    {
+        test_partial_state st;
+        st.expected = 12;
+        partial_mock pm{&st};
+        {
+            stream_writer<partial_mock> sw(std::move(pm));
+            co_await sw.write(buffer<>(std::string_view{"HelloWorld!!"}));
+            co_await sw.flush();
+        }
+        assert(st.written == st.expected);
+        std::cout << "streamrw Test 10 (writer partial flush) passed\n";
+    }
+
+    {
+        test_partial_state st;
+        st.expected = 10;
+        {
+            partial_mock pm{&st};
+            stream_writer<partial_mock> sw(std::move(pm));
+            co_await sw.write(buffer<>(std::string_view{"ABCDEFGHIJ"}));
+        }
+        assert(st.written == st.expected);
+        std::cout << "streamrw Test 11 (writer dtor partial flush) passed\n";
+    }
+
+    {
+        const auto path = "streamrw_srw_basic.txt"sv;
+        auto r = co_await file::at(path).read().write().create().truncate().mode(0644).open();
+        assert(r.has_value());
+        {
+            asco::io::stream_read_writer<file> srw(std::move(*r));
+
+            co_await srw.write(buffer<>(std::string_view{"Hello"}));
+            {
+                auto rf = co_await open_read_only(path);
+                stream_reader<file> sr(std::move(rf));
+                auto all = co_await sr.read_all();
+                assert(std::move(all).to_string().empty());
+            }
+
+            co_await srw.write(buffer<>(std::string_view{"World\nTail"}));
+            {
+                auto rf = co_await open_read_only(path);
+                stream_reader<file> sr(std::move(rf));
+                auto all = co_await sr.read_all();
+                assert(std::move(all).to_string() == "HelloWorld\n");
+            }
+
+            co_await srw.flush();
+            {
+                auto rf = co_await open_read_only(path);
+                stream_reader<file> sr(std::move(rf));
+                auto all = co_await sr.read_all();
+                assert(std::move(all).to_string() == "HelloWorld\nTail");
+            }
+        }
+        std::filesystem::remove(path);
+        std::cout << "streamrw Test 12 (stream_read_writer basic) passed\n";
+    }
+
+    {
+        const auto path = "streamrw_srw_dtor_flush.txt"sv;
+        auto r = co_await file::at(path).read().write().create().truncate().mode(0644).open();
+        assert(r.has_value());
+        {
+            asco::io::stream_read_writer<file> srw(std::move(*r));
+            co_await srw.write(buffer<>(std::string_view{"NoFlushData"}));
+        }
+        {
+            auto rf = co_await open_read_only(path);
+            stream_reader<file> sr(std::move(rf));
+            auto all = co_await sr.read_all();
+            assert(std::move(all).to_string() == "NoFlushData");
+        }
+        std::filesystem::remove(path);
+        std::cout << "streamrw Test 13 (stream_read_writer dtor flush) passed\n";
     }
 
     std::cout << "All streamrw tests passed.\n";

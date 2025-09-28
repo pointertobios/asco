@@ -424,19 +424,23 @@ public:
         buffer_chain.push_back(std::make_unique<shared_frame>(frame, 0, size));
         size_sum += size;
     }
+
+    struct rawbuffer {
+        void *buffer;
+        size_t size;
+
+        size_t seq;
+
+        CharT *data() const { return static_cast<CharT *>(buffer); }
+        CharT *end() const { return reinterpret_cast<CharT *>(static_cast<uint8_t *>(buffer) + size); }
+    };
+
     struct rawbuffer_iterator {
-        struct rawbuffer {
-            void *buffer;
-            size_t size;
-
-            size_t seq;
-        };
-
         rawbuffer_iterator(
             std::vector<std::unique_ptr<shared_frame>>::const_iterator it,
             std::vector<std::unique_ptr<shared_frame>>::const_iterator end) noexcept
-                : it(it)
-                , end(end) {}
+                : it{it}
+                , end{end} {}
 
         const rawbuffer operator*() const {
 #pragma clang diagnostic push
@@ -451,8 +455,8 @@ public:
                 (*it)->frame->buffer));
 #pragma clang diagnostic pop
 
-            void *buf = ptr + (*it)->start;
-            return {buf, (*it)->size, seq};
+            void *buf = ptr + (*it)->start * sizeof(CharT);
+            return {buf, (*it)->size * sizeof(CharT), seq};
         }
 
         const rawbuffer_iterator &operator++() const {
@@ -461,7 +465,11 @@ public:
             return *this;
         }
 
-        const rawbuffer_iterator &operator++(int) const { return ++*this; }
+        const rawbuffer_iterator operator++(int) const {
+            const rawbuffer_iterator res = *this;
+            ++*this;
+            return res;
+        }
 
         bool is_end() const { return it == end; }
 
@@ -471,7 +479,57 @@ public:
         std::vector<std::unique_ptr<shared_frame>>::const_iterator end;
     };
 
-    rawbuffer_iterator rawbuffers() const noexcept { return {buffer_chain.begin(), buffer_chain.end()}; }
+    const rawbuffer_iterator rawbuffers() const noexcept {
+        return {buffer_chain.begin(), buffer_chain.end()};
+    }
+
+    struct rawbuffer_reverse_iterator {
+        rawbuffer_reverse_iterator(
+            std::vector<std::unique_ptr<shared_frame>>::const_reverse_iterator it,
+            std::vector<std::unique_ptr<shared_frame>>::const_reverse_iterator rend) noexcept
+                : it{it}
+                , rend{rend} {}
+
+        const rawbuffer operator*() const {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-stack-address"
+            uint8_t *ptr = static_cast<uint8_t *>(std::visit(
+                [](auto buf) {
+                    if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>)
+                        return static_cast<void *>(buf);
+                    else
+                        return const_cast<void *>(reinterpret_cast<const void *>(buf.data()));
+                },
+                (*it)->frame->buffer));
+#pragma clang diagnostic pop
+
+            void *buf = ptr + (*it)->start * sizeof(CharT);
+            return {buf, (*it)->size * sizeof(CharT), seq};
+        }
+
+        const rawbuffer_reverse_iterator &operator++() const {
+            it++;
+            seq++;
+            return *this;
+        }
+
+        const rawbuffer_reverse_iterator operator++(int) const {
+            const rawbuffer_reverse_iterator res = *this;
+            ++*this;
+            return res;
+        }
+
+        bool is_rend() const { return it == rend; }
+
+    private:
+        size_t mutable seq{0};
+        std::vector<std::unique_ptr<shared_frame>>::const_reverse_iterator mutable it;
+        std::vector<std::unique_ptr<shared_frame>>::const_reverse_iterator rend;
+    };
+
+    const rawbuffer_reverse_iterator raw_buffers_reversed() const noexcept {
+        return {buffer_chain.rbegin(), buffer_chain.rend()};
+    }
 };
 
 };  // namespace asco::io
