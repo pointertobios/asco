@@ -100,7 +100,7 @@ future<void> file::close() {
 
     none = true;
     auto fh = fhandle;
-    if (is_destructor_close)
+    if (is_destructor_close.load(morder::acquire))
         destructor_can_exit.test_and_set();
     fhandle = raw_handle_invalid;
 

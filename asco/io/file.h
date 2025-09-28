@@ -97,6 +97,8 @@ public:
     // Platform related, unabortable
     future<void> close();
 
+    __asco_always_inline bool closed() const noexcept { return none; }
+
     // Unabortable
     future_inline<void> reopen(opener &&o);
 
@@ -139,7 +141,7 @@ private:
     size_t pread{0};
     size_t pwrite{0};
 
-    bool is_destructor_close{false};
+    atomic_bool is_destructor_close{false};
     // close() use this flag to inform the destructor that it can continue.
     atomic_flag destructor_can_exit;
 

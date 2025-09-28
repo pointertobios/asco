@@ -1,9 +1,9 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include <asco/io/file.h>
-
 #include <asco/exception.h>
+#include <asco/io/file.h>
+#include <asco/utils/concurrency.h>
 
 namespace asco::io {
 
@@ -29,9 +29,9 @@ file::~file() {
     if (none)
         return;
 
-    is_destructor_close = true;
+    is_destructor_close.store(true, morder::release);
     close();
-    while (!destructor_can_exit.test());
+    while (!destructor_can_exit.test()) concurrency::cpu_relax();
 }
 
 file::file(int fd, std::string path, flags<options> opts)
