@@ -37,7 +37,7 @@ struct task {
     perf::coro_recorder *perf_recorder{nullptr};
 #endif
 
-    std::atomic<task_id> waiting{0};
+    atomic<task_id> waiting{0};
 
     enum class state {
         ready,
