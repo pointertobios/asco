@@ -147,6 +147,11 @@ public:
                 continue;
             }
 
+            if (read_count >= 10010 && read_count < 20000) {
+                co_await std::suspend_always{};
+                continue;
+            }
+
             with(auto guard = waiting_tasks.lock()) {
                 if (counter.load(morder::acquire) == 0) {
                     auto &worker = this_coro::get_worker();
@@ -158,7 +163,6 @@ public:
             }
 
             co_await std::suspend_always{};
-            break;
         }
 
         restorer.state = 1;

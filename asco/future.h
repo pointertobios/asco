@@ -247,7 +247,7 @@ struct future_base {
                 if (caller_task_id) {
                     RT::__worker::get_worker_from_task_id(caller_task_id)
                         .sc.get_task(caller_task_id)
-                        ->waiting.store(0);
+                        ->waiting.store(0, morder::release);
                     rt.awake(caller_task_id);
                 }
 
@@ -262,10 +262,10 @@ struct future_base {
                     rt.suspend(tid);
 
                 if (caller_task_id) {
-                    rt.awake(caller_task_id);
                     worker::get_worker_from_task_id(caller_task_id)
                         .sc.get_task(caller_task_id)
-                        ->waiting.store(0);
+                        ->waiting.store(0, morder::release);
+                    rt.awake(caller_task_id);
                 }
 
                 return std::suspend_always{};
@@ -354,7 +354,7 @@ struct future_base {
                 auto id = rt.task_id_from_corohandle(handle);
                 state->caller_task = handle;
                 state->caller_task_id.store(id);
-                worker::get_worker_from_task_id(id).sc.get_task(id)->waiting.store(task_id);
+                worker::get_worker_from_task_id(id).sc.get_task(id)->waiting.store(task_id, morder::release);
                 rt.suspend(id);
                 return true;
             }
@@ -365,7 +365,7 @@ struct future_base {
             auto id = rt.task_id_from_corohandle(handle);
             state->caller_task = handle;
             state->caller_task_id.store(id);
-            worker::get_worker_from_task_id(id).sc.get_task(id)->waiting.store(task_id);
+            worker::get_worker_from_task_id(id).sc.get_task(id)->waiting.store(task_id, morder::release);
             rt.suspend(id);
 
             auto task_ = worker.sc.get_task(task_id);

@@ -9,7 +9,7 @@
 #include <asco/sync/semaphore.h>
 #include <asco/time/interval.h>
 
-using asco::future, asco::binary_semaphore, asco::mutex, asco::interval;
+using asco::future, asco::binary_semaphore, asco::mutex;
 using namespace std::chrono_literals;
 
 future<void> foo() {

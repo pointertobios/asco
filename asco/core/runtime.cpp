@@ -385,7 +385,7 @@ void runtime::abort(task_id id) {
     auto &w = worker::get_worker_from_task_id(id);
     auto t = w.sc.get_task(id);
     t->aborted = true;
-    if (auto wid = t->waiting.load(); wid) {
+    if (auto wid = t->waiting.load(morder::acquire); wid) {
         abort(wid);
     } else {
         if (w.sc.get_state(id) != sched::task::state::ready)
