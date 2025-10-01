@@ -17,7 +17,7 @@
 - `asco::generator<T>`：标准生成器
 - `asco::generator_core<T>`：核心生成器
 
-生成器的本体是一个协程函数：在生产端用 `co_yield` 逐项产出 `T`，完成时 `co_return;`；消费端用 `while (g)` 搭配 `co_await g()` 逐项拉取。
+生成器的本体是一个协程：在生产端用 `co_yield` 逐项产出 `T`，完成时 `co_return;`；消费端用 `while (g)` 搭配 `co_await g()` 逐项拉取。
 
 ## 快速示例
 
@@ -157,5 +157,5 @@ future_inline<void> consume(file &f) {
    ```
 
 3. 生成器可移动，不可拷贝；移动后旧对象失效。
-4. 避免长时间在单次 `co_yield` 之间写大量 CPU 循环而不让出（必要时显式 `co_await some_schedule_point()`）。
+4. 避免长时间在单次 `co_yield` 之间写大量 CPU 循环而不让出（必要时显式 `co_await asco::yield{}`）。
 5. 若需要“热”消费（持续高频拉取），注意批量处理 / 聚合减少调度开销。

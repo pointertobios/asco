@@ -71,8 +71,6 @@ future<int> async_main() {
 `future_inline<T>` 的功能与 `std::future` 相同，但是它被创建时不会被发送给 *asco 异步运行时*，而是直接将协程挂起。
 当此对象被 **co_await** 时，协程在当前上下文中被当场恢复，执行完毕后返回。
 
-此等待器适用于本身十分短小但不得不执行异步代码的函数。
-
 #### dispatch() 函数
 
 当在非异步环境中调用 `future_inline<T>` 的异步函数时，不能使用 `await()` 阻塞等待其返回，
