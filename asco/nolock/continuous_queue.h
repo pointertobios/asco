@@ -30,14 +30,18 @@ struct alignas(4096) frame {
     using element_type = monostate_if_void<T>;
 
 public:
+    struct slot {
+        element_type val;
+        alignas(alignof(element_type)) char _[0];
+    };
+
     // So `index_nullopt` is always greater or equal to any size_t value
     constexpr static size_t index_nullopt = std::numeric_limits<size_t>::max();
 
-    using passing_element_type = std::conditional_t<base_type<element_type>, element_type, element_type &&>;
     constexpr static bool passing_element_type_is_rvalue = !base_type<element_type>;
 
     // This is size_t::max() when receiver have not go to this frame.
-    atomic_size_t head{index_nullopt};
+    alignas(std::hardware_destructive_interference_size) atomic_size_t head{index_nullopt};
 
     // Set to size_t::max() when the sender went to next frame.
     alignas(std::hardware_destructive_interference_size) atomic_size_t tail{0};
@@ -70,17 +74,36 @@ public:
         (header_size % alignof(element_type)) == 0,
         "[ASCO] continuous_queue: Cannot fit alignment of element_type.");
 
-    constexpr static size_t length = (4096 - header_size) / sizeof(element_type);
+    constexpr static size_t data_size = 4096 - header_size;
+
+    constexpr static size_t group_size = std::hardware_destructive_interference_size;
+    constexpr static bool grouped = sizeof(slot) <= group_size;
+    constexpr static size_t group_count = data_size / group_size;
+
+    constexpr static size_t length =
+        grouped ? ((group_size / sizeof(slot)) * group_count) : (data_size / sizeof(slot));
 
     static_assert(
         length > 16, "[ASCO] Object is too large. There is less than/only 16 objects' room in one frame.");
 
     // There is no problem about alignment:
     // length > 16 means sizeof(T) always less than 256.
-    // sizeof(T) < 256 means alignof(T) always less than 256.
+    // sizeof(T) < 256 means alignof(T) usually less than 256.
     // The header_size is usually 256, so the address of the stored elements always fit the alignment
     // requirement of T.
-    char data[4096 - header_size];
+    char data[data_size];
+
+    element_type &operator[](size_t index) {
+        if (index >= length)
+            throw runtime_error(
+                "[ASCO] asco::nolock::continuous_queue::frame::operator[]: Index out of size.");
+
+        if constexpr (grouped)
+            return reinterpret_cast<slot *>(data + group_size * (index % group_count))[index / group_count]
+                .val;
+        else
+            return reinterpret_cast<slot *>(data)[index].val;
+    }
 
     static frame *create() noexcept { return new frame(); }
 
@@ -152,7 +175,7 @@ template<move_secure T>
 class sender {
     using frame_type = frame<T>;
     using element_type = typename frame_type::element_type;
-    using passing_element_type = typename frame_type::passing_element_type;
+    using slot = typename frame_type::slot;
     constexpr static bool passing_element_type_is_rvalue = frame<T>::passing_element_type_is_rvalue;
 
 public:
@@ -218,9 +241,9 @@ public:
         return f->sender_stopped.load(morder::acquire) || f->receiver_stopped.load(morder::acquire);
     }
 
-    [[nodiscard]] std::optional<element_type> push(passing_element_type val) {
+    [[nodiscard]] std::optional<element_type> push(passing<element_type> val) {
         if (!f)
-            throw asco::runtime_error(
+            throw runtime_error(
                 "[ASCO] nolock::continuous_queue::sender::push(): sender didn't bind to a continuous_queue");
 
         size_t index;
@@ -268,9 +291,9 @@ public:
         } while (true);
 
         if constexpr (passing_element_type_is_rvalue)
-            new (f->data + sizeof(element_type) * index) element_type(std::move(val));
+            new (&(*f)[index]) element_type{std::move(val)};
         else
-            new (f->data + sizeof(element_type) * index) element_type(val);
+            new (&(*f)[index]) element_type{val};
 
         // Serial releasing.
         // Current sender must wait for previous element to be released.
@@ -303,7 +326,7 @@ template<move_secure T>
 class receiver {
     using frame_type = frame<T>;
     using element_type = typename frame_type::element_type;
-    using passing_element_type = typename frame_type::passing_element_type;
+    using slot = typename frame_type::slot;
     static constexpr bool passing_element_type_is_rvalue = frame<T>::passing_element_type_is_rvalue;
 
 public:
@@ -373,7 +396,7 @@ public:
 
     [[nodiscard]] std::expected<element_type, pop_fail> pop() {
         if (!f)
-            throw asco::runtime_error(
+            throw runtime_error(
                 "[ASCO] nolock::continuous_queue::receiver::pop(): receiver didn't bind to a continuous_queue");
 
         size_t index;
@@ -431,7 +454,7 @@ public:
             break;
         } while (true);
 
-        auto element = reinterpret_cast<element_type *>(f->data + sizeof(element_type) * index);
+        auto element = &(*f)[index];
 
         if constexpr (passing_element_type_is_rvalue) {
             auto res = std::move(*element);
