@@ -9,10 +9,14 @@
 
 namespace asco::sync {
 
-template<typename T>
-class mutex {
+template<typename T = void>
+class mutex;
+
+template<>
+class mutex<void> {
 public:
-    struct guard {
+    class guard {
+    public:
         guard() = default;
 
         explicit guard(mutex *self)
@@ -24,67 +28,30 @@ public:
         }
 
         guard &operator=(guard &&rhs) noexcept {
+            if (this == &rhs)
+                return *this;
+            release_if_needed();
             self = rhs.self;
             rhs.moved = true;
             return *this;
         }
 
-        ~guard() {
+        ~guard() { release_if_needed(); }
+
+    private:
+        void release_if_needed() {
             if (!self || moved)
                 return;
             self->sem.release();
         }
 
-        T &operator*() {
-            if (!self)
-                throw asco::runtime_error("mutex::guard::operator*() called on nullptr");
-            if (moved)
-                throw asco::runtime_error("mutex::guard::operator*() called on moved");
-            return self->value;
-        }
-        const T &operator*() const {
-            if (!self)
-                throw asco::runtime_error("mutex::guard::operator*() called on nullptr");
-            if (moved)
-                throw asco::runtime_error("mutex::guard::operator*() called on moved");
-            return self->value;
-        }
-
-        T *operator->() {
-            if (!self)
-                throw asco::runtime_error("mutex::guard::operator->() called on nullptr");
-            if (moved)
-                throw asco::runtime_error("mutex::guard::operator->() called on moved");
-            return &self->value;
-        }
-        const T *operator->() const {
-            if (!self)
-                throw asco::runtime_error("mutex::guard::operator->() called on nullptr");
-            if (moved)
-                throw asco::runtime_error("mutex::guard::operator->() called on moved");
-            return &self->value;
-        }
-
-    private:
-        mutex *self;
+        mutex *self{nullptr};
         bool moved{false};
     };
 
-    mutex()
-            : value{} {}
-
+    mutex() = default;
     mutex(const mutex &) = delete;
     mutex(mutex &&) = delete;
-
-    explicit mutex(const T &val)
-            : value{val} {}
-
-    explicit mutex(T &&val)
-            : value{std::move(val)} {}
-
-    template<typename... Args>
-    explicit mutex(Args &&...args)
-            : value(std::forward<Args>(args)...) {}
 
     std::optional<guard> try_lock() {
         if (sem.try_acquire())
@@ -123,8 +90,76 @@ public:
     }
 
 private:
-    T value;
     binary_semaphore sem{1};
+};
+
+// Non-void specialization wrapping a value and reusing mutex<void>
+template<typename T>
+class mutex {
+public:
+    class guard {
+    public:
+        guard() = default;
+        guard(mutex *self, typename mutex<void>::guard &&g)
+                : self(self)
+                , base_guard(std::move(g)) {}
+
+        guard(guard &&) noexcept = default;
+        guard &operator=(guard &&) noexcept = default;
+
+        T &operator*() {
+            if (!self)
+                throw asco::runtime_error("mutex::guard::operator*() called on nullptr");
+            return self->value;
+        }
+        const T &operator*() const {
+            if (!self)
+                throw asco::runtime_error("mutex::guard::operator*() called on nullptr");
+            return self->value;
+        }
+        T *operator->() {
+            if (!self)
+                throw asco::runtime_error("mutex::guard::operator->() called on nullptr");
+            return &self->value;
+        }
+        const T *operator->() const {
+            if (!self)
+                throw asco::runtime_error("mutex::guard::operator->() called on nullptr");
+            return &self->value;
+        }
+
+    private:
+        mutex *self{nullptr};
+        typename mutex<void>::guard base_guard;
+    };
+
+    mutex() = default;
+    mutex(const mutex &) = delete;
+    mutex(mutex &&) = delete;
+
+    explicit mutex(const T &val)
+            : value{val} {}
+    explicit mutex(T &&val)
+            : value{std::move(val)} {}
+    template<typename... Args>
+    explicit mutex(Args &&...args)
+            : value(std::forward<Args>(args)...) {}
+
+    std::optional<guard> try_lock() {
+        auto g = base.try_lock();
+        if (!g)
+            return std::nullopt;
+        return guard(this, std::move(*g));
+    }
+
+    future_inline<guard> lock() {
+        auto g = co_await base.lock();
+        co_return guard(this, std::move(g));
+    }
+
+private:
+    T value{};
+    mutex<> base;
 };
 
 };  // namespace asco::sync
