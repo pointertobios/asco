@@ -33,6 +33,7 @@ struct generator_base : public future_base<T, false, Blocking, sizeof(generator_
         using promise_base = typename base_future::promise_base;
 
         cq::sender<return_type> yield_tx;
+        cq::receiver<return_type> yield_rx;
 
         generator_extra *gextra;
 
@@ -41,6 +42,8 @@ struct generator_base : public future_base<T, false, Blocking, sizeof(generator_
         }
 
         generator_base get_return_object() {
+            promise_base::future_type_hash = inner::type_hash<generator_base<T, Blocking>>();
+
             gextra = new (promise_base::state->extra_space) generator_extra;
             promise_base::state->extra_space_dtor =
                 +[](void *p) { reinterpret_cast<generator_extra *>(p)->~generator_extra(); };
@@ -49,6 +52,7 @@ struct generator_base : public future_base<T, false, Blocking, sizeof(generator_
 
             auto [tx, rx] = cq::create<return_type>();
             yield_tx = std::move(tx);
+            yield_rx = rx;  // Copy rx
 
             generator_base res;
             static_cast<base_future &>(res) =
@@ -84,6 +88,12 @@ struct generator_base : public future_base<T, false, Blocking, sizeof(generator_
             yield_tx.stop();
             gextra->yield_sem.release();
             gextra->throwed.store(true, morder::release);
+        }
+
+        std::vector<return_type> genvals_move_out() {
+            std::vector<return_type> vals;
+            while (auto v = yield_rx.pop()) { vals.push_back(std::move(*v)); }
+            return vals;
         }
     };
 

@@ -21,9 +21,19 @@ F::return_type move_back_return_value() {
     auto h = *(std::coroutine_handle<typename F::promise_type> *)(&h_);
     if (h.promise().future_type_hash != inner::type_hash<F>())
         throw asco::runtime_error(
-            "[ASCO] move_back_return_value<F, T>(): F is not matched with your current coroutine.");
+            "[ASCO] move_back_return_value<F>(): F is not matched with your current coroutine.");
     // If a task aborted and must move back return value, its awaiter will always exists.
     return h.promise().retval_move_out();
+}
+
+template<typename F>
+std::vector<typename F::return_type> move_back_generated_values() {
+    auto h_ = RT::__worker::get_worker().current_task().handle;
+    auto h = *(std::coroutine_handle<typename F::promise_type> *)(&h_);
+    if (h.promise().future_type_hash != inner::type_hash<F>())
+        throw asco::runtime_error(
+            "[ASCO] move_back_generated_values<F>(): F is not matched with your current coroutine.");
+    return h.promise().genvals_move_out();
 }
 
 template<typename F>
@@ -32,7 +42,7 @@ void throw_coroutine_abort() {
     auto h = *(std::coroutine_handle<typename F::promise_type> *)(&h_);
     if (h.promise().future_type_hash != inner::type_hash<F>())
         throw asco::runtime_error(
-            "[ASCO] move_back_return_value<F, T>(): F is not matched with your current coroutine.");
+            "[ASCO] move_back_return_value<F>(): F is not matched with your current coroutine.");
     h.promise().set_abort_exception();
 }
 
@@ -61,10 +71,11 @@ size_t clone(std::coroutine_handle<> h);
 
 namespace asco::this_coro {
 
-using base::this_coro::aborted, base::this_coro::move_back_return_value;
+using base::this_coro::aborted;
 using base::this_coro::coro_local_exists;
 using base::this_coro::get_id;
 using base::this_coro::get_worker;
+using base::this_coro::move_back_return_value, base::this_coro::move_back_generated_values;
 using base::this_coro::throw_coroutine_abort;
 
 };  // namespace asco::this_coro

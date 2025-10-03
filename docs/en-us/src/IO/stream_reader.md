@@ -8,13 +8,31 @@
 
 ## Common APIs
 
-| Method                   | Purpose                                                      | Return                   |
-| ------------------------ | ------------------------------------------------------------ | ------------------------ |
-| `read(size_t n)`         | Read at most n bytes (may be fewer if EOF reached)           | `future<buffer<>>`       |
-| `read_all()`             | Read everything until EOF (single shot; beware huge streams) | `future<buffer<>>`       |
-| `read_lines(newline nl)` | Incremental line-by-line read (supports LF / CR / CRLF)      | `generator<std::string>` |
+| Method                                                                                     | Purpose                                                                                                    | Return                   |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `read(size_t n)`                                                                           | Read at most n bytes (may be fewer if EOF reached)                                                         | `future<buffer<>>`       |
+| `read_all()`                                                                               | Read everything until EOF (single shot; beware huge streams)                                               | `future<buffer<>>`       |
+| `read_lines(newline nl, std::optional<future_inline<mutex<>::guard>> lock = std::nullopt)` | Incremental line-by-line read (supports LF / CR / CRLF); optionally hold a mutex during generator lifetime | `generator<std::string>` |
 
 Newline enum values: `newline::LF`, `newline::CR`, `newline::CRLF`.
+
+Behavior details:
+
+- LF mode: split by `\n`, the delimiter is not included in the line.
+- CR mode: split by `\r`, the delimiter is not included.
+- CRLF mode: prefer `\r\n` as the newline; a bare `\r` (not followed by `\n`) is preserved as data.
+- Consecutive delimiters produce empty lines (e.g., `"A\r\n\r\nB"` -> `["A", "", "B"]`).
+- At EOF, if there is a pending tail without a trailing newline, it is yielded as the last line.
+
+Lock parameter:
+
+- `read_lines(nl, mtx.lock())` will keep the mutex locked while the generator is alive; it releases when the generator is exhausted/destroyed.
+- While the generator is alive, `mtx.try_lock()` fails; after completion, it succeeds.
+
+Abort recovery semantics:
+
+- If the generator is aborted, any lines that have been `co_yield`ed but not yet received by the caller are cached back into the `stream_reader`.
+- A subsequent `read_lines` will continue from these cached lines, ensuring that "after abort, the previously yielded but unconsumed content is delivered first".
 
 ## Quick Start
 
@@ -46,6 +64,35 @@ auto g = sr.read_lines(newline::CRLF);
 while (auto line = co_await g()) {
     if (line.empty()) break;   // Empty line = end of header section
     headers.push_back(std::move(line));
+}
+```
+
+## Lock and abort examples
+
+Holding a lock:
+
+```cpp
+mutex<> mtx;
+auto gen = sr.read_lines(newline::lf, mtx.lock());
+// While the generator is alive, try_lock should fail
+assert(!mtx.try_lock().has_value());
+// Drain the generator
+std::vector<std::string> lines;
+while (auto s = co_await gen()) lines.push_back(*s);
+// After completion, the lock becomes available again
+assert(mtx.try_lock().has_value());
+```
+
+Abort recovery:
+
+```cpp
+auto gen = sr.read_lines(newline::lf);
+auto first = co_await gen();      // e.g., "L1"
+gen.abort();                      // abort; already-yielded-but-unreceived lines are cached back
+
+auto gen2 = sr.read_lines(newline::lf);
+while (auto s = co_await gen2()) {
+    // Continues from the lines yielded before the abort
 }
 ```
 

@@ -6,6 +6,7 @@
 #include <asco/io/buffer.h>
 #include <asco/io/bufio.h>
 #include <asco/io/file.h>
+#include <asco/sync/mutex.h>
 
 #include <cassert>
 #include <filesystem>
@@ -17,6 +18,7 @@
 using namespace std::literals;
 using asco::future;
 using asco::generator;
+using asco::mutex;
 using asco::io::buffer;
 using asco::io::file;
 using asco::io::newline;
@@ -60,6 +62,57 @@ future<int> async_main() {
 
         std::filesystem::remove(path);
         std::cout << "streamrw Test 1 passed\n";
+    }
+
+    {
+        const auto path = "streamrw_abort_recover_lf.txt"sv;
+        std::string content = "L1\nL2\nL3\n";  // ensure all in one small chunk
+        co_await write_file(path, content);
+
+        auto f = co_await open_read_only(path);
+        stream_reader<file> sr(std::move(f));
+
+        auto gen = sr.read_lines(newline::lf);
+
+        auto first = co_await gen();
+        assert(first.has_value());
+        assert(*first == "L1");
+
+        gen.abort();
+
+        auto gen2 = sr.read_lines(newline::lf);
+        std::vector<std::string> got;
+        while (auto s = co_await gen2()) { got.push_back(*s); }
+        // Expect remaining lines
+        assert((got == std::vector<std::string>{"L2", "L3"}));
+
+        std::filesystem::remove(path);
+        std::cout << "streamrw Test 14 (abort recovery LF) passed\n";
+    }
+
+    {
+        const auto path = "streamrw_abort_recover_crlf.txt"sv;
+        std::string content = "A\r\nB\r\nC\r\n";
+        co_await write_file(path, content);
+
+        auto f = co_await open_read_only(path);
+        stream_reader<file> sr(std::move(f));
+
+        auto gen = sr.read_lines(newline::crlf);
+
+        auto first = co_await gen();
+        assert(first.has_value());
+        assert(*first == "A");
+
+        gen.abort();
+
+        auto gen2 = sr.read_lines(newline::crlf);
+        std::vector<std::string> got;
+        while (auto s = co_await gen2()) { got.push_back(*s); }
+        assert((got == std::vector<std::string>{"B", "C"}));
+
+        std::filesystem::remove(path);
+        std::cout << "streamrw Test 15 (abort recovery CRLF) passed\n";
     }
 
     {
@@ -139,6 +192,79 @@ future<int> async_main() {
 
         std::filesystem::remove(path);
         std::cout << "streamrw Test 4 passed\n";
+    }
+
+    {
+        const auto path = "streamrw_crlf_empty_lines.txt"sv;
+        std::string content = "A\r\n\r\nB";  // Expect: ["A", "", "B"]
+        co_await write_file(path, content);
+
+        auto f = co_await open_read_only(path);
+        stream_reader<file> sr(std::move(f));
+
+        auto gl = sr.read_lines(newline::crlf);
+        std::vector<std::string> got;
+        while (auto s = co_await gl()) { got.push_back(*s); }
+        assert((got == std::vector<std::string>{"A", "", "B"}));
+
+        auto f2 = co_await open_read_only(path);
+        stream_reader<file> sr2(std::move(f2));
+        auto all = co_await sr2.read_all();
+        assert(std::move(all).to_string() == content);
+
+        std::filesystem::remove(path);
+        std::cout << "streamrw Test 4.1 (CRLF empty lines) passed\n";
+    }
+
+    {
+        const auto path = "streamrw_crlf_bare_cr.txt"sv;
+        std::string content = "A\r\nB\rC";  // Expect lines: ["A", "B\rC"]
+        co_await write_file(path, content);
+
+        auto f = co_await open_read_only(path);
+        stream_reader<file> sr(std::move(f));
+
+        auto gl = sr.read_lines(newline::crlf);
+        std::vector<std::string> got;
+        while (auto s = co_await gl()) { got.push_back(*s); }
+        assert(got.size() == 2);
+        assert(got[0] == "A");
+        assert(got[1] == "B\rC");
+
+        std::filesystem::remove(path);
+        std::cout << "streamrw Test 4.2 (CRLF bare CR treated as data) passed\n";
+    }
+
+    {
+        const auto path = "streamrw_read_lines_lock.txt"sv;
+        std::string content = "L1\nL2\nL3";  // 3 lines, LF
+        co_await write_file(path, content);
+
+        mutex<> mtx;
+        auto f = co_await open_read_only(path);
+        stream_reader<file> sr(std::move(f));
+
+        auto gen = sr.read_lines(newline::lf, mtx.lock());
+
+        std::vector<std::string> got;
+        if (auto s1 = co_await gen()) {
+            got.push_back(*s1);
+            auto g2 = mtx.try_lock();
+            assert(!g2.has_value());
+        } else {
+            assert(false && "expected first line");
+        }
+
+        while (auto s = co_await gen()) { got.push_back(*s); }
+        assert((got == std::vector<std::string>{"L1", "L2", "L3"}));
+
+        {
+            auto g3 = mtx.try_lock();
+            assert(g3.has_value());
+        }
+
+        std::filesystem::remove(path);
+        std::cout << "streamrw Test 4.3 (read_lines lock lifetime) passed\n";
     }
 
     {

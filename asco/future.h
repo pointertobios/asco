@@ -360,8 +360,14 @@ struct future_base {
             }
             return false;
         } else {
-            auto &rt = RT::get_runtime();
             auto &worker = worker::get_worker();
+            if (auto &w = worker::get_worker_from_task_id(task_id); w.id != worker.id) {
+                auto [task, awaiter] = *w.sc.steal(task_id);
+                worker.modify_task_map(task_id, &worker);
+                worker.sc.steal_from(task, awaiter);
+            }
+
+            auto &rt = RT::get_runtime();
             auto id = rt.task_id_from_corohandle(handle);
             state->caller_task = handle;
             state->caller_task_id.store(id);

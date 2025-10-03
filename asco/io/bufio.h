@@ -8,6 +8,7 @@
 #include <asco/future.h>
 #include <asco/generator.h>
 #include <asco/io/buffer.h>
+#include <asco/sync/mutex.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/concurrency.h>
 #include <asco/utils/math.h>
@@ -440,32 +441,45 @@ public:
         }
     }
 
-    generator<std::string> read_lines(newline nl = [] consteval {
-        using compile_time::platform::platform;
-        using compile_time::platform::os;
-        newline res;
-        if constexpr (platform::os_is(os::linux))
-            res = newline::lf;
-        else if constexpr (platform::os_is(os::windows))
-            res = newline::crlf;
-        else if constexpr (platform::os_is(os::apple))
-            res = newline::cr;
-        return res;
-    }()) {
+    generator<std::string> read_lines(
+        newline nl =
+            [] consteval {
+                using compile_time::platform::platform;
+                using compile_time::platform::os;
+                if constexpr (platform::os_is(os::linux))
+                    return newline::lf;
+                else if constexpr (platform::os_is(os::windows))
+                    return newline::crlf;
+                else if constexpr (platform::os_is(os::apple))
+                    return newline::cr;
+            }(),
+        std::optional<future_inline<mutex<>::guard>> lock = std::nullopt) {
         if (eof)
             co_return;
 
         struct re {
+            stream_reader &self;
+            std::optional<mutex<>::guard> lock_guard;
             int state{0};
 
             ~re() {
                 if (!this_coro::aborted())
                     return;
 
+                self.generated_cache.append_range(
+                    this_coro::move_back_generated_values<generator<std::string>>());
+
                 if (state == 0)
                     this_coro::throw_coroutine_abort<generator<std::string>>();
             }
-        } restorer;
+        } restorer{*this, lock ? std::optional{co_await *lock} : std::nullopt};
+
+        for (auto &s : std::vector{std::move(generated_cache)}) co_yield std::move(s);
+
+        if (this_coro::aborted()) {
+            restorer.state = 1;
+            throw coroutine_abort{};
+        }
 
         buffer<> pending{std::move(cache)};
         bool prev_cr = false;
@@ -596,6 +610,7 @@ public:
 
 private:
     buffer<> cache{};
+    std::vector<std::string> generated_cache{};
     std::optional<T> ioo{std::nullopt};
     bool eof{false};
 
