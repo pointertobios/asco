@@ -58,6 +58,9 @@ target_link_libraries(test_generator PRIVATE asco asco-main)
 add_executable(test_streamrw io/streamrw.cpp)
 target_link_libraries(test_streamrw PRIVATE asco asco-main)
 
+add_executable(test_standard io/standard.cpp)
+target_link_libraries(test_standard PRIVATE asco asco-main)
+
 add_test(NAME futurets COMMAND test_futurets)
 add_test(NAME inline COMMAND test_inline)
 add_test(NAME sems COMMAND test_sems)

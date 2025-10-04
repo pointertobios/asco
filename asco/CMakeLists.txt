@@ -9,8 +9,9 @@ set(ASCO_SOURCES
     coroutine_allocator.cpp
     future.cpp
     futures.cpp
-    io/file.cpp
     io/bufio.cpp
+    io/file.cpp
+    io/standard.cpp
     sync/condition_variable.cpp
     unwind/unwind.cpp
 )
