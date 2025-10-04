@@ -443,17 +443,14 @@ public:
                 , end{end} {}
 
         const rawbuffer operator*() const {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wreturn-stack-address"
             uint8_t *ptr = static_cast<uint8_t *>(std::visit(
-                [](auto buf) {
+                [](auto &buf) {
                     if constexpr (std::is_same_v<std::remove_reference_t<decltype(buf)>, CharT *>)
                         return static_cast<void *>(buf);
                     else
                         return const_cast<void *>(reinterpret_cast<const void *>(buf.data()));
                 },
                 (*it)->frame->buffer));
-#pragma clang diagnostic pop
 
             void *buf = ptr + (*it)->start * sizeof(CharT);
             return {buf, (*it)->size * sizeof(CharT), seq};
