@@ -99,7 +99,7 @@ public:
                 : p{p}
                 , g{p->page_lock.write()} {}
 
-        void deallocate(T *ptr) noexcept { p->deallocate(ptr); }
+        void deallocate(T *ptr) noexcept { p->deallocate_impl(ptr); }
 
     private:
         page *p;

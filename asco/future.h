@@ -362,9 +362,11 @@ struct future_base {
         } else {
             auto &worker = worker::get_worker();
             if (auto &w = worker::get_worker_from_task_id(task_id); w.id != worker.id) {
-                auto [task, awaiter] = *w.sc.steal(task_id);
-                worker.modify_task_map(task_id, &worker);
-                worker.sc.steal_from(task, awaiter);
+                if (auto res = w.sc.steal(task_id)) {
+                    auto [task, awaiter] = *res;
+                    worker.modify_task_map(task_id, &worker);
+                    worker.sc.steal_from(task, awaiter);
+                }
             }
 
             auto &rt = RT::get_runtime();
