@@ -12,13 +12,13 @@ using asco::future;
 future<void> foo() {
     int *coro_local(arr);
     for (int i = 0; i < 1000; i++) { arr[i] = i; }
-    asco::println("foo exited");
+    co_await asco::println("foo exited");
     co_return;
 }
 
 future<int> async_main() {
     int *decl_local_array(arr, new int[1000]);
     foo();
-    asco::println("main exited");
+    co_await asco::println("main exited");
     co_return 0;
 }

@@ -13,7 +13,7 @@ future<void> foo() {
     interval in(1s);
     for (int i = 0; i < 10; i++) {
         co_await in.tick();
-        asco::println("tick foo");
+        co_await asco::println("tick foo");
     }
     co_return;
 }
@@ -23,7 +23,7 @@ future<int> async_main() {
     interval in(500ms);
     for (int i = 0; i < 10; i++) {
         co_await in.tick();
-        asco::println("tick async_main");
+        co_await asco::println("tick async_main");
     }
     co_await task;
     co_return 0;

@@ -103,6 +103,6 @@ future<int> async_main() {
     test_single_thread_basic();
     test_insert_remove_middle();
     test_concurrency_head_basic();
-    asco::println("placement_list tests passed");
+    co_await asco::println("placement_list tests passed");
     co_return 0;
 }

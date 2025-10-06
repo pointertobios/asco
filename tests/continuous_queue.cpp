@@ -150,12 +150,12 @@ static asco::future<void> test_mpmc_correctness_coro() {
 }
 
 future<int> async_main() {
-    asco::println("[continuous_queue] SPSC...");
+    co_await asco::println("[continuous_queue] SPSC...");
     test_spsc_basic();
-    asco::println("OK\n[continuous_queue] stop...");
+    co_await asco::println("OK\n[continuous_queue] stop...");
     test_stop_semantics();
-    asco::println("OK\n[continuous_queue] MPMC (coroutines)...");
+    co_await asco::println("OK\n[continuous_queue] MPMC (coroutines)...");
     co_await test_mpmc_correctness_coro();
-    asco::println("OK");
+    co_await asco::println("OK");
     co_return 0;
 }

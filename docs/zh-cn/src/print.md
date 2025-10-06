@@ -30,10 +30,10 @@ future<void> eprintln(std::format_string<Args...> fmt, Args&&... args);
 using asco::future, asco::println, asco::print, asco::eprintln;
 
 future<int> async_main() {
-    println("Hello, {}!", "ASCO");
+    co_await println("Hello, {}!", "ASCO");
     int answer = 42;
-    print("answer = {}", answer);
-    eprintln(" oops: {}", "something went wrong");
+    co_await print("answer = {}", answer);
+    co_await eprintln(" oops: {}", "something went wrong");
     co_return 0;
 }
 ```

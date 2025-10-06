@@ -11,7 +11,7 @@ using asco::future, asco::future_inline, asco::future_core;
 future_inline<uint64_t> foo(uint64_t i) {
     char coro_local(y);
     char *coro_local(str);
-    asco::print("foo {}", y);
+    co_await asco::print("foo {}", y);
     y = i % 26 + 'a';
     co_return i;
 }
@@ -24,15 +24,15 @@ future_core<void> bar() {
         auto x = co_await foo(i);
         assert(x == i);
         s += x;
-        asco::println(" {}", y);
-        asco::println("{} : {}", x, s);
+        co_await asco::println(" {}", y);
+        co_await asco::println("{} : {}", x, s);
         y = 'a';
     }
     co_return;
 }
 
 future<int> async_main() {
-    asco::println("async_main");
+    co_await asco::println("async_main");
     co_await bar();
     co_return 0;
 }

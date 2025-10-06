@@ -5,8 +5,8 @@
 #include <asco/future.h>
 #include <asco/io/buffer.h>
 #include <asco/io/file.h>
-
 #include <asco/print.h>
+
 #include <cassert>
 #include <string>
 #include <string_view>
@@ -15,7 +15,7 @@ using asco::future, asco::file, asco::buffer, asco::seekpos;
 
 future<int> async_main() {
     {
-        asco::println("--- Normal tests ---");
+        co_await asco::println("--- Normal tests ---");
 
         {
             {
@@ -33,10 +33,10 @@ future<int> async_main() {
 
                 auto res = co_await f.write(std::move(buf));
                 if (res)
-                    asco::println("rest buffer: {}", std::move(*res).to_string());
+                    co_await asco::println("rest buffer: {}", std::move(*res).to_string());
                 assert(!res);
 
-                asco::println("Test file write passed.");
+                co_await asco::println("Test file write passed.");
             }
 
             {
@@ -47,7 +47,7 @@ future<int> async_main() {
                 f.seekg(10);
                 auto partial = (co_await f.read(10)).value_or(buffer{});
                 assert(partial.size() == 10);
-                asco::println("First 10 bytes: '{}' .", std::move(partial).to_string());
+                co_await asco::println("First 10 bytes: '{}' .", std::move(partial).to_string());
             }
             ::system(std::format("rm {}", "asco_test_file.txt").c_str());
         }
@@ -77,7 +77,7 @@ future<int> async_main() {
                              .open();
             assert(ores1.has_value());
 
-            asco::println("Open mode test passed.");
+            co_await asco::println("Open mode test passed.");
         }
         ::system("rm exclusive.txt truncate.txt");
     }
@@ -108,11 +108,11 @@ future<int> async_main() {
             assert(false);
         } catch (const std::exception &e) { close_ok = true; }
         if (close_ok)
-            asco::println("Close test passed");
+            co_await asco::println("Close test passed");
     }
 
     {
-        asco::println("\n--- Testing append mode ---");
+        co_await asco::println("\n--- Testing append mode ---");
         std::string appendpath = "append_test.txt";
 
         {
@@ -151,17 +151,17 @@ future<int> async_main() {
 
             auto content = (co_await f.read(1024)).value_or(buffer{});
             std::string content_str = std::move(content).to_string();
-            asco::println("Append test content: '{}'", content_str);
+            co_await asco::println("Append test content: '{}'", content_str);
             assert(content_str.find("Initial content") != std::string::npos);
             assert(content_str.find("Appended content") != std::string::npos);
         }
 
         ::system(std::format("rm {}", appendpath).c_str());
-        asco::println("Append mode test passed.");
+        co_await asco::println("Append mode test passed.");
     }
 
     {
-        asco::println("\n--- Testing seek operations ---");
+        co_await asco::println("\n--- Testing seek operations ---");
         std::string seekpath = "seek_test.txt";
 
         {
@@ -189,17 +189,17 @@ future<int> async_main() {
             f.seekg(5, seekpos::begin);
             assert(f.tellg() == 5);
             auto content1 = (co_await f.read(5)).value_or(buffer{});
-            asco::println("Read from position 5: '{}'", std::move(content1).to_string());
+            co_await asco::println("Read from position 5: '{}'", std::move(content1).to_string());
 
             f.seekg(-3, seekpos::current);
             assert(f.tellg() == 7);
             auto content2 = (co_await f.read(3)).value_or(buffer{});
-            asco::println("Read after seekg(-3): '{}'", std::move(content2).to_string());
+            co_await asco::println("Read after seekg(-3): '{}'", std::move(content2).to_string());
 
             f.seekg(-5, seekpos::end);
             assert(f.tellg() == 21);
             auto content3 = (co_await f.read(5)).value_or(buffer{});
-            asco::println("Read 5 chars from end(-5): '{}'", std::move(content3).to_string());
+            co_await asco::println("Read 5 chars from end(-5): '{}'", std::move(content3).to_string());
 
             f.seekp(10, seekpos::begin);
             assert(f.tellp() == 10);
@@ -209,15 +209,16 @@ future<int> async_main() {
 
             f.seekg(0, seekpos::begin);
             auto final_content = (co_await f.read(100)).value_or(buffer{});
-            asco::println("Final content after seek/write: '{}'", std::move(final_content).to_string());
+            co_await asco::println(
+                "Final content after seek/write: '{}'", std::move(final_content).to_string());
         }
 
         ::system(std::format("rm {}", seekpath).c_str());
-        asco::println("Seek operations test passed.");
+        co_await asco::println("Seek operations test passed.");
     }
 
     {
-        asco::println("\n--- Testing error handling ---");
+        co_await asco::println("\n--- Testing error handling ---");
 
         {
             auto ores = co_await file::at("/nonexistent/file.txt")
@@ -233,7 +234,7 @@ future<int> async_main() {
             assert(!ores.has_value());
         }
 
-        asco::println("Error handling test passed.");
+        co_await asco::println("Error handling test passed.");
     }
 
     co_return 0;

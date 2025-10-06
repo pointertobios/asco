@@ -10,20 +10,20 @@ using asco::future;
 constexpr size_t NUM_THREADS = 5;
 
 future<void> worker(asco::sync::barrier<NUM_THREADS> &bar, size_t id) {
-    asco::println("Worker {} arrived at barrier.", id);
+    co_await asco::println("Worker {} arrived at barrier.", id);
     co_await bar.arrive().wait();
-    asco::println("Worker {} passed the barrier.", id);
+    co_await asco::println("Worker {} passed the barrier.", id);
     co_return;
 }
 
 future<int> async_main() {
     asco::sync::barrier<NUM_THREADS> bar;
 
-    asco::println("Starting workers...");
+    co_await asco::println("Starting workers...");
     for (size_t i = 0; i < NUM_THREADS; ++i) { worker(bar, i + 1); }
 
     co_await bar.all_arrived();
-    asco::println("All workers have passed the barrier.");
+    co_await asco::println("All workers have passed the barrier.");
 
     co_return 0;
 }
