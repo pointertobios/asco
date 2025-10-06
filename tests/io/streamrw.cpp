@@ -10,7 +10,6 @@
 
 #include <cassert>
 #include <filesystem>
-#include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -24,6 +23,7 @@ using asco::io::file;
 using asco::io::newline;
 using asco::io::stream_reader;
 using asco::io::stream_writer;
+#include <asco/print.h>
 
 static future<void> write_file(std::string_view path, const std::string &content) {
     auto r = co_await file::at(path).read().write().create().truncate().mode(0644).open();
@@ -61,7 +61,7 @@ future<int> async_main() {
         assert(cnt == 0);
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 1 passed\n";
+        asco::println("streamrw Test 1 passed");
     }
 
     {
@@ -87,7 +87,7 @@ future<int> async_main() {
         assert((got == std::vector<std::string>{"L2", "L3"}));
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 14 (abort recovery LF) passed\n";
+        asco::println("streamrw Test 14 (abort recovery LF) passed");
     }
 
     {
@@ -112,7 +112,7 @@ future<int> async_main() {
         assert((got == std::vector<std::string>{"B", "C"}));
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 15 (abort recovery CRLF) passed\n";
+        asco::println("streamrw Test 15 (abort recovery CRLF) passed");
     }
 
     {
@@ -141,7 +141,7 @@ future<int> async_main() {
         assert(got == lines_vec);
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 2 passed\n";
+        asco::println("streamrw Test 2 passed");
     }
 
     {
@@ -158,7 +158,7 @@ future<int> async_main() {
         assert((got == std::vector<std::string>{"A", "B", "C"}));
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 3 passed\n";
+        asco::println("streamrw Test 3 passed");
     }
 
     {
@@ -191,7 +191,7 @@ future<int> async_main() {
         assert(std::move(all).to_string() == content);
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 4 passed\n";
+        asco::println("streamrw Test 4 passed");
     }
 
     {
@@ -213,7 +213,7 @@ future<int> async_main() {
         assert(std::move(all).to_string() == content);
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 4.1 (CRLF empty lines) passed\n";
+        asco::println("streamrw Test 4.1 (CRLF empty lines) passed");
     }
 
     {
@@ -232,7 +232,7 @@ future<int> async_main() {
         assert(got[1] == "B\rC");
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 4.2 (CRLF bare CR treated as data) passed\n";
+        asco::println("streamrw Test 4.2 (CRLF bare CR treated as data) passed");
     }
 
     {
@@ -264,7 +264,7 @@ future<int> async_main() {
         }
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 4.3 (read_lines lock lifetime) passed\n";
+        asco::println("streamrw Test 4.3 (read_lines lock lifetime) passed");
     }
 
     {
@@ -295,7 +295,7 @@ future<int> async_main() {
         assert(b4.size() == 0);
 
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 5 passed\n";
+        asco::println("streamrw Test 5 passed");
     }
 
     {
@@ -311,7 +311,7 @@ future<int> async_main() {
         auto eofb = co_await sr.read(10);
         assert(eofb.size() == 0);
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 6 passed\n";
+        asco::println("streamrw Test 6 passed");
     }
 
     {
@@ -326,7 +326,7 @@ future<int> async_main() {
         auto eofb = co_await sr.read(1);
         assert(eofb.size() == 0);
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 7 passed\n";
+        asco::println("streamrw Test 7 passed");
     }
 
     {
@@ -339,7 +339,7 @@ future<int> async_main() {
         auto b2 = co_await sr.read(1);
         assert(b2.size() == 0);
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 8 passed\n";
+        asco::println("streamrw Test 8 passed");
     }
 
     // --- stream_writer tests ---
@@ -375,7 +375,7 @@ future<int> async_main() {
             }
         }
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 9 (writer basic) passed\n";
+        asco::println("streamrw Test 9 (writer basic) passed");
     }
 
     struct test_partial_state {
@@ -417,7 +417,7 @@ future<int> async_main() {
             co_await sw.flush();
         }
         assert(st.written == st.expected);
-        std::cout << "streamrw Test 10 (writer partial flush) passed\n";
+        asco::println("streamrw Test 10 (writer partial flush) passed");
     }
 
     {
@@ -429,7 +429,7 @@ future<int> async_main() {
             co_await sw.write(buffer<>(std::string_view{"ABCDEFGHIJ"}));
         }
         assert(st.written == st.expected);
-        std::cout << "streamrw Test 11 (writer dtor partial flush) passed\n";
+        asco::println("streamrw Test 11 (writer dtor partial flush) passed");
     }
 
     {
@@ -464,7 +464,7 @@ future<int> async_main() {
             }
         }
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 12 (stream_read_writer basic) passed\n";
+        asco::println("streamrw Test 12 (stream_read_writer basic) passed");
     }
 
     {
@@ -482,9 +482,9 @@ future<int> async_main() {
             assert(std::move(all).to_string() == "NoFlushData");
         }
         std::filesystem::remove(path);
-        std::cout << "streamrw Test 13 (stream_read_writer dtor flush) passed\n";
+        asco::println("streamrw Test 13 (stream_read_writer dtor flush) passed");
     }
 
-    std::cout << "All streamrw tests passed.\n";
+    asco::println("All streamrw tests passed.");
     co_return 0;
 }

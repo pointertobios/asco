@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 #include <cassert>
-#include <iostream>
 #include <string>
 #include <string_view>
 
 #include <asco/exception.h>
 #include <asco/future.h>
 #include <asco/io/buffer.h>
+#include <asco/print.h>
 
 using asco::future;
 using asco::io::buffer;
@@ -20,44 +20,44 @@ future<int> async_main() {
     buf1.push('B');
     buf1.push('C');
     assert(std::move(buf1).to_string() == "ABC");
-    std::cout << "Test 1 passed\n";
+    asco::println("Test 1 passed");
 
     buffer buf2;
     std::string str = "hello";
     buf2.push(std::move(str));
     assert(std::move(buf2).to_string() == "hello");
-    std::cout << "Test 2 passed\n";
+    asco::println("Test 2 passed");
 
     buffer buf3;
     std::string_view sv = "world";
     buf3.push(sv);
     assert(std::move(buf3).to_string() == "world");
-    std::cout << "Test 3 passed\n";
+    asco::println("Test 3 passed");
 
     buffer buf4('X');
     assert(std::move(buf4).to_string() == "X");
-    std::cout << "Test 4 passed\n";
+    asco::println("Test 4 passed");
 
     buffer buf5("abc"s);
     assert(std::move(buf5).to_string() == "abc");
-    std::cout << "Test 5 passed\n";
+    asco::println("Test 5 passed");
 
     buffer buf6("def"sv);
     assert(std::move(buf6).to_string() == "def");
-    std::cout << "Test 6 passed\n";
+    asco::println("Test 6 passed");
 
     buffer buf7;
     buf7.push('1');
     buf7.push("23"s);
     buf7.push("45"sv);
     assert(std::move(buf7).to_string() == "12345");
-    std::cout << "Test 7 passed\n";
+    asco::println("Test 7 passed");
 
     buffer buf8;
     buf8.push('a');
     buffer buf9(std::move(buf8));
     assert(std::move(buf9).to_string() == "a");
-    std::cout << "Test 8 passed\n";
+    asco::println("Test 8 passed");
 
     buffer buf10;
     buf10.push('x');
@@ -65,13 +65,13 @@ future<int> async_main() {
     buf11.push('y');
     buf10.push(std::move(buf11));
     assert(std::move(buf10).to_string() == "xy");
-    std::cout << "Test 9 passed\n";
+    asco::println("Test 9 passed");
 
     buffer buf12;
     buf12.push('z');
     assert(std::move(buf12).to_string() == "z");
     assert(std::move(buf12).to_string().empty());
-    std::cout << "Test 10 passed\n";
+    asco::println("Test 10 passed");
 
     {
         buffer buf13;
@@ -81,7 +81,7 @@ future<int> async_main() {
         buf13.swap(buf14);
         assert(std::move(buf13).to_string() == "b");
         assert(std::move(buf14).to_string() == "a");
-        std::cout << "Test 11 (swap) passed\n";
+        asco::println("Test 11 (swap) passed");
     }
 
     {
@@ -96,7 +96,7 @@ future<int> async_main() {
         assert(right.size() == 3);
         assert(std::move(left).to_string() == "12");
         assert(std::move(right).to_string() == "345");
-        std::cout << "Test 12 (split) passed\n";
+        asco::println("Test 12 (split) passed");
     }
 
     {
@@ -106,7 +106,7 @@ future<int> async_main() {
         try {
             auto [l, r] = std::move(buf16).split(5);
             assert(false);
-        } catch (const asco::runtime_error &) { std::cout << "Test 13 (split out of range) passed\n"; }
+        } catch (const asco::runtime_error &) { asco::println("Test 13 (split out of range) passed"); }
     }
 
     {
@@ -118,7 +118,7 @@ future<int> async_main() {
         assert(buf17.size() == 3);
         std::move(buf17).to_string();
         assert(buf17.size() == 0);
-        std::cout << "Test 14 (size) passed\n";
+        asco::println("Test 14 (size) passed");
     }
 
     {
@@ -133,7 +133,7 @@ future<int> async_main() {
         auto cloned2 = bufA.clone();
         auto s2 = std::move(cloned2).to_string();
         assert(s2 == "ASCO");
-        std::cout << "Test 15 (clone basic) passed\n";
+        asco::println("Test 15 (clone basic) passed");
     }
 
     {
@@ -145,7 +145,7 @@ future<int> async_main() {
         auto c2 = bufA.clone();
         auto s2 = std::move(c2).to_string();
         assert(s2 == "Hello");
-        std::cout << "Test 16 (clone independence) passed\n";
+        asco::println("Test 16 (clone independence) passed");
     }
 
     {
@@ -156,7 +156,7 @@ future<int> async_main() {
         bufA.modify(5, std::move(insert));
         auto s = std::move(bufA).to_string();
         assert(s == "HelloASCOd");
-        std::cout << "Test 17 (modify mid shorter) passed\n";
+        asco::println("Test 17 (modify mid shorter) passed");
     }
 
     {
@@ -167,7 +167,7 @@ future<int> async_main() {
         bufA.modify(5, std::move(insert));
         auto s = std::move(bufA).to_string();
         assert(s == "HelloASCOOOL");
-        std::cout << "Test 18 (modify mid longer) passed\n";
+        asco::println("Test 18 (modify mid longer) passed");
     }
 
     {
@@ -178,7 +178,7 @@ future<int> async_main() {
         bufA.modify(0, std::move(repl));
         auto s = std::move(bufA).to_string();
         assert(s == "ASllo");
-        std::cout << "Test 19 (modify prefix) passed\n";
+        asco::println("Test 19 (modify prefix) passed");
     }
 
     {
@@ -189,7 +189,7 @@ future<int> async_main() {
         bufA.modify(4, std::move(add));
         auto s = std::move(bufA).to_string();
         assert(s == "Data");
-        std::cout << "Test 20 (modify append) passed\n";
+        asco::println("Test 20 (modify append) passed");
     }
 
     {
@@ -200,7 +200,7 @@ future<int> async_main() {
         bufA.modify(4, std::move(tail));
         auto s = std::move(bufA).to_string();
         assert(s == "ABCDXYZ");
-        std::cout << "Test 21 (modify tail exact) passed\n";
+        asco::println("Test 21 (modify tail exact) passed");
     }
 
     {
@@ -211,7 +211,7 @@ future<int> async_main() {
         bufA.modify(0, std::move(repl));
         auto s = std::move(bufA).to_string();
         assert(s == "NewContent");
-        std::cout << "Test 22 (modify full replace) passed\n";
+        asco::println("Test 22 (modify full replace) passed");
     }
 
     {
@@ -224,7 +224,7 @@ future<int> async_main() {
         assert(buf.empty());
         assert(buf.size() == 0);
         assert(buf.buffer_count() == 0);
-        std::cout << "Test 23 (empty/clear/buffer_count) passed\n";
+        asco::println("Test 23 (empty/clear/buffer_count) passed");
     }
 
     {
@@ -236,7 +236,7 @@ future<int> async_main() {
         expect.push_back('X');
         expect.append(5, '\0');
         assert(s == expect);
-        std::cout << "Test 24 (fill_zero small) passed\n";
+        asco::println("Test 24 (fill_zero small) passed");
     }
 
     {
@@ -250,7 +250,7 @@ future<int> async_main() {
         expect.append(5000, '\0');
         expect.push_back('B');
         assert(s == expect);
-        std::cout << "Test 25 (fill_zero large) passed\n";
+        asco::println("Test 25 (fill_zero large) passed");
     }
 
     {
@@ -261,7 +261,7 @@ future<int> async_main() {
         assert(buf.buffer_count() >= 2);
         auto s = std::move(buf).to_string();
         assert(s == std::string("A") + std::string(100, 'q'));
-        std::cout << "Test 26 (push string large) passed\n";
+        asco::println("Test 26 (push string large) passed");
     }
 
     {
@@ -278,7 +278,7 @@ future<int> async_main() {
             assert(std::move(l).to_string() == "EDGE");
             assert(r.size() == 0);
         }
-        std::cout << "Test 27 (split boundaries) passed\n";
+        asco::println("Test 27 (split boundaries) passed");
     }
 
     {
@@ -288,7 +288,7 @@ future<int> async_main() {
         dst = std::move(src);
         assert(src.size() == 0);
         assert(std::move(dst).to_string() == "MOVE");
-        std::cout << "Test 28 (move assignment) passed\n";
+        asco::println("Test 28 (move assignment) passed");
     }
 
     {
@@ -301,7 +301,7 @@ future<int> async_main() {
             buf.modify(10, std::move(repl));
         } catch (const asco::runtime_error &) { thrown = true; }
         assert(thrown);
-        std::cout << "Test 29 (modify out of range) passed\n";
+        asco::println("Test 29 (modify out of range) passed");
     }
 
     {
@@ -319,7 +319,7 @@ future<int> async_main() {
 
         std::string joined = std::move(buf).to_string();
         assert(joined == "AA"s + std::string(40, 'b') + std::string(100, 'c'));
-        std::cout << "Test 30 (rawbuffers iterate) passed\n";
+        asco::println("Test 30 (rawbuffers iterate) passed");
     }
 
     {
@@ -341,7 +341,7 @@ future<int> async_main() {
             buf.clear();
         }
         assert(destroy_count == 1);
-        std::cout << "Test 31 (push_raw_array_buffer deleter) passed\n";
+        asco::println("Test 31 (push_raw_array_buffer deleter) passed");
     }
 
     {
@@ -349,9 +349,9 @@ future<int> async_main() {
         buf.push("ZZZ"sv);
         (void)std::move(buf).to_string();
         assert(buf.buffer_count() == 0);
-        std::cout << "Test 32 (to_string clears frames) passed\n";
+        asco::println("Test 32 (to_string clears frames) passed");
     }
 
-    std::cout << "All buffer tests passed!" << std::endl;
+    asco::println("All buffer tests passed!");
     co_return 0;
 }

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #include <cassert>
-#include <iostream>
 
 #include <asco/future.h>
+#include <asco/print.h>
 #include <asco/sync/mutex.h>
 #include <asco/sync/semaphore.h>
 #include <asco/time/interval.h>
@@ -15,7 +15,7 @@ using namespace std::chrono_literals;
 future<void> foo() {
     binary_semaphore coro_local(sem);
     sem.release();
-    std::cout << "foo release semaphore, counter: " << sem.get_counter() << std::endl;
+    asco::println("foo release semaphore, counter: {}", sem.get_counter());
     co_return;
 }
 
@@ -23,20 +23,20 @@ future<void> bar() {
     binary_semaphore coro_local(sem);
     for (int i = 0; i < 100; i++) {
         sem.release();
-        std::cout << "bar after release " << i << " counter: " << sem.get_counter() << std::endl;
+        asco::println("bar after release {} counter: {}", i, sem.get_counter());
         co_await sem.acquire();
     }
     sem.release();
-    std::cout << "bar release, counter: " << sem.get_counter() << std::endl;
+    asco::println("bar release, counter: {}", sem.get_counter());
     co_return;
 }
 
 future<void> fot() {
     mutex<int> coro_local(mut);
-    std::cout << "fot lock" << std::endl;
+    asco::println("fot lock");
     auto g = co_await mut.lock();
     *g = 5;
-    std::cout << "fot *g: " << *g << std::endl;
+    asco::println("fot *g: {}", *g);
     co_return;
 }
 
@@ -46,36 +46,38 @@ future<int> async_main() {
     auto tt = foo();
     co_await sem.acquire();
     co_await tt;
-    std::cout << "main acquire semaphore, try acquire: " << (sem.try_acquire() ? "true" : "false")
-              << std::endl;
+    asco::println("main acquire semaphore, try acquire: {}", (sem.try_acquire() ? "true" : "false"));
     sem.release();
     if (sem.try_acquire()) {
-        std::cout << "main try acquire semaphore success: " << sem.get_counter() << std::endl;
+        asco::println("main try acquire semaphore success: {}", sem.get_counter());
         sem.release();
     }
     auto task = sem.acquire();
     task.abort();
-    co_await std::move(task).aborted([] { std::cout << "sem.acquire() truely aborted" << std::endl; });
-    std::cout << "test the abortable task (must be 1): " << sem.get_counter() << std::endl;
+    co_await std::move(task).aborted([] {
+        // Fire-and-forget logging, cannot co_await here
+        asco::println("sem.acquire() truely aborted");
+    });
+    asco::println("test the abortable task (must be 1): {}", sem.get_counter());
     assert(sem.get_counter() == 1);
     co_await sem.acquire();
 
     future<void> t = bar();
     for (int i = 0; i < 100; i++) {
         co_await sem.acquire();
-        std::cout << i << " counter: " << sem.get_counter() << std::endl;
+        asco::println("{} counter: {}", i, sem.get_counter());
         sem.release();
-        std::cout << "release, counter: " << sem.get_counter() << std::endl;
+        asco::println("release, counter: {}", sem.get_counter());
     }
     co_await t;
 
     {
         auto g = co_await mut.lock();
         t = fot();
-        std::cout << "*g: " << *g << std::endl;
+        asco::println("*g: {}", *g);
     }
     co_await t;
 
-    std::cout << "async_main will exit" << std::endl;
+    asco::println("async_main will exit");
     co_return 0;
 }

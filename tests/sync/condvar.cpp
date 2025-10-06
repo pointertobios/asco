@@ -1,18 +1,17 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include <atomic>
-#include <iostream>
-
 #include <asco/future.h>
+#include <asco/print.h>
 #include <asco/sync/condition_variable.h>
 #include <asco/time/sleep.h>
+#include <atomic>
 
 using asco::future, asco::condition_variable;
 using namespace std::chrono_literals;
 
 future<void> one_shoot() {
-    std::cout << "one shoot test started\n";
+    asco::println("one shoot test started");
 
     condition_variable decl_local(cv);
 
@@ -21,15 +20,15 @@ future<void> one_shoot() {
     auto t = [] -> future<void> {
         bool coro_local(flag);
         condition_variable coro_local(cv);
-        std::cout << "sub task waiting on cv\n";
+        asco::println("sub task waiting on cv");
         co_await cv.wait([flag] { return flag; });
-        std::cout << "sub task notified\n";
+        asco::println("sub task notified");
         co_return;
     }();
 
     flag = true;
     cv.notify_one();
-    std::cout << "notify one on cv\n";
+    asco::println("notify one on cv");
 
     co_await t;
 
@@ -37,7 +36,7 @@ future<void> one_shoot() {
 }
 
 future<void> broadcast_test() {
-    std::cout << "broadcast test started\n";
+    asco::println("broadcast test started");
 
     condition_variable decl_local(cv);
 
@@ -46,34 +45,34 @@ future<void> broadcast_test() {
     auto task1 = [] -> future<void> {
         std::atomic_bool coro_local(flag);
         condition_variable coro_local(cv);
-        std::cout << "task1 waiting on cv\n";
+        asco::println("task1 waiting on cv");
         co_await cv.wait([&flag] { return flag.load(std::memory_order::seq_cst); });
-        std::cout << "task1 notified\n";
+        asco::println("task1 notified");
         co_return;
     }();
 
     auto task2 = [] -> future<void> {
         std::atomic_bool coro_local(flag);
         condition_variable coro_local(cv);
-        std::cout << "task2 waiting on cv\n";
+        asco::println("task2 waiting on cv");
         co_await cv.wait([&flag] { return flag.load(std::memory_order::seq_cst); });
-        std::cout << "task2 notified\n";
+        asco::println("task2 notified");
         co_return;
     }();
 
     auto task3 = [] -> future<void> {
         std::atomic_bool coro_local(flag);
         condition_variable coro_local(cv);
-        std::cout << "task3 waiting on cv\n";
+        asco::println("task3 waiting on cv");
         co_await cv.wait([&flag] { return flag.load(std::memory_order::seq_cst); });
-        std::cout << "task3 notified\n";
+        asco::println("task3 notified");
         co_return;
     }();
 
     flag.store(true, std::memory_order::seq_cst);
     co_await asco::this_coro::sleep_for(1s);
     cv.notify_all();
-    std::cout << "broadcast notify all on cv\n";
+    asco::println("broadcast notify all on cv");
 
     co_await task1;
     co_await task2;

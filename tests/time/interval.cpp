@@ -1,9 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include <iostream>
-
 #include <asco/future.h>
+#include <asco/print.h>
 #include <asco/time/interval.h>
 
 using asco::future;
@@ -14,7 +13,7 @@ future<void> foo() {
     interval in(1s);
     for (int i = 0; i < 10; i++) {
         co_await in.tick();
-        std::cout << "tick foo" << std::endl;
+        asco::println("tick foo");
     }
     co_return;
 }
@@ -24,7 +23,7 @@ future<int> async_main() {
     interval in(500ms);
     for (int i = 0; i < 10; i++) {
         co_await in.tick();
-        std::cout << "tick async_main" << std::endl;
+        asco::println("tick async_main");
     }
     co_await task;
     co_return 0;

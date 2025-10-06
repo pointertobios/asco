@@ -1,9 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include <iostream>
-
 #include <asco/future.h>
+#include <asco/print.h>
 #include <asco/time/timeout.h>
 
 using asco::future;
@@ -14,19 +13,19 @@ using namespace std::chrono_literals;
 future<int> async_main() {
     auto res = co_await timeout(1s, [] -> future<void> {
         interval in{2s};
-        std::cout << "interval start\n";
+        asco::println("interval start");
         co_await in.tick().aborted([] {});
         if (asco::this_coro::aborted()) {
-            std::cout << "timeout aborted\n";
+            asco::println("timeout aborted");
             throw asco::coroutine_abort{};
         } else {
-            std::cout << "interval 2s\n";
+            asco::println("interval 2s");
         }
         co_return;
     });
     if (!res)
-        std::cout << "timeout\n";
+        asco::println("timeout");
     else
-        std::cout << "not timeout\n";
+        asco::println("not timeout");
     co_return 0;
 }

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #include <cassert>
-#include <iostream>
 
 #include <asco/future.h>
+#include <asco/print.h>
 #include <asco/time/sleep.h>
 #include <asco/utils/placement_list.h>
 
@@ -103,6 +103,6 @@ future<int> async_main() {
     test_single_thread_basic();
     test_insert_remove_middle();
     test_concurrency_head_basic();
-    std::cout << "placement_list tests passed" << std::endl;
+    asco::println("placement_list tests passed");
     co_return 0;
 }

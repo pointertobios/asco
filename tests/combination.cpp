@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #include <cassert>
-#include <iostream>
 #include <stdexcept>
 
 #include <asco/future.h>
+#include <asco/print.h>
 
 using asco::future;
 
@@ -20,13 +20,14 @@ future<int> async_main() {
     auto fut = async_add(1, 2).then([](int v) -> asco::future<int> { co_return v * 2; });
     int result = co_await fut;
     assert(result == 6);
-    std::cout << "then passed\n";
+    asco::println("then passed");
 
     auto fut2 = co_await async_throw().exceptionally([](const std::runtime_error &e) -> void {
-        std::cout << "exceptionally caught: " << e.what() << std::endl;
+        // Fire-and-forget logging (no await inside non-coroutine handler)
+        asco::println("exceptionally caught: {}", e.what());
     });
     assert(!fut2);  // must be the error type of expected<T, E>
-    std::cout << "exceptionally passed\n";
+    asco::println("exceptionally passed");
 
     co_return 0;
 }

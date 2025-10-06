@@ -5,12 +5,12 @@
 #include <atomic>
 #include <cassert>
 #include <cstdint>
-#include <print>
 #include <thread>
 #include <vector>
 
 #include <asco/future.h>
 #include <asco/nolock/continuous_queue.h>
+#include <asco/print.h>
 #include <asco/yield.h>
 
 using asco::future;
@@ -150,12 +150,12 @@ static asco::future<void> test_mpmc_correctness_coro() {
 }
 
 future<int> async_main() {
-    std::println("[continuous_queue] SPSC...");
+    asco::println("[continuous_queue] SPSC...");
     test_spsc_basic();
-    std::println("OK\n[continuous_queue] stop...");
+    asco::println("OK\n[continuous_queue] stop...");
     test_stop_semantics();
-    std::println("OK\n[continuous_queue] MPMC (coroutines)...");
+    asco::println("OK\n[continuous_queue] MPMC (coroutines)...");
     co_await test_mpmc_correctness_coro();
-    std::println("OK");
+    asco::println("OK");
     co_return 0;
 }

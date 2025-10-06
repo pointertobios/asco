@@ -8,7 +8,6 @@
 
 #include <cassert>
 #include <filesystem>
-#include <iostream>
 #include <string>
 
 using asco::block_read_writer;
@@ -17,6 +16,7 @@ using asco::io::buffer;
 using asco::io::file;
 using asco::io::seekpos;
 using namespace std::literals;
+#include <asco/print.h>
 
 static future<std::string> read_all(block_read_writer<file> &brw) {
     std::string acc;
@@ -48,7 +48,7 @@ future<int> async_main() {
 
         auto content = co_await read_all(brw);
         assert(content == "HelloWorld");
-        std::cout << "blockrw Test 1 passed\n";
+        asco::println("blockrw Test 1 passed");
     }
 
     {
@@ -57,7 +57,7 @@ future<int> async_main() {
         auto content = co_await read_all(brw);
         assert(content == "HelloWorld");
 
-        std::cout << "blockrw Test 2 passed\n";
+        asco::println("blockrw Test 2 passed");
     }
 
     {
@@ -72,7 +72,7 @@ future<int> async_main() {
         assert(s[20] == 'X');
 
         co_await brw.flush();
-        std::cout << "blockrw Test 3 passed\n";
+        asco::println("blockrw Test 3 passed");
     }
 
     {
@@ -85,7 +85,7 @@ future<int> async_main() {
         for (size_t i = 10; i < 20; ++i) assert(s[i] == '\0');
         assert(s[20] == 'X');
 
-        std::cout << "blockrw Test 4 passed\n";
+        asco::println("blockrw Test 4 passed");
     }
 
     {
@@ -109,7 +109,7 @@ future<int> async_main() {
         assert(!r4.has_value());  // EOF
         assert(brw.tellg() == 21);
 
-        std::cout << "blockrw Test 5 passed\n";
+        asco::println("blockrw Test 5 passed");
     }
 
     {
@@ -121,7 +121,7 @@ future<int> async_main() {
         auto r1 = co_await brw.read(2);
         assert(r1 && std::move(*r1).to_string() == "AB");
 
-        std::cout << "blockrw Test 6 passed\n";
+        asco::println("blockrw Test 6 passed");
     }
 
     std::error_code ec;
