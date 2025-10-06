@@ -1,6 +1,7 @@
 # Summary
 
 - [Quick Start](./quick_start.md)
+- [print](./print.md)
 - [Asynchronous Programming with `future<T>`](./future.md)
 - [Task Composition](./task_composition.md)
 - [Async Programming Basics](./async_basics/README.md)

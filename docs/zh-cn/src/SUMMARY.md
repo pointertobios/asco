@@ -1,6 +1,7 @@
 # Summary
 
 - [快速入门](./快速入门.md)
+- [print](./print.md)
 - [`future<T>`协程函数下的异步编程](./future.md)
 - [任务组合](./任务组合.md)
 - [异步编程基本工具](./异步编程基本工具/README.md)

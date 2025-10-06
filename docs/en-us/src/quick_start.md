@@ -35,6 +35,20 @@ ASCO therefore also supports keeping a synchronous `main` and calling async func
 
 Link against `asco-base` to use this style.
 
+## Hello World
+
+```c++
+#include <asco/future.h>
+#include <asco/print.h>
+
+using asco::future, asco::println;
+
+future<int> async_main() {
+    co_await println("Hello, World!");
+    co_return 0;
+}
+```
+
 ## CMake Targets
 
 - `asco`: ASCO runtime environment, static library.
