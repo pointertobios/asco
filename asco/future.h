@@ -64,6 +64,7 @@ struct future_base {
         atomic_size_t caller_task_id{0};
         std::coroutine_handle<> caller_task;
 
+        atomic_bool e_rethrowed{false};
         atomic_bool returned{false};
         atomic_bool moved_back{false};
 
@@ -391,8 +392,8 @@ struct future_base {
             throw asco::runtime_error("[ASCO] future didn't bind to a task");
 
         if (auto &e = state->e) {
-            auto tmp = e;
-            e = nullptr;
+            auto tmp = std::move(e);
+            state->e_rethrowed.store(true, morder::release);
             std::rethrow_exception(tmp);
         }
 
@@ -417,7 +418,7 @@ struct future_base {
 
             if (auto &e = state->e) {
                 auto tmp = e;
-                e = nullptr;
+                state->e_rethrowed.store(true, morder::release);
                 std::rethrow_exception(tmp);
             }
 
@@ -477,9 +478,10 @@ struct future_base {
         }
 
         auto e = state->e;
+        bool e_rethrowed = state->e_rethrowed.load(morder::acquire);
         state->unlink();
 
-        if (e) {
+        if (!e_rethrowed && e) {
             try {
                 std::rethrow_exception(e);
             } catch (coroutine_abort &) {
