@@ -4,19 +4,22 @@
 #ifndef ASCO_LINUX_IO_URING_H
 #define ASCO_LINUX_IO_URING_H 1
 
+#include <asco/core/daemon.h>
+#include <asco/core/sched.h>
 #include <asco/core/slub.h>
 #include <asco/io/buffer.h>
 #include <asco/sync/spin.h>
 #include <asco/utils/flags.h>
 #include <asco/utils/pubusing.h>
 
-#include <cstdint>
-#include <deque>
+#include <expected>
 #include <flat_map>
 #include <unordered_map>
 
 #include <liburing.h>
 #include <linux/openat2.h>
+#include <poll.h>
+#include <sys/eventfd.h>
 
 namespace asco::core::_linux {
 
@@ -94,6 +97,42 @@ struct read {
 
 };  // namespace ioreq
 
+class uring_poll_thread : public daemon {
+public:
+    uring_poll_thread(
+        size_t worker_id, ::io_uring &ring, spin<std::unordered_map<size_t, ::io_uring_cqe>> &completed_cqes,
+        atomic_int &event_fd)
+            : daemon(std::format("asco::ringp{}", worker_id), SIGALRM)
+            , ring(ring)
+            , completed_cqes(completed_cqes)
+            , event_fd(event_fd) {
+        daemon::start();
+    }
+
+    bool attach(
+        size_t seq_num, sched::task::task_id tid,
+        spin<std::unordered_map<size_t, sched::task::task_id>>::guard guard);
+
+    __asco_always_inline spin<std::unordered_map<size_t, sched::task::task_id>>::guard
+    prelock_attaching_tasks() {
+        return this->attaching_tasks.lock();
+    }
+
+    __asco_always_inline void decrease_unhandled_cqe_count() { unhandled_cqe_count.fetch_sub(1); }
+
+private:
+    bool initialize(atomic_bool &running) override;
+    void run() override;
+
+    ::io_uring &ring;
+    spin<std::unordered_map<size_t, ::io_uring_cqe>> &completed_cqes;
+    atomic_int &event_fd;
+    ::pollfd pfds[1];
+    atomic_ssize_t unhandled_cqe_count{0};
+
+    spin<std::unordered_map<size_t, sched::task::task_id>> attaching_tasks;
+};
+
 class uring {
 public:
     struct req_token {
@@ -104,7 +143,12 @@ public:
     explicit uring(size_t worker_id);
     ~uring();
 
+    bool attach(
+        size_t seq_num, sched::task::task_id tid,
+        spin<std::unordered_map<size_t, sched::task::task_id>>::guard &&guard);
     std::optional<int> peek(size_t seq_num);
+    std::expected<int, spin<std::unordered_map<size_t, sched::task::task_id>>::guard>
+    peek_or_preattach(size_t seq_num);
     std::optional<io::buffer<>> peek_read_buffer(size_t seq_num, size_t read);
     std::optional<io::buffer<>> peek_rest_write_buffer(size_t seq_num, size_t written);
 
@@ -115,13 +159,17 @@ public:
 
 private:
     size_t worker_id;
-    ::io_uring ring;
 
-    atomic_size_t seq_count{0};
+    ::io_uring ring;
+    atomic_int event_fd{-1};
+
+    spin<std::unordered_map<size_t, ::io_uring_cqe>> completed_cqes;
+
+    uring_poll_thread poll_thread;
+
+    atomic_size_t seq_count{1};
 
     atomic_size_t iotask_count{0};
-
-    spin<std::deque<::io_uring_cqe>> compeleted_queue;
 
     // <req_token::seq_num, ioreq::open>
     spin<std::unordered_map<size_t, ioreq::open>> unpeeked_opens;

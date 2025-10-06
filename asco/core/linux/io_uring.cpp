@@ -3,7 +3,9 @@
 
 #include <asco/core/linux/io_uring.h>
 
+#include <asco/core/runtime.h>
 #include <asco/rterror.h>
+#include <asco/utils/concurrency.h>
 #include <asco/utils/math.h>
 
 #include <cstring>
@@ -16,6 +18,7 @@
 #include <fcntl.h>
 #include <liburing.h>
 #include <liburing/io_uring.h>
+#include <sys/eventfd.h>
 
 namespace asco::core::_linux {
 
@@ -37,12 +40,99 @@ static ::cpu_set_t get_cpu_set_in_numa_node(int target_node) noexcept {
     return cpumask;
 }
 
+bool uring_poll_thread::attach(
+    size_t seq_num, sched::task::task_id tid,
+    spin<std::unordered_map<size_t, sched::task::task_id>>::guard guard) {
+    if (auto compg = completed_cqes.lock(); compg->contains(seq_num))
+        return false;
+    (*guard)[seq_num] = tid;
+    return true;
+}
+
+bool uring_poll_thread::initialize(atomic_bool &running) {
+    while (running.load(morder::acquire) && event_fd.load(morder::acquire) < 0) concurrency::cpu_relax();
+    if (!running.load(morder::acquire))
+        return false;
+
+    pfds[0].fd = event_fd.load(morder::acquire);
+    pfds[0].events = POLLIN;
+
+    return true;
+}
+
+void uring_poll_thread::run() {
+    int res = ::poll(pfds, 1, 1000);
+
+    // FIXME Sometimes poll never returns. Sometimes the attaching tasks never be awaken.
+    // So we use 1000ms timeout and awake a attaching task some time.
+    // One day we find the reason, fix it.
+    if (auto guard = attaching_tasks.lock(); !guard->empty()) {
+        auto it = guard->begin();
+        auto [seq_num, tid] = *it;
+        guard->erase(it);
+        if (RT::__worker::task_available(tid)) {
+            auto &w = RT::__worker::get_worker_from_task_id(tid);
+            w.sc.awake(tid);
+            w.awake();
+        }
+    }
+
+    if (res < 0 && errno == EINTR) {
+        return;
+    }
+
+    if (!(pfds[0].revents & POLLIN))
+        return;
+
+    uint64_t count;
+    while (int err = ::read(this->event_fd, &count, sizeof(count))) {
+        if (err < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+            throw runtime_error(
+                std::format("[ASCO] uring::poll_thread(): read() failed: {}", std::strerror(errno)));
+        } else if (err >= 0) {
+            break;
+        }
+    }
+    unhandled_cqe_count.fetch_add(count, morder::acq_rel);
+
+    ::io_uring_cqe *cqe{nullptr};
+    while (unhandled_cqe_count.load(morder::acquire) > 0) {
+        auto attac_guard = attaching_tasks.lock();
+
+        size_t seq_num;
+
+        with(auto compq_guard = completed_cqes.lock()) {
+            if (auto ret = ::io_uring_peek_cqe(&this->ring, &cqe); ret != 0 || !cqe) {
+                continue;
+            }
+
+            seq_num = ::io_uring_cqe_get_data64(cqe);
+            (*compq_guard)[seq_num] = *cqe;
+            ::io_uring_cqe_seen(&this->ring, cqe);
+        }
+
+        sched::task::task_id tid{0};
+        if (attac_guard->contains(seq_num)) {
+            tid = attac_guard->at(seq_num);
+            attac_guard->erase(seq_num);
+        }
+        if (tid && RT::__worker::task_available(tid)) {
+            auto &w = RT::__worker::get_worker_from_task_id(tid);
+            w.sc.awake(tid);
+            w.awake();
+        }
+
+        unhandled_cqe_count.fetch_sub(1, morder::acq_rel);
+    }
+}
+
 uring::uring(size_t worker_id)
-        : worker_id(worker_id) {
+        : worker_id(worker_id)
+        , poll_thread{worker_id, ring, completed_cqes, event_fd} {
     ::io_uring_params params{};
     params.sq_entries = io_uring_entries;
     params.cq_entries = io_uring_entries;
-    params.flags = IORING_SETUP_SQPOLL | IORING_SETUP_SQ_AFF;
+    params.flags = IORING_SETUP_SQPOLL | IORING_SETUP_SQ_AFF | IORING_SETUP_CQSIZE;
     params.sq_thread_idle = 100;
     params.sq_thread_cpu = worker_id;
 
@@ -51,9 +141,29 @@ uring::uring(size_t worker_id)
             std::format("[ASCO] uring::uring(): Failed to initialize io_uring: {}", std::strerror(-err)));
     }
 
+    if (auto event_fd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK); event_fd < 0) {
+        ::io_uring_queue_exit(&this->ring);
+        throw runtime_error(
+            std::format("[ASCO] uring::uring(): Failed to create eventfd: {}", std::strerror(errno)));
+    } else {
+        this->event_fd.store(event_fd, morder::release);
+    }
+
+    if (int err = ::io_uring_register_eventfd(&this->ring, this->event_fd.load(morder::acquire)); err < 0) {
+        ::close(this->event_fd.load(morder::acquire));
+        ::io_uring_queue_exit(&this->ring);
+        throw runtime_error(
+            std::format(
+                "[ASCO] uring::uring(): Failed to register eventfd to io_uring: {}", std::strerror(-err)));
+    }
+
     if (auto numa_node = get_numa_node(worker_id); numa_node >= 0) {
         auto cpumask = get_cpu_set_in_numa_node(numa_node);
+        // IO poll kernel thread can be bound to current numa node
         if (int err = ::io_uring_register_iowq_aff(&this->ring, sizeof(cpumask), &cpumask); err < 0) {
+            ::io_uring_unregister_eventfd(&this->ring);
+            ::close(this->event_fd.load(morder::acquire));
+            ::io_uring_queue_exit(&this->ring);
             throw runtime_error(
                 std::format(
                     "[ASCO] uring::uring(): Failed to register io_uring worker affinity: {}",
@@ -67,43 +177,62 @@ uring::~uring() {
     ::io_uring_queue_exit(&this->ring);
 }
 
-std::optional<int> uring::peek(size_t seq_num) {
-    ::io_uring_cqe local_cqe_cache;
-    ::io_uring_cqe *cqe{nullptr};
+bool uring::attach(
+    size_t seq_num, sched::task::task_id tid,
+    spin<std::unordered_map<size_t, sched::task::task_id>>::guard &&guard) {
+    return this->poll_thread.attach(seq_num, tid, std::move(guard));
+}
 
-    if (auto guard = this->compeleted_queue.lock(); !guard->empty()) {
+std::optional<int> uring::peek(size_t seq_num) {
+    ::io_uring_cqe *cqe{nullptr};
+    int res;
+    size_t ud;
+
+    if (auto guard = this->completed_cqes.lock(); !guard->empty()) {
         for (auto it = guard->begin(); it != guard->end(); it++) {
-            if ((*it).user_data == seq_num) {
-                local_cqe_cache = *it;
+            auto &[it_seq_num, it_cqe] = *it;
+            if (it_seq_num == seq_num) {
+                res = it_cqe.res;
+                ud = ::io_uring_cqe_get_data64(&it_cqe);
                 guard->erase(it);
                 goto finish;
             }
         }
     }
 
-    int ret;
     do {
         cqe = nullptr;
-        if (ret = ::io_uring_peek_cqe(&this->ring, &cqe);
-            ret == 0 && cqe && cqe->user_data != seq_num && !(cqe->flags & IORING_CQE_F_NOTIF)) {
-            this->compeleted_queue.lock()->push_back(*cqe);
+        auto guard = this->completed_cqes.lock();
+        if (int ret = ::io_uring_peek_cqe(&this->ring, &cqe); ret == 0 && cqe) {
+            if (auto idx = ::io_uring_cqe_get_data64(cqe); idx != seq_num) {
+                (*guard)[idx] = *cqe;
+            } else {
+                res = cqe->res;
+                ud = idx;
+            }
+            poll_thread.decrease_unhandled_cqe_count();
             ::io_uring_cqe_seen(&this->ring, cqe);
         }
-    } while (cqe && (cqe->user_data != seq_num || cqe->flags & IORING_CQE_F_NOTIF));
+    } while (cqe && cqe->user_data != seq_num);
 
     if (!cqe)
         return std::nullopt;
 
 finish:
-    int res = cqe ? cqe->res : local_cqe_cache.res;
-    auto ud = ::io_uring_cqe_get_data64(cqe ? cqe : &local_cqe_cache);
     if (auto guard = unpeeked_opens.lock(); guard->contains(ud)) {
         guard->erase(ud);
     }
-    if (cqe)
-        ::io_uring_cqe_seen(&this->ring, cqe);
     this->iotask_count.fetch_sub(1);
     return res;
+}
+
+std::expected<int, spin<std::unordered_map<size_t, sched::task::task_id>>::guard>
+uring::peek_or_preattach(size_t seq_num) {
+    auto guard = poll_thread.prelock_attaching_tasks();
+    if (auto res = peek(seq_num); res)
+        return std::move(*res);
+    else
+        return std::unexpected{std::move(guard)};
 }
 
 std::optional<io::buffer<>> uring::peek_read_buffer(size_t seq_num, size_t read) {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <asco/core/daemon.h>
+#include <asco/utils/concurrency.h>
 
 #include <cstring>
 #ifdef __linux__
@@ -11,11 +12,12 @@
 
 namespace asco::core {
 
-daemon::daemon(const char *name, int sig)
-        : name(name)
+daemon::daemon(std::string &&name, int sig)
+        : name(std::move(name))
         , awake_sig(sig) {}
 
 daemon::~daemon() {
+    spin_wait_init();
     running.store(false, morder::seq_cst);
     awake();
 }
@@ -29,13 +31,15 @@ void daemon::awake() {
 #endif
 }
 
-void daemon::spin_wait_init() { while (!init_waiter.load(morder::seq_cst)); }
+void daemon::spin_wait_init() {
+    while (!init_waiter.load(morder::seq_cst)) concurrency::cpu_relax();
+}
 
 void daemon::start() {
     thread = std::jthread([this]() {
 #ifdef __linux__
         ptid = ::pthread_self();
-        ::pthread_setname_np(ptid, name);
+        ::pthread_setname_np(ptid, name.c_str());
 
         pid = ::gettid();
 
@@ -49,6 +53,9 @@ void daemon::start() {
 #    error "Windows daemon not implemented"
 #endif
         init_waiter.store(true, morder::seq_cst);
+
+        if (!initialize(running))
+            return;
 
         while (running.load(morder::seq_cst)) run();
     });

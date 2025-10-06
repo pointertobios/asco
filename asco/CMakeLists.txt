@@ -30,6 +30,7 @@ if (LINUX)
     else()
         set(ASCO_SOURCES ${ASCO_SOURCES}
             core/linux/io_uring.cpp
+            core/linux/io_uring_helper.cpp
             io/uring_file.cpp
         )
     endif()

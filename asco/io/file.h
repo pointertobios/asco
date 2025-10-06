@@ -25,6 +25,8 @@ class file {
     friend struct open_file;
     friend struct opener;
 
+    constexpr static std::string_view raw_handle_object_path = "<raw-handle-object>";
+
 public:
 #ifdef __linux__
     using file_raw_handle = int;
@@ -81,6 +83,12 @@ public:
     file() = default;
 
     file(file &&);
+
+    file(file_raw_handle handle, flags<options> opts)
+            : none{false}
+            , fhandle{handle}
+            , path{raw_handle_object_path}
+            , opts{opts} {}
 
     file(const file &) = delete;
 
@@ -143,7 +151,7 @@ private:
 
     atomic_bool is_destructor_close{false};
     // close() use this flag to inform the destructor that it can continue.
-    atomic_flag destructor_can_exit;
+    atomic_flag destructor_can_exit ATOMIC_FLAG_INIT;
 
 #ifdef ASCO_IO_URING
     std::optional<core::_linux::uring::req_token> aborted_token{std::nullopt};
@@ -281,6 +289,8 @@ struct opener {
     }
 
     inline future_inline<void> reopen(this opener &&self, file &f) {
+        if (f.path == file::raw_handle_object_path)
+            throw inner_exception("[ASCO] opener::reopen(): Cannot reopen file constructed from raw handle.");
         self._path = f.path;
         return f.reopen(std::move(self));
     }

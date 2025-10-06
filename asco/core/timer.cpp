@@ -62,8 +62,11 @@ void timer::run() {
         auto &point = guard->front();
         for (auto &id : point.id) {
             attaching_tasks.lock()->erase(id);
-            if (RT::__worker::task_available(id))
-                RT::get_runtime().awake(id);
+            if (RT::__worker::task_available(id)) {
+                auto &w = RT::__worker::get_worker_from_task_id(id);
+                w.sc.awake(id);
+                w.awake();
+            }
         }
         std::pop_heap(guard->begin(), guard->end(), std::greater<awake_point>());
         guard->pop_back();

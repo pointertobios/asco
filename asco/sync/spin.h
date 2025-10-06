@@ -22,6 +22,7 @@ public:
     spin(spin &&) = delete;
     class guard {
         spin &s;
+        bool none{false};
 
     public:
         guard(spin &s) noexcept
@@ -36,7 +37,15 @@ public:
             // not, the probability of competitors releasing this lock is the same.
         }
 
-        ~guard() { s.locked.store(false, morder::release); }
+        guard(guard &&rhs) noexcept
+                : s{rhs.s} {
+            rhs.none = true;
+        }
+
+        ~guard() {
+            if (!none)
+                s.locked.store(false, morder::release);
+        }
     };
 
     guard lock() noexcept { return guard{*this}; }
@@ -71,6 +80,10 @@ public:
         guard(spin &s) noexcept
                 : g{s._lock.lock()}
                 , s{s} {}
+
+        guard(guard &&rhs) noexcept
+                : g{std::move(rhs.g)}
+                , s{rhs.s} {}
 
         ~guard() {}
 

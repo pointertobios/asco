@@ -24,9 +24,11 @@ using size_t = uintptr_t;
 using ssize_t = intptr_t;
 
 using atomic_size_t = std::atomic<size_t>;
+using atomic_ssize_t = std::atomic<ssize_t>;
 using atomic_int64_t = std::atomic_int64_t;
 using atomic_bool = std::atomic_bool;
 using atomic_flag = std::atomic_flag;
+using atomic_int = std::atomic_int;
 
 using atomic_uint8_t = std::atomic_uint8_t;
 
@@ -36,6 +38,9 @@ template<typename T>
 using atomic = std::atomic<T>;
 
 using morder = std::memory_order;
+
+template<typename T>
+using monostate_if_void = std::conditional_t<std::is_void_v<T>, std::monostate, T>;
 
 };  // namespace asco::types
 

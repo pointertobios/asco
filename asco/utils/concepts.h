@@ -10,9 +10,17 @@
 #include <exception>
 #include <type_traits>
 #include <utility>
-#include <variant>
+
+#include <asco/utils/pubusing.h>
 
 namespace asco::concepts {
+
+using namespace types;
+
+template<typename T>
+concept hashable = requires(T t) {
+    { std::hash<T>{}(t) } -> std::convertible_to<std::size_t>;
+};
 
 template<typename E>
 concept enum_type = std::is_enum_v<E>;
@@ -20,9 +28,6 @@ concept enum_type = std::is_enum_v<E>;
 template<typename CharT>
 concept simple_char =
     std::is_integral_v<CharT> || std::is_same_v<CharT, char> || std::is_same_v<CharT, std::byte>;
-
-template<typename T>
-using monostate_if_void = std::conditional_t<std::is_void_v<T>, std::monostate, T>;
 
 template<typename T>
 concept move_secure =
@@ -33,6 +38,9 @@ concept move_secure =
 template<typename T>
 concept base_type =
     std::is_void_v<T> || std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_pointer_v<T>;
+
+template<typename T>
+using passing = std::conditional_t<base_type<T>, T, T &&>;
 
 template<typename F>
 concept future_type = requires(F f) {

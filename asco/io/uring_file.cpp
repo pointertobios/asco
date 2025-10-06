@@ -4,12 +4,10 @@
 #include <asco/io/file.h>
 
 #include <asco/core/linux/io_uring.h>
+#include <asco/core/linux/io_uring_helper.h>
 #include <asco/exception.h>
 
-#include <asm-generic/errno.h>
 #include <cerrno>
-#include <chrono>
-#include <coroutine>
 #include <cstring>
 #include <expected>
 #include <optional>
@@ -21,14 +19,6 @@
 namespace asco::io {
 
 using namespace core::_linux;
-
-using clock = std::chrono::high_resolution_clock;
-
-#define do_suspend_while(cond)                                       \
-    for (auto start_time = clock::now(); cond; ({                    \
-             if (clock::now() - start_time > file::max_waiting_time) \
-                 co_await std::suspend_always{};                     \
-         }))
 
 future<std::expected<file, file::open_result>>
 open_file::open(std::string path, flags<file::options> opts, uint64_t perm) {
@@ -78,20 +68,23 @@ open_file::open(std::string path, flags<file::options> opts, uint64_t perm) {
             uring_resolvemode,
         });
 
-    do_suspend_while(true) {
-        if (auto res = uring.peek(token.seq_num)) {
-            if (*res < 0) {
-                co_return std::unexpected{static_cast<file::open_result>(-*res)};
-            }
+    auto deal_with_res = [&path, opts](int res) -> std::expected<file, file::open_result> {
+        if (res < 0)
+            return std::unexpected{static_cast<file::open_result>(-res)};
 
-            auto f = file{static_cast<int>(*res), std::move(path), opts};
-            if (opts.has(file::options::append)) {
-                f.seekg(0, seekpos::end);
-                f.seekp(0, seekpos::end);
-            }
-            co_return std::move(f);
+        auto f = file{res, std::move(path), opts};
+        if (opts.has(file::options::append)) {
+            f.seekg(0, seekpos::end);
+            f.seekp(0, seekpos::end);
         }
-    }
+        return std::move(f);
+    };
+
+    if (auto res = uring.peek(token.seq_num))
+        co_return deal_with_res(*res);
+
+    auto res = co_await peek_uring(uring, token.seq_num);
+    co_return deal_with_res(res);
 }
 
 future<void> file::close() {
@@ -107,10 +100,11 @@ future<void> file::close() {
     auto &uring = RT::__worker::get_worker().get_uring();
     auto token = uring.submit(ioreq::close{fh});
 
-    do_suspend_while(true) {
-        if (uring.peek(token.seq_num))
-            co_return;
-    }
+    if (auto res = uring.peek(token.seq_num))
+        co_return;
+
+    (void)co_await peek_uring(uring, token.seq_num);
+    co_return;
 }
 
 future<std::optional<io::buffer<>>> file::write(buffer<> buf) {
@@ -123,17 +117,21 @@ future<std::optional<io::buffer<>>> file::write(buffer<> buf) {
     auto &uring = RT::__worker::get_worker().get_uring();
     auto token = uring.submit(ioreq::write{fhandle, std::move(buf), pwrite});
 
-    do_suspend_while(true) {
-        if (auto res = uring.peek(token.seq_num)) {
-            if (*res < 0)
-                throw inner_exception(
-                    std::format(
-                        "[ASCO] asco::io::file::write(): write failed because: {}", std::strerror(-*res)));
+    auto deal_with_res = [&pwrite = this->pwrite, &uring,
+                          seq_num = token.seq_num](int res) -> std::optional<io::buffer<>> {
+        if (res < 0)
+            throw inner_exception(
+                std::format("[ASCO] asco::io::file::write(): write failed because: {}", std::strerror(-res)));
 
-            pwrite += *res;
-            co_return uring.peek_rest_write_buffer(token.seq_num, *res);
-        }
-    }
+        pwrite += res;
+        return uring.peek_rest_write_buffer(seq_num, res);
+    };
+
+    if (auto res = uring.peek(token.seq_num))
+        co_return deal_with_res(*res);
+
+    auto res = co_await peek_uring(uring, token.seq_num);
+    co_return deal_with_res(res);
 }
 
 future<std::expected<buffer<>, read_result>> file::read(size_t nbytes) {
@@ -193,38 +191,47 @@ future<std::expected<buffer<>, read_result>> file::read(size_t nbytes) {
 
 after_submit:
 
-    do_suspend_while(true) {
-        if (this_coro::aborted()) {
-            aborted_token = token;
-            throw base::coroutine_abort{};
-        }
-
-        uring = &RT::get_runtime().get_worker_from_id(token.worker_id).get_uring();
-
-        if (auto res = uring->peek(token.seq_num)) {
-            if (*res == 0) {
-                co_return std::unexpected{read_result::eof};
-            } else if (*res < 0) {
-                switch (-*res) {
-                case EINTR:
-                    co_return std::unexpected{read_result::interrupted};
-                case EAGAIN:
-                    co_return std::unexpected{read_result::again};
-                default:
-                    throw inner_exception(
-                        std::format(
-                            "[ASCO] asco::io::file::read(): read failed because: {}", std::strerror(-*res)));
-                }
-            } else if (auto rbuf = uring->peek_read_buffer(token.seq_num, *res)) {
-                restorer.state = 1;
-                restorer.pread_inc = *res;
-                pread += *res;
-                co_return std::move(*rbuf);
-            } else {
-                throw inner_exception("[ASCO] asco::io::file::read(): cqe peeked but read buffer not found");
+    auto deal_with_res = [&restorer, &pread = this->pread, &uring,
+                          seq_num = token.seq_num](int res) -> std::expected<buffer<>, read_result> {
+        if (res == 0)
+            return std::unexpected{read_result::eof};
+        else if (res < 0) {
+            switch (-res) {
+            case EINTR:
+                return std::unexpected{read_result::interrupted};
+            case EAGAIN:
+                return std::unexpected{read_result::again};
+            default:
+                throw inner_exception(
+                    std::format(
+                        "[ASCO] asco::io::file::read(): read failed because: {}", std::strerror(-res)));
             }
+        } else if (auto rbuf = uring->peek_read_buffer(seq_num, res)) {
+            restorer.state = 1;
+            restorer.pread_inc = res;
+            pread += res;
+            return std::move(*rbuf);
+        } else {
+            throw inner_exception("[ASCO] asco::io::file::read(): cqe peeked but read buffer not found");
         }
+    };
+
+    if (auto res = uring->peek(token.seq_num))
+        co_return deal_with_res(*res);
+
+    if (this_coro::aborted()) {
+        aborted_token = token;
+        throw base::coroutine_abort{};
     }
+
+    auto res = co_await peek_uring(*uring, token.seq_num);
+
+    if (this_coro::aborted()) {
+        aborted_token = token;
+        throw base::coroutine_abort{};
+    }
+
+    co_return deal_with_res(res);
 }
 
 };  // namespace asco::io

@@ -14,7 +14,7 @@ using namespace types;
 
 class daemon {
 public:
-    explicit daemon(const char *name, int sig);
+    explicit daemon(std::string &&name, int sig);
     ~daemon();
 
     void awake();
@@ -26,9 +26,10 @@ protected:
     void start();
 
 private:
+    virtual bool initialize(atomic_bool &) { return true; };
     virtual void run() = 0;
 
-    const char *name;
+    std::string name;
     int awake_sig;
 
     atomic_bool running{true};
