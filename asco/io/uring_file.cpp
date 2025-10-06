@@ -114,6 +114,9 @@ future<std::optional<io::buffer<>>> file::write(buffer<> buf) {
     if (!opts.has(options::write))
         throw inner_exception("[ASCO] asco::io::file::write(): file not opened with option::write");
 
+    if (buf.empty())
+        co_return std::move(buf);
+
     auto &uring = RT::__worker::get_worker().get_uring();
     auto token = uring.submit(ioreq::write{fhandle, std::move(buf), pwrite});
 

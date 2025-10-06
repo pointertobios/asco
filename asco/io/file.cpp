@@ -29,6 +29,9 @@ file::~file() {
     if (none)
         return;
 
+    if (path == raw_handle_object_path)
+        return;
+
     is_destructor_close.store(true, morder::release);
     close();
     while (!destructor_can_exit.test()) concurrency::cpu_relax();

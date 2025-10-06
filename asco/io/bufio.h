@@ -188,6 +188,9 @@ public:
 
     // Unabortable
     future<void> write(buffer<> buf) {
+        if (buf.empty())
+            co_return;
+
         auto inbuf_size = buf.size();
         if (auto acbuf_size = active_buffer.size(), buffer_end = buffer_start + acbuf_size;
             pwrite > buffer_end) {
@@ -679,7 +682,9 @@ public:
 
     // Unabortable
     future_inline<void> write_all(buffer<> buf) {
-        cache.push(std::move(buf));
+        if (!buf.empty())
+            cache.push(std::move(buf));
+
         co_await flush();
         co_return;
     }
