@@ -1,0 +1,17 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Dependencies
+# Hint: if this config file is used from the build tree, prefer the vendored cpptrace in deps/
+# This makes find_dependency(cpptrace ...) work without requiring consumers to set cpptrace_DIR.
+set(_ASCO_BUILD_CPPTRACE_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/deps/cpptrace/cmake")
+if(EXISTS "${_ASCO_BUILD_CPPTRACE_CMAKE_DIR}/cpptrace-config.cmake")
+	# Provide a direct hint for config-mode find_package
+	set(cpptrace_DIR "${_ASCO_BUILD_CPPTRACE_CMAKE_DIR}")
+endif()
+
+find_dependency(cpptrace CONFIG REQUIRED)
+
+# Exported targets
+include("${CMAKE_CURRENT_LIST_DIR}/ascoTargets.cmake")
