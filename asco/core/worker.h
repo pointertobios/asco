@@ -8,7 +8,6 @@
 #include <stack>
 #include <tuple>
 #include <unordered_map>
-#include <unordered_set>
 
 #include <asco/concurrency/continuous_queue.h>
 #include <asco/core/daemon.h>
@@ -71,7 +70,7 @@ private:
 
     std::stack<task_id> task_stack;
 
-    spin<std::unordered_set<task_id>> tasks{};
+    spin<std::unordered_map<task_id, std::shared_ptr<task<>>>> tasks{};
     spin<std::unordered_map<task_id, std::shared_ptr<task<>>>> suspended_tasks{};
     spin<std::deque<std::shared_ptr<task<>>>> active_tasks{};
 

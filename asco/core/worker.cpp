@@ -89,9 +89,9 @@ bool worker::run_once() {
         return true;
     }
 
-    task_enter(id);
+    task_stack = std::move(task->call_chain);
     task->corohandle.resume();
-    task_exit();
+    tasks.lock()->at(task_stack.top())->call_chain = std::move(task_stack);
 
     if (task->corohandle.done()) {
         // The tasks always suspend themselves, so only unregister_task is OK.
@@ -114,7 +114,7 @@ bool worker::in_worker() noexcept { return _this_worker.load(morder::acquire) !=
 worker &worker::this_worker() noexcept { return *_this_worker.load(morder::acquire); }
 
 void worker::register_task(task_id id, std::shared_ptr<task<>> task, bool non_spawn) {
-    tasks.lock()->insert(id);
+    tasks.lock()->emplace(id, task);
     if (non_spawn) {
         suspended_tasks.lock()->emplace(id, std::move(task));
     } else {
@@ -199,8 +199,8 @@ std::shared_ptr<core::task<>> worker::move_out_suspended_task(task_id id) {
 void worker::move_in_suspended_task(task_id id, std::shared_ptr<core::task<>> t) {
     t->worker_ptr = this;
     t->scheduled.store(true, morder::release);
-    suspended_tasks.lock()->emplace(id, std::move(t));
-    tasks.lock()->insert(id);
+    suspended_tasks.lock()->emplace(id, t);
+    tasks.lock()->emplace(id, std::move(t));
 }
 
 };  // namespace asco::core

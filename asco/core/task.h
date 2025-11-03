@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <semaphore>
+#include <stack>
 
 #include <asco/concurrency/concurrency.h>
 #include <asco/panic/panic.h>
@@ -63,6 +64,8 @@ struct task<> {
 
     cpptrace::stacktrace raw_stacktrace;
 
+    std::stack<task_id> call_chain;
+
     task(
         task_id id, std::coroutine_handle<> corohdl, bool spawn_task, bool core_task,
         panic::coroutine_trace_handle caller_coroutine_addr) noexcept
@@ -70,7 +73,9 @@ struct task<> {
             , corohandle{corohdl}
             , spawn_task{spawn_task}
             , core_task{core_task}
-            , caller_coroutine_trace{caller_coroutine_addr} {}
+            , caller_coroutine_trace{caller_coroutine_addr} {
+        call_chain.push(id);
+    }
 
 protected:
     void destroy() noexcept {

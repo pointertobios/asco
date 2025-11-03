@@ -3,11 +3,23 @@
 
 #include <print>
 
+#include <asco/concurrency/concurrency.h>
 #include <asco/future.h>
 
 using namespace asco;
 
-future<int> foo() { co_return 42; }
+future_spawn<void> wtf() {
+    for (int i = 0; i < 10; ++i) {
+        asco::concurrency::withdraw<100000>();
+        std::println("In wtf()");
+    }
+    co_return;
+}
+
+future<int> foo() {
+    co_await wtf();
+    co_return 42;
+}
 
 future_spawn<void> bar() {
     std::println("In bar()");
