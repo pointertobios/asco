@@ -4,6 +4,7 @@
 #pragma once
 
 #include <coroutine>
+#include <functional>
 #include <memory>
 #include <memory_resource>
 #include <type_traits>
@@ -243,8 +244,7 @@ public:
     future_base<deliver_type, true, false, UseReturnValue, StateExtra> spawn(this future_base self)
         requires(!Spawn)
     {
-        // Copy is banned, so only move or temporary object is possible.
-        // demangle usually can't demangle the symbol with fucking requires.
+        // Copy is banned, so only move or temporary future object can be passed.
         static_assert(!Spawn, "[ASCO] future_base::spawn: cannot spawn a coroutine whitch Spawn=true");
         if (self.this_task->scheduled.load(morder::acquire))
             reinterpret_cast<core::worker *>(self.this_task->worker_ptr)
@@ -259,8 +259,7 @@ public:
     future_base<deliver_type, true, true, UseReturnValue, StateExtra> spawn_core(this future_base self)
         requires(!Spawn)
     {
-        // Copy is banned, so only move or temporary object is possible.
-        // demangle usually can't demangle the symbol with fucking requires.
+        // Copy is banned, so only move or temporary future object can be passed.
         static_assert(!Spawn, "[ASCO] future_base::spawn_core: cannot spawn a coroutine whitch Spawn=true");
         if (self.this_task->scheduled.load(morder::acquire))
             reinterpret_cast<core::worker *>(self.this_task->worker_ptr)
@@ -270,6 +269,17 @@ public:
             co_await self;
         else
             co_return co_await self;
+    }
+
+    future_base<void, true, false> ignore(
+        this future_base self,
+        std::optional<std::function<void(std::exception_ptr)>> on_exception = std::nullopt) noexcept {
+        try {
+            co_await self;
+        } catch (...) {
+            if (on_exception)
+                (*on_exception)(std::current_exception());
+        }
     }
 
     future_base() noexcept = default;

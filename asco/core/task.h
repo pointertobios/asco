@@ -86,6 +86,8 @@ protected:
                 panic::panic(
                     std::format(
                         "Exception thrown by task {} hasn't been caught:\n  what(): {}", id, e.what()));
+            } catch (...) {
+                panic::panic(std::format("Unknown exception thrown by task {} hasn't been caught.", id));
             }
         }
     }
