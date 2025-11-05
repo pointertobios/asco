@@ -93,7 +93,7 @@ bool worker::run_once() {
     task->corohandle.resume();
     tasks.lock()->at(task_stack.top())->call_chain = std::move(task_stack);
 
-    if (task->corohandle.done()) {
+    if (task->spawn_task && task->corohandle.done()) {
         // The tasks always suspend themselves, so only unregister_task is OK.
         core::runtime::this_runtime().unregister_task(id);
         load_counter.fetch_sub(1, morder::acq_rel);

@@ -128,8 +128,8 @@ public:
                     && promise_base::this_task->caller->scheduled.load(
                         morder::acquire)  // `worker_ptr` has been released
                 ) {
-                    reinterpret_cast<core::worker *>(promise_base::this_task->caller->worker_ptr)
-                        ->activate_task(promise_base::this_task->caller->id);
+                    promise_base::this_task->caller->worker_ptr->activate_task(
+                        promise_base::this_task->caller->id);
                 }
                 return std::suspend_always{};
             } else {
@@ -139,8 +139,9 @@ public:
                     bool await_ready() const noexcept { return false; }
 
                     auto await_suspend(std::coroutine_handle<> corohandle) const noexcept {
+                        auto reschdl = caller_task->corohandle;
                         corohandle.destroy();  // Destroy here to avoid use-after-free
-                        return caller_task->corohandle;
+                        return reschdl;
                     }
 
                     void await_resume() const noexcept {}
@@ -207,6 +208,8 @@ public:
     }
 
     deliver_type await_resume() {
+        (void)this_task->returned.load(morder::acquire);  // Ensure memory order
+
         if (this_task->e_thrown.load(morder::acquire) && !this_task->e_rethrown.load(morder::acquire)) {
             auto e = this_task->e_ptr;
             this_task->e_rethrown.store(true, morder::release);
@@ -247,8 +250,7 @@ public:
         // Copy is banned, so only move or temporary future object can be passed.
         static_assert(!Spawn, "[ASCO] future_base::spawn: cannot spawn a coroutine whitch Spawn=true");
         if (self.this_task->scheduled.load(morder::acquire))
-            reinterpret_cast<core::worker *>(self.this_task->worker_ptr)
-                ->move_out_suspended_task(self.this_id);
+            self.this_task->worker_ptr->move_out_suspended_task(self.this_id);
         core::worker::this_worker().move_in_suspended_task(self.this_id, self.this_task);
         if constexpr (deliver_type_is_void)
             co_await self;
@@ -262,8 +264,7 @@ public:
         // Copy is banned, so only move or temporary future object can be passed.
         static_assert(!Spawn, "[ASCO] future_base::spawn_core: cannot spawn a coroutine whitch Spawn=true");
         if (self.this_task->scheduled.load(morder::acquire))
-            reinterpret_cast<core::worker *>(self.this_task->worker_ptr)
-                ->move_out_suspended_task(self.this_id);
+            self.this_task->worker_ptr->move_out_suspended_task(self.this_id);
         core::worker::this_worker().move_in_suspended_task(self.this_id, self.this_task);
         if constexpr (deliver_type_is_void)
             co_await self;

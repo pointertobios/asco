@@ -27,6 +27,8 @@ using namespace concepts;
 
 using concurrency::atomic_ptr;
 
+class worker;
+
 using task_id = size_t;
 
 template<
@@ -57,7 +59,7 @@ struct task<> {
 
     std::shared_ptr<task<>> caller;  // Released by `await_started`
 
-    void *worker_ptr{nullptr};  // Released by `scheduled`
+    worker *worker_ptr{nullptr};  // Released by `scheduled`
 
     std::optional<std::binary_semaphore> wait_sem{std::nullopt};
     rwspin<> sync_waiting_lock;

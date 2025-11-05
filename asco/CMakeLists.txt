@@ -4,6 +4,7 @@
 set(ASCO_SOURCES
     core/daemon.cpp
     core/runtime.cpp
+    core/wait_queue.cpp
     core/worker.cpp
     future.cpp
     panic/panic.cpp
