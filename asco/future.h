@@ -93,8 +93,8 @@ public:
             } else if (core::worker::in_worker()) {
                 // Non-spawn coroutine controls by the caller or `co_await`er.
                 // So this coroutine's worker inherits from the caller.
-                promise_base::this_task->worker_ptr = &core::worker::this_worker();
-                promise_base::this_task->scheduled.store(true, morder::release);
+                task->worker_ptr = &core::worker::this_worker();
+                task->scheduled.store(true, morder::release);
                 core::worker::this_worker().register_task(id, task, true);
             }
 
@@ -342,5 +342,9 @@ using future_spawn = base::future_base<T, true, false>;
 
 template<concepts::move_secure T>
 using future_core = base::future_base<T, true, true>;
+
+using runtime_initializer_t = std::optional<std::function<core::runtime_builder()>>;
+
+#define runtime_initializer runtime_initializer
 
 };  // namespace asco

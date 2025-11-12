@@ -16,7 +16,7 @@ daemon::daemon(std::string name)
 
 void daemon::awake() { sem.release(); }
 
-void daemon::start() {
+daemon::init_waiter daemon::start() {
     dthread = std::jthread{[&self = *this](std::stop_token st) {
 #ifdef __linux__
         self.ptid = ::pthread_self();
@@ -24,14 +24,18 @@ void daemon::start() {
 #endif
 
         if (!self.init()) {
+            self.init_sem.release();
             self.shutdown();
             return;
         }
+        self.init_sem.release();
 
-        while (!st.stop_requested() && self.run_once());
+        while (!st.stop_requested() && self.run_once(st));
 
         self.shutdown();
     }};
+
+    return {*this};
 }
 
 daemon::~daemon() {
@@ -42,7 +46,7 @@ daemon::~daemon() {
     }
 }
 
-void daemon::sleep_until_awake_for() { sem.acquire(); }
+void daemon::sleep_until_awake() { sem.acquire(); }
 
 void daemon::sleep_until_awake_for(const std::chrono::seconds &duration) { sem.try_acquire_for(duration); }
 
@@ -58,10 +62,14 @@ void daemon::sleep_until_awake_for(const std::chrono::nanoseconds &duration) {
     sem.try_acquire_for(duration);
 }
 
+void daemon::sleep_until_awake_before(const std::chrono::high_resolution_clock::time_point &time_point) {
+    sem.try_acquire_until(time_point);
+}
+
 bool daemon::init() { return true; }
 
-bool daemon::run_once() {
-    sleep_until_awake_for();
+bool daemon::run_once(std::stop_token &) {
+    sleep_until_awake();
     return true;
 }
 

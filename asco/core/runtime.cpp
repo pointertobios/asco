@@ -16,8 +16,8 @@ namespace asco::core {
 using compile_time::platform::os;
 using compile_time::platform::platform;
 
-runtime &runtime::init(size_t parallel) noexcept {
-    static runtime instance{parallel};
+runtime &runtime::init(runtime_builder &&builder) noexcept {
+    static runtime instance{builder.parallel, std::move(builder.timer)};
     return instance;
 }
 
@@ -28,6 +28,8 @@ void runtime::register_task(task_id id, std::shared_ptr<task<>> task) {
     task_ids_by_handle.write()->emplace(task->corohandle, id);
     tasks_by_id.write()->emplace(id, std::move(task));
 }
+
+time::timer_concept &runtime::timer() noexcept { return *_timer; }
 
 void runtime::unregister_task(task_id id) {
     auto tasks_by_handle_g = tasks_by_handle.write();
@@ -139,7 +141,8 @@ void runtime::awake_calcu_worker_once() {
         awake_all();
 }
 
-runtime::runtime(size_t parallel) {
+runtime::runtime(size_t parallel, std::unique_ptr<time::timer_concept> &&timer_ptr)
+        : _timer{std::move(timer_ptr)} {
     if (parallel == 0) {
         parallel = std::thread::hardware_concurrency();
         if (parallel == 0)
@@ -192,16 +195,16 @@ runtime::runtime(size_t parallel) {
             io_worker_count++;
         }
 
-        workers.push_back(new worker{i, lc, wq, std::move(rx), worker_count});
+        workers.push_back(std::make_unique<worker>(i, lc, wq, std::move(rx), worker_count, shutting_down));
     }
 }
 
 runtime::~runtime() {
+    shutting_down.store(true, morder::release);
     io_task_tx.stop();
     calcu_task_tx.stop();
     awake_all();
     worker_count.wait(0);
-    for (auto w : workers) { delete w; }
 }
 
 };  // namespace asco::core

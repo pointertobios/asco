@@ -5,7 +5,6 @@
 #include <format>
 #include <memory>
 #include <print>
-#include <semaphore>
 #ifdef __linux__
 #    include <pthread.h>
 #    include <sched.h>
@@ -30,20 +29,20 @@ std::tuple<task_id, std::shared_ptr<task<>>> worker::sched() {
         act_g->push_back(t);
         return {t->id, std::move(t)};
     }
-    return {};
+    return {0, nullptr};
 }
 
 worker::worker(
     size_t id, atomic_size_t &load_counter, awake_queue &awake_q, task_receiver &&task_recv,
-    atomic_size_t &worker_count)
+    atomic_size_t &worker_count, atomic_bool &shutting_down)
         : daemon{std::format("asco::w{}", id)}
         , _id{id}
         , task_recv{std::move(task_recv)}
         , load_counter{load_counter}
         , worker_count{worker_count}
+        , shutting_down{shutting_down}
         , awake_q{awake_q} {
-    daemon::start();
-    init_sem.acquire();
+    auto _ = daemon::start();
 }
 
 worker::~worker() { _this_worker.store(nullptr, morder::release); }
@@ -64,11 +63,10 @@ bool worker::init() {
     _this_worker.store(this, morder::release);
     awake_q.lock()->push_back(_id);
 
-    init_sem.release();
     return true;
 }
 
-bool worker::run_once() {
+bool worker::run_once(std::stop_token &) {
     while (true) {
         if (auto res = task_recv.pop()) {
             auto [id, task] = std::move(*res);
@@ -84,7 +82,9 @@ bool worker::run_once() {
 
     auto [id, task] = sched();
     if (!id) {
-        sleep_until_awake_for();
+        sleep_until_awake();
+        if (shutting_down.load(morder::acquire))
+            return true;  // There may be tasks still in the queue.
         awake_q.lock()->push_back(_id);
         return true;
     }

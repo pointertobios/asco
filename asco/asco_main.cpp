@@ -3,7 +3,16 @@
 
 #include <asco/future.h>
 
-asco::core::runtime &_ = asco::core::runtime::init();
+inline asco::runtime_initializer_t runtime_initializer;
+
+asco::core::runtime &_ = asco::core::runtime::init([] {
+    if (runtime_initializer) {
+        if (auto builder_func = *runtime_initializer; builder_func) {
+            return builder_func();
+        }
+    }
+    return asco::core::runtime_builder{};
+}());
 
 #ifndef __ASCORT__
 

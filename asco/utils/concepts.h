@@ -6,17 +6,13 @@
 #include <chrono>
 #include <type_traits>
 
-#include <asco/utils/types.h>
-
 namespace asco::concepts {
-
-using namespace types;
 
 template<typename T>
 concept move_secure =
     std::is_void_v<T> || std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_pointer_v<T>
-    || (std::is_move_constructible_v<monostate_if_void<T>>
-        && std::is_move_assignable_v<monostate_if_void<T>>);
+    || (std::is_move_constructible_v<std::conditional<std::is_void_v<T>, std::monostate, T>>
+        && std::is_move_assignable_v<std::conditional<std::is_void_v<T>, std::monostate, T>>);
 
 template<typename T>
 concept base_type =
@@ -28,10 +24,11 @@ concept is_void = std::is_void_v<T>;
 template<typename T>
 concept non_void = !std::is_void_v<T>;
 
-template<typename T>
-using passing = std::conditional_t<base_type<T>, T, T &&>;
-
 template<typename Ti>
 concept duration_type = std::is_same_v<Ti, std::chrono::duration<typename Ti::rep, typename Ti::period>>;
+
+template<typename Tp>
+concept time_point_type =
+    std::is_same_v<Tp, std::chrono::time_point<typename Tp::clock, typename Tp::duration>>;
 
 };  // namespace asco::concepts

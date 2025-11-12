@@ -4,7 +4,6 @@
 #pragma once
 
 #include <deque>
-#include <semaphore>
 #include <stack>
 #include <tuple>
 #include <unordered_map>
@@ -31,7 +30,7 @@ class worker final : public daemon {
 public:
     worker(
         size_t id, atomic_size_t &load_counter, awake_queue &awake_q, task_receiver &&task_recv,
-        atomic_size_t &worker_count);
+        atomic_size_t &worker_count, atomic_bool &shutting_down);
     ~worker();
 
     size_t id() const noexcept { return _id; }
@@ -55,7 +54,7 @@ public:
 
 private:
     bool init() override;
-    bool run_once() override;
+    bool run_once(std::stop_token &st) override;
     void shutdown() override;
 
     const size_t _id;
@@ -63,10 +62,9 @@ private:
 
     atomic_size_t &load_counter;
     atomic_size_t &worker_count;
+    atomic_bool &shutting_down;
 
     awake_queue &awake_q;
-
-    std::binary_semaphore init_sem{0};
 
     std::stack<task_id> task_stack;
 

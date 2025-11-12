@@ -7,5 +7,13 @@ target_link_libraries(test_future_base PRIVATE asco::core asco::main)
 add_executable(test_semaphore sync/test_semaphore.cpp)
 target_link_libraries(test_semaphore PRIVATE asco::core asco::main)
 
+add_executable(test_interval time/test_interval.cpp)
+target_link_libraries(test_interval PRIVATE asco::core asco::main)
+
+add_executable(test_sleep time/test_sleep.cpp)
+target_link_libraries(test_sleep PRIVATE asco::core asco::main)
+
 add_test(NAME future_base COMMAND test_future_base)
 add_test(NAME semaphore COMMAND test_semaphore)
+add_test(NAME interval COMMAND test_interval)
+add_test(NAME sleep COMMAND test_sleep)

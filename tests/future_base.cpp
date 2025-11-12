@@ -4,9 +4,15 @@
 #include <print>
 
 #include <asco/concurrency/concurrency.h>
+#include <asco/core/runtime.h>
 #include <asco/future.h>
 
 using namespace asco;
+
+inline asco::runtime_initializer_t runtime_initializer{[] {
+    std::println("Custom runtime initializer called.");
+    return asco::core::runtime_builder{};
+}};
 
 future_spawn<void> wtf() {
     for (int i = 0; i < 10; ++i) {

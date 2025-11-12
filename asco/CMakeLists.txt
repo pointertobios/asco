@@ -4,11 +4,14 @@
 set(ASCO_SOURCES
     core/daemon.cpp
     core/runtime.cpp
+    core/time/high_resolution_timer.cpp
+    core/time/timer.cpp
     core/wait_queue.cpp
     core/worker.cpp
     future.cpp
     panic/panic.cpp
     panic/unwind.cpp
+    time/interval.cpp
 )
 
 set(MDEFS ASCO __ASCO__)
