@@ -30,6 +30,8 @@ future<int> async_main() {
 
 ### Documentations
 
+- [简体中文](https://pointertobios.github.io/asco/zhcn/)
+
 ### Import into your project
 
 #### Use as submodule
