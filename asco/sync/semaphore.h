@@ -17,6 +17,14 @@ public:
     explicit semaphore_base(size_t initial_count) noexcept
             : count{initial_count} {}
 
+    bool try_acquire() noexcept {
+        size_t old_count = count.load(morder::acquire);
+        if (!old_count) {
+            return false;
+        }
+        return count.compare_exchange_strong(old_count, old_count - 1, morder::acquire, morder::relaxed);
+    }
+
     future<void> acquire() {
         size_t old_count, new_count;
         do {
