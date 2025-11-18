@@ -13,15 +13,18 @@
 #include <tuple>
 
 #include <asco/concurrency/concurrency.h>
+#include <asco/concurrency/queue.h>
 #include <asco/core/pool_allocator.h>
 #include <asco/panic/panic.h>
 #include <asco/utils/concepts.h>
 #include <asco/utils/types.h>
 
-namespace asco::nolock::continuous_queue {
+namespace asco::concurrency::continuous_queue {
 
 using namespace types;
 using namespace concepts;
+
+using queue::pop_fail;
 
 // We assume that T's move constructor and move assignment operator is low-cost.
 // In principle, they can't throw any exception.
@@ -267,10 +270,7 @@ private:
     std::shared_ptr<frame_type> f{};
 };
 
-enum class pop_fail {
-    non_object,  // No object available now.
-    closed       // This queue is closed.
-};
+static_assert(queue::sender<sender<char>, char>);
 
 // Always thread-safe.
 template<move_secure T>
@@ -417,23 +417,34 @@ private:
     std::shared_ptr<frame_type> f{};
 };
 
-template<move_secure T>
-std::tuple<sender<T>, receiver<T>> create() {
-    using frame_type = frame<T>;
-    auto f = frame_type::create();
-    if (!f)
-        throw std::bad_alloc();
-    f->preset_head();
-    return std::tuple{sender<T>(f), receiver<T>(f)};
-}
+static_assert(queue::receiver<receiver<char>, char>);
 
-};  // namespace asco::nolock::continuous_queue
+template<move_secure T>
+struct create_s {
+    using Sender = sender<T>;
+    using Receiver = receiver<T>;
+
+    std::tuple<Sender, Receiver> operator()() const {
+        using frame_type = frame<T>;
+        auto f = frame_type::create();
+        if (!f)
+            throw std::bad_alloc();
+        f->preset_head();
+        return std::tuple{sender<T>(f), receiver<T>(f)};
+    }
+};
+
+static_assert(queue::creator<create_s<char>, char>);
+
+template<move_secure T>
+create_s<T> create;
+
+};  // namespace asco::concurrency::continuous_queue
 
 namespace asco::continuous_queue {
 
-using nolock::continuous_queue::create;
-using nolock::continuous_queue::pop_fail;
-using nolock::continuous_queue::receiver;
-using nolock::continuous_queue::sender;
+using concurrency::continuous_queue::create;
+using concurrency::continuous_queue::receiver;
+using concurrency::continuous_queue::sender;
 
 };  // namespace asco::continuous_queue

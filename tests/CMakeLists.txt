@@ -13,7 +13,11 @@ target_link_libraries(test_interval PRIVATE asco::core asco::main)
 add_executable(test_sleep time/test_sleep.cpp)
 target_link_libraries(test_sleep PRIVATE asco::core asco::main)
 
+add_executable(test_channel sync/test_channel.cpp)
+target_link_libraries(test_channel PRIVATE asco::core asco::main)
+
 add_test(NAME future_base COMMAND test_future_base)
 add_test(NAME semaphore COMMAND test_semaphore)
 add_test(NAME interval COMMAND test_interval)
 add_test(NAME sleep COMMAND test_sleep)
+add_test(NAME channel COMMAND test_channel)

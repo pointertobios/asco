@@ -73,9 +73,9 @@ bool worker::run_once(std::stop_token &) {
             task->worker_ptr = this;
             task->scheduled.store(true, morder::release);
             register_task(id, std::move(task));
-        } else if (res.error() == cq::pop_fail::non_object) {
+        } else if (res.error() == pop_fail::non_object) {
             break;
-        } else if (res.error() == cq::pop_fail::closed) {
+        } else if (res.error() == pop_fail::closed) {
             return false;
         }
     }
