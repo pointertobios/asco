@@ -96,7 +96,7 @@ future<int> compute() {
 
 // 在调用者线程中同步执行
 future<void> caller() {
-    int value = co_await compute();  // 不会切换线程
+    int value = co_await compute();  // 不会发生异步调度
 }
 ```
 
@@ -121,7 +121,7 @@ future_spawn<void> async_caller() {
 
 ### 任务转换
 
-非spawn类型的Future可以转换为spawn类型：
+`future<T>` 可以转换为 `future_spawn<T>` 或 `future_core<T>`：
 
 ```cpp
 future<int> normal() {
@@ -167,20 +167,19 @@ co_await some_future().ignore();
 
 ### 选择合适的 Future 类型
 
-1. 默认使用 `future_spawn<T>`
+1. 默认使用 `future<T>`
    - 适用于大多数异步操作
+   - 需要低异步调度开销
+   - 无并发
+
+2. 使用 `future_spawn<T>` 当：
+   - 需要并发
    - 自动负载均衡
    - 良好的并发性能
 
-2. 使用 `future<T>` 当：
-   - 需要线程亲和性
-   - 操作必须在特定线程上执行
-   - 性能关键且要避免线程切换开销
-
 3. 使用 `future_core<T>` 当：
-   - 实现运行时核心功能（如调度器组件）
-   - 预计任务对线程亲和性要求高
-   - 希望在未来的任务窃取机制中保持不可窃取
+   - 自动负载均衡
+   - 需要线程亲和、保持不可窃取
 
 ### 异步编程指南
 
@@ -215,10 +214,10 @@ future_spawn<void> robust() {
 1. 合理使用 `ignore()`
 
 ```cpp
-// 适用于确实可以忽略失败的场景
+// 适用于确实可以忽略返回值和异常的场景
 background_task().ignore();
 
-// 需要记录错误时提供回调
+// 需要记录异常时提供回调
 cleanup_task().ignore([](auto e) {
     log_error("Cleanup failed", e);
 });
@@ -232,7 +231,7 @@ cleanup_task().ignore([](auto e) {
 
 2. 合理使用同步/异步模式
    - 短小操作使用 `future<T>` 避免调度开销
-   - IO密集型操作使用 `future_spawn<T>` 提高并发度
+   - IO 密集型操作使用 `future_spawn<T>` 提高并发度
 
 ## 调试技巧
 
@@ -248,4 +247,4 @@ cleanup_task().ignore([](auto e) {
 
 ## 注意事项
 
-- 使用 `ignore()` 时要谨慎，确保错误可以被安全忽略
+- 使用 `ignore()` 时要谨慎，确保返回值和异常可以被安全忽略
