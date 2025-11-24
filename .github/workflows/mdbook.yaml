@@ -7,7 +7,7 @@ name: Deploy mdBook site to Pages
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches: ["remake"]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -42,6 +42,7 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Build with mdBook
         run: |
+          rm -rf docs/book
           cd docs/zh-cn
           mdbook build --dest-dir ../book/zhcn
           cd ../en-us
