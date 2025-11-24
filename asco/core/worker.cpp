@@ -1,6 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include <asco/core/worker.h>
+
 #include <format>
 #include <memory>
 #include <print>
@@ -9,8 +11,7 @@
 #    include <sched.h>
 #endif
 
-#include <asco/core/worker.h>
-
+#include <asco/assert.h>
 #include <asco/concurrency/continuous_queue.h>
 #include <asco/core/runtime.h>
 #include <asco/utils/types.h>

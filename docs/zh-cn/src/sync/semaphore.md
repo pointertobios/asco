@@ -19,6 +19,10 @@
   - 若计数大于 0，则原子地减 1 并返回 `true`；否则返回 `false`。
 - `future<void> acquire()`
   - 若计数为 0，则当前协程挂起，直到被 `release()` 唤醒；恢复后原子地减 1。
+- `future<bool> acquire_for(const duration_type auto &timeout)`
+  - 尝试在指定超时时间内获取许可，超时则返回 `false`。
+- `future<bool> acquire_until(const time_point_type auto &expire_time)`
+  - 尝试在指定时间点前获取许可，超时则返回 `false`。
 - `void release(size_t update = 1)`
   - 将计数增加 `min(update, CountMax - old_count)`，并唤醒相应数量的等待者。
 

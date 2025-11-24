@@ -82,7 +82,7 @@ try {
 
 ### 值类型约束
 
-- 要求 T 满足 `move_secure` 概念（可移动且线程安全）
+- 要求 T 满足 `move_secure` 概念（可移动）
 - 支持 void 类型（`future<void>`）
 
 ## 执行模型
@@ -183,7 +183,34 @@ co_await some_future().ignore();
 
 ### 异步编程指南
 
-1. 避免在工作线程中使用 `.await()`
+- 注意 lambda 表达式的生命周期
+
+```cpp
+// 错误示例：lambda 生命周期短于异步任务生命周期
+
+auto task1 = []() -> future<void> {
+    // 任务逻辑
+    co_return;
+}();
+co_await task1; // 任务启动，但是前面的 lambda 表达式已经销毁，产生 use-after-free
+
+auto task2 = []() -> future_spawn<void> {
+    // 耗时任务逻辑
+    co_return;
+}();
+co_await task2; // 任务在刚启动时行为正常，但是很快 lambda 表达式就将被销毁，产生 use-after-free
+
+// 正确示例：保持 lambda 生命周期足够长
+
+auto task_fn = []() -> future<void> {
+    // 任务逻辑
+    co_return;
+};
+auto task = task_fn();
+co_await task; // 任务安全执行
+```
+
+- 避免在工作线程中使用 `.await()`
 
 ```cpp
 // 错误：在工作线程中同步等待
@@ -197,7 +224,7 @@ future_spawn<void> correct() {
 }
 ```
 
-1. 正确处理异常
+- 正确处理异常
 
 ```cpp
 future_spawn<void> robust() {
@@ -211,7 +238,7 @@ future_spawn<void> robust() {
 }
 ```
 
-1. 合理使用 `ignore()`
+- 合理使用 `ignore()`
 
 ```cpp
 // 适用于确实可以忽略返回值和异常的场景

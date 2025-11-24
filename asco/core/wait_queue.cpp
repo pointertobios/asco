@@ -7,7 +7,7 @@
 
 namespace asco::core {
 
-yield wait_queue::wait() {
+yield<std::optional<decltype(wait_queue::waiters)::iterator>> wait_queue::wait() {
     auto _ = mut.lock();
 
     if (auto u = untriggered_notifications.load(morder::acquire)) {
@@ -17,15 +17,22 @@ yield wait_queue::wait() {
                 goto do_suspend;
         } while (
             !untriggered_notifications.compare_exchange_weak(u, u - 1, morder::acq_rel, morder::acquire));
-        return {};
+        return {std::nullopt};
     }
 
 do_suspend:
     auto &w = worker::this_worker();
     auto this_task = w.current_task();
     w.suspend_task(this_task);
-    waiters.push_back({&w, this_task});
-    return {};
+    waiters.push_back({w, this_task});
+    return {std::prev(waiters.end())};
+}
+
+void wait_queue::interrupt_wait(decltype(waiters)::iterator it) {
+    auto _ = mut.lock();
+
+    auto [w, task_id] = *it;
+    waiters.erase(it);
 }
 
 void wait_queue::notify(size_t n) {
@@ -36,7 +43,7 @@ void wait_queue::notify(size_t n) {
             break;
         auto [w, task_id] = waiters.front();
         waiters.pop_front();
-        w->activate_task(task_id);
+        w.activate_task(task_id);
         n--;
     }
     if (n)

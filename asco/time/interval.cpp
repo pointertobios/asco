@@ -19,7 +19,7 @@ future<void> interval::tick() {
         auto tid = w.current_task();
         core::runtime::this_runtime().timer().register_timer(next_timepoint, w, tid);
         w.suspend_task(tid);
-        co_await yield{};
+        co_await yield<>{};
         last_timepoint = next_timepoint;
     }
     co_return;

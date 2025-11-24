@@ -21,7 +21,7 @@ future<void> sleep_for(const Dur &duration) {
                        + std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
     core::runtime::this_runtime().timer().register_timer(expire_time, w, tid);
     w.suspend_task(tid);
-    co_await yield{};
+    co_await yield<>{};
     co_return;
 }
 
@@ -31,7 +31,7 @@ future<void> sleep_until(const Tp &timepoint) {
     auto tid = w.current_task();
     core::runtime::this_runtime().timer().register_timer(timepoint, w, tid);
     w.suspend_task(tid);
-    co_await yield{};
+    co_await yield<>{};
     co_return;
 }
 
