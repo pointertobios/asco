@@ -5,6 +5,7 @@
 
 #include <asco/core/runtime.h>
 #include <asco/panic/color.h>
+#include <cpptrace/basic.hpp>
 
 namespace asco::panic {
 
@@ -163,6 +164,31 @@ std::string co_unwind(size_t skip, bool color) {
     }
 
     return res;
+}
+
+cpptrace::stacktrace co_stacktrace(size_t skip) {
+    std::vector<cpptrace::stacktrace_frame> res;
+
+    auto st = cpptrace::stacktrace::current(skip);
+    for (auto &e : st) {
+        bool is_coroutine = e.symbol.ends_with("[clone .resume]") || e.symbol.ends_with("[clone .actor]")
+                            || e.symbol.ends_with("(.resume)") || e.symbol.ends_with(".resume");
+        res.push_back(e);
+        if (is_coroutine)
+            break;
+    }
+
+    auto task = core::runtime::this_runtime().get_task_by(core::worker::this_worker().current_task());
+    for (; task; task = task->caller) {
+        if (!task->caller) {
+            for (const auto &e : task->raw_stacktrace) { res.push_back(e); }
+            break;
+        }
+
+        res.push_back(*task->caller_coroutine_trace);
+    }
+
+    return cpptrace::stacktrace(std::move(res));
 }
 
 };  // namespace asco::panic

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 set(ASCO_SOURCES
+    assert.cpp
     core/daemon.cpp
     core/runtime.cpp
     core/time/high_resolution_timer.cpp

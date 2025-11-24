@@ -63,7 +63,7 @@ if (NOT WIN32)
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-gnu-statement-expression -Wno-gnu-statement-expression-from-macro-expansion)
 endif()
 
-add_compile_options(-Wno-vla-cxx-extension -Wno-zero-length-array)
+add_compile_options(-Wno-vla-cxx-extension -Wno-zero-length-array -Wno-gnu-zero-variadic-macro-arguments)
 
 # add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer)
 # add_link_options(-fsanitize=undefined -fno-omit-frame-pointer)

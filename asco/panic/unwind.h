@@ -15,4 +15,6 @@ std::string unwind(size_t skip = 0, bool color = true);
 
 std::string co_unwind(size_t skip = 0, bool color = true);
 
+cpptrace::stacktrace co_stacktrace(size_t skip = 0);
+
 };  // namespace asco::panic

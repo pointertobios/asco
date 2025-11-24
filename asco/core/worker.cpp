@@ -1,7 +1,6 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include <cassert>
 #include <format>
 #include <memory>
 #include <print>
