@@ -89,19 +89,21 @@ target_link_libraries(<your-target> PRIVATE asco::shared::core asco::shared::mai
   - [ ] MacOS full support
 - [ ] Basic tools for parallel programming
   - [ ] Sync Primitives
-    - [ ] Spin
+    - [x] Spin
+    - [x] Semaphore
+    - [x] Channel
     - [ ] Mutex
     - [ ] Read-Write Lock
-    - [ ] Semaphore
     - [ ] Condition variable
     - [ ] Barrier
-  - [ ] Timer and Interval
+  - [x] Timer and Interval
 - [ ] Async IO
   - [ ] Buffred IO
   - [ ] Async file IO
   - [ ] Async TCP/UDP stream
 - [ ] No lock data structures and parallel algorithms
-  - [ ] continuous_queue
+  - [x] continuous_queue
+  - and so on...
 
 ## Compilers
 
