@@ -15,6 +15,7 @@
 #include <asco/panic/panic.h>
 #include <asco/panic/unwind.h>
 #include <asco/utils/concepts.h>
+#include <asco/utils/erased.h>
 #include <asco/utils/memory_slot.h>
 #include <asco/utils/types.h>
 
@@ -283,6 +284,8 @@ public:
         }
     }
 
+    void bind_lambda(std::unique_ptr<utils::erased> &&f) { this_task->bind_lambda(std::move(f)); }
+
     future_base() noexcept = default;
 
     future_base(task_id id, std::shared_ptr<task_type> &&task) noexcept
@@ -344,6 +347,35 @@ template<concepts::move_secure T>
 using future_core = base::future_base<T, true, true>;
 
 using runtime_initializer_t = std::optional<std::function<core::runtime_builder()>>;
+
+namespace concepts {
+
+template<typename Fn>
+struct is_specialization_of_future_type {
+private:
+    template<move_secure T, bool Spawn, bool Core, bool UseReturnValue, typename StateExtra>
+    static std::true_type test(base::future_base<T, Spawn, Core, UseReturnValue, StateExtra> *);
+
+    template<typename>
+    static std::false_type test(...);
+
+public:
+    static constexpr bool value = decltype(test(std::declval<Fn *>()))::value;
+};
+
+template<typename T>
+constexpr bool is_specialization_of_future_type_v = is_specialization_of_future_type<T>::value;
+
+template<typename F>
+concept future_type = is_specialization_of_future_type_v<std::remove_cvref_t<F>>;
+
+template<typename Fn, typename... Args>
+concept async_function = requires(Fn f) {
+    std::invocable<Fn, Args...>;
+    is_specialization_of_future_type_v<std::invoke_result_t<std::remove_cvref_t<Fn>, Args...>>;
+};
+
+}  // namespace concepts
 
 #define runtime_initializer runtime_initializer
 

@@ -80,6 +80,20 @@ try {
 }
 ```
 
+### co_invoke
+
+- 用于延长协程本身的生命周期并启动协程（通常用于 lambda 表达式）
+
+```cpp
+auto task = co_invoke([] -> future_spawn<void> {
+    // 耗时任务
+    co_return;
+});
+co_await task;  // lambda 表达式随协程一起销毁，此处安全
+```
+
+- 注意：**协程本身的销毁有额外的开销**
+
 ### 值类型约束
 
 - 要求 T 满足 `move_secure` 概念（可移动）
@@ -200,13 +214,12 @@ auto task2 = []() -> future_spawn<void> {
 }();
 co_await task2; // 任务在刚启动时行为正常，但是很快 lambda 表达式就将被销毁，产生 use-after-free
 
-// 正确示例：保持 lambda 生命周期足够长
+// 正确示例：使用 co_invoke 延长 lambda 表达式的生命周期
 
-auto task_fn = []() -> future<void> {
+auto task = co_invoke([]() -> future<void> {
     // 任务逻辑
     co_return;
-};
-auto task = task_fn();
+});
 co_await task; // 任务安全执行
 ```
 

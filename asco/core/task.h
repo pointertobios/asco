@@ -15,6 +15,7 @@
 #include <asco/panic/unwind.h>
 #include <asco/sync/rwspin.h>
 #include <asco/utils/concepts.h>
+#include <asco/utils/erased.h>
 #include <asco/utils/memory_slot.h>
 #include <asco/utils/types.h>
 
@@ -111,6 +112,11 @@ struct task<T, Spawn, Core, UseReturnValue, StateExtra> : public task<> {
             : task<>{id, corohdl, Spawn, Core, caller_coroutine_addr} {}
 
     ~task() noexcept { destroy(); }
+
+    void bind_lambda(std::unique_ptr<utils::erased> &&f) { bound_lambda = std::move(f); }
+
+private:
+    std::unique_ptr<utils::erased> bound_lambda{nullptr};
 };
 
 };  // namespace asco::core

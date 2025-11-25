@@ -7,6 +7,7 @@
 
 #include <asco/concurrency/concurrency.h>
 #include <asco/future.h>
+#include <asco/invoke.h>
 #include <asco/sync/semaphore.h>
 #include <asco/time/sleep.h>
 
@@ -29,13 +30,12 @@ future<int> async_main() {
         binary_semaphore sem{0};
         std::atomic<bool> done{false};
 
-        auto waiter_f = [&sem, &done]() -> future_spawn<void> {
+        auto waiter = co_invoke([&sem, &done] -> future_spawn<void> {
             co_await sem.acquire();
             done.store(true, std::memory_order::release);
             std::println("test_semaphore: waiter resumed");
             co_return;
-        };
-        auto waiter = waiter_f();
+        });
 
         // Give runtime a short spin to ensure task is scheduled if needed.
         // concurrency::withdraw<100>();
@@ -56,14 +56,13 @@ future<int> async_main() {
         counting_semaphore<N> sem{0};
         std::atomic<size_t> counter{0};
 
-        auto worker_f = [&sem, &counter]() -> future_spawn<void> {
+        auto worker = co_invoke([&sem, &counter] -> future_spawn<void> {
             for (size_t i{0}; i < N; ++i) {
                 co_await sem.acquire();
                 counter.fetch_add(1, std::memory_order::release);
             }
             co_return;
-        };
-        auto worker = worker_f();
+        });
 
         // Give runtime a short spin to ensure task is scheduled if needed.
         // concurrency::withdraw<100>();
@@ -96,13 +95,11 @@ future<int> async_main() {
     {
         binary_semaphore sem{0};
 
-        auto releaser_fn = [&sem]() -> future_spawn<void> {
+        auto releaser = co_invoke([&sem] -> future_spawn<void> {
             co_await sleep_for(20ms);
             sem.release();
             co_return;
-        };
-
-        auto releaser = releaser_fn();
+        });
 
         auto ok = co_await sem.acquire_for(200ms);
         co_await releaser;
@@ -132,13 +129,11 @@ future<int> async_main() {
             binary_semaphore sem{0};
             auto deadline = std::chrono::high_resolution_clock::now() + 200ms;
 
-            auto releaser_fn = [&sem]() -> future_spawn<void> {
+            auto releaser = co_invoke([&sem] -> future_spawn<void> {
                 co_await sleep_for(20ms);
                 sem.release();
                 co_return;
-            };
-
-            auto releaser = releaser_fn();
+            });
 
             auto ok = co_await sem.acquire_until(deadline);
             co_await releaser;
