@@ -2,7 +2,6 @@
 
 ASCO 的 Channel 为多生产者/多消费者（MPMC）数据通道：
 
-- 底层使用无锁队列 `continuous_queue<T>` 负责存储与 FIFO 顺序；
 - 结合 `unlimited_semaphore` 完成“有数据即通知”的等待/唤醒。
 
 - 头文件：`#include <asco/sync/channel.h>`
@@ -20,9 +19,12 @@ ASCO 的 Channel 为多生产者/多消费者（MPMC）数据通道：
 
 ### sender
 
-- `std::optional<T> send(T value)`
+- `future<std::optional<std::tuple<T, queue::push_fail>>> send(T value)`
+  - 调用方需 `co_await` 该 `future`，以便在底层使用有界队列满载时自动等待配额。
   - 成功：返回 `std::nullopt`，并唤醒一个等待的接收者。
-  - 失败：返回原值（`std::optional` 含值）。通常发生在队列已关闭/停止后。
+  - 失败：返回包含原值与失败原因的 `std::tuple<T, queue::push_fail>`：
+    - `push_fail::closed`：队列已关闭或停止。
+    - `push_fail::full`：自定义队列已满且不可再写入。
 - `void stop() noexcept`
   - 标记底层队列为“发送端停止”。调用后不得再调用 `send()`；否则底层会触发 panic（调试保护）。
 - `bool is_stopped() const noexcept`
@@ -36,13 +38,13 @@ ASCO 的 Channel 为多生产者/多消费者（MPMC）数据通道：
   - 若成功：返回 `T`。
 - `future<std::optional<T>> recv()`
   - 若当前无数据：协程方式挂起直至有“数据就绪”的通知；
-  - 唤醒后尝试读取，若成功返回 `T`，若关闭导致无对象可读返回 `std::nullopt`。
+  - 唤醒后尝试读取，若成功返回 `T`，若关闭导致无对象可读返回 `std::nullopt`。当底层队列为有界队列时，成功读取还会释放一个配额令发送端继续写入。
 - `bool is_stopped() const noexcept`
   - 当发送端或接收端停止，且当前帧已读尽时，返回 `true`。
 
 ## 有序性与并发性
 
-- Channel 保持 FIFO 顺序（基于 `continuous_queue` 的帧式结构）。
+- Channel 保持 FIFO 顺序。
 - 支持 MPMC：多个 sender/receiver 并发安全。
 
 ## 典型用法
@@ -60,8 +62,9 @@ future<int> async_main() {
 
     // 发送
     for (int i = 0; i < 5; ++i) {
-        if (auto r = tx.send(i); r.has_value()) {
-            std::println("send failed: {}", *r);
+      if (auto r = co_await tx.send(i); r.has_value()) {
+        auto &[value, reason] = *r;
+        std::println("send failed: {} (reason = {})", value, static_cast<int>(reason));
             co_return 1;
         }
     }
@@ -89,8 +92,8 @@ using namespace asco;
 future<int> async_main() {
     auto [tx, rx] = channel<int>();
 
-    (void)tx.send(7);
-    (void)tx.send(8);
+    (void)co_await tx.send(7);
+    (void)co_await tx.send(8);
 
     // 停止发送端：之后不得再调用 send()
     tx.stop();
@@ -125,7 +128,7 @@ future<int> async_main() {
 
     // 生产者：异步发送
     auto producer = [] (sender<int> tx) -> future_spawn<void> {
-        for (int i = 0; i < 3; ++i) (void)tx.send(i);
+        for (int i = 0; i < 3; ++i) (void)co_await tx.send(i);
         tx.stop();
         co_return;
     }(tx);
@@ -148,6 +151,8 @@ future<int> async_main() {
 
 ## 注意事项
 
+- 始终 `co_await sender::send()` 以正确处理带界队列的背压；忽略返回 `future` 可能导致任务提前退出或绕过容量控制。
+- `sender::send()` 返回值含 `queue::push_fail`，常见原因是通道已关闭（`push_fail::closed`）；若自定义队列有容量限制，可额外关注 `push_fail::full`。
 - 调用 `sender::stop()` 后不可再调用 `send()`；这是通道关闭的显式信号，违背会触发 panic（调试保护）。
 - `recv()` 被唤醒后理论上应能读到元素；若底层已关闭并无对象可读将得到 `std::nullopt`。
 - 使用 `try_recv()` 判空时，请正确处理 `pop_fail::non_object` 与 `pop_fail::closed`。

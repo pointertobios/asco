@@ -25,6 +25,7 @@ using namespace types;
 using namespace concepts;
 
 using queue::pop_fail;
+using queue::push_fail;
 
 // We assume that T's move constructor and move assignment operator is low-cost.
 // In principle, they can't throw any exception.
@@ -134,6 +135,8 @@ class sender {
     constexpr static bool passing_element_type_is_rvalue = frame<T>::passing_element_type_is_rvalue;
 
 public:
+    constexpr static size_t max_volume = std::numeric_limits<size_t>::max();
+
     sender() noexcept = default;
 
     sender(std::shared_ptr<frame_type> f) noexcept
@@ -185,7 +188,7 @@ public:
         return f->sender_stopped.load(morder::acquire) || f->receiver_stopped.load(morder::acquire);
     }
 
-    [[nodiscard]] std::optional<element_type> push(passing<element_type> val) {
+    [[nodiscard]] std::optional<std::tuple<element_type, push_fail>> push(passing<element_type> val) {
         if (!f) {
             panic::co_panic(
                 "[ASCO] nolock::continuous_queue::sender::push(): sender didn't bind to a continuous_queue");
@@ -195,7 +198,7 @@ public:
 
         do {
             if (f->sender_stopped.load(morder::acquire) || f->receiver_stopped.load(morder::acquire)) {
-                return std::move(val);
+                return std::tuple{std::move(val), push_fail::closed};
             }
 
             if (auto t = f->tail.load(morder::acquire); t != frame_type::index_nullopt) {
@@ -281,6 +284,8 @@ class receiver {
     static constexpr bool passing_element_type_is_rvalue = frame<T>::passing_element_type_is_rvalue;
 
 public:
+    constexpr static size_t max_volume = std::numeric_limits<size_t>::max();
+
     receiver() noexcept = default;
 
     receiver(std::shared_ptr<frame_type> f) noexcept
@@ -423,6 +428,8 @@ template<move_secure T>
 struct create_s {
     using Sender = sender<T>;
     using Receiver = receiver<T>;
+
+    constexpr static size_t max_volume = std::numeric_limits<size_t>::max();
 
     std::tuple<Sender, Receiver> operator()() const {
         using frame_type = frame<T>;

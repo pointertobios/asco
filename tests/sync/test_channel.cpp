@@ -29,9 +29,10 @@ future<int> async_main() {
     // Test B: send then try_recv returns the value; send returns nullopt on success
     {
         auto [tx, rx] = channel<int>();
-        auto send_res = tx.send(123);
+        auto send_res = co_await tx.send(123);
         if (send_res.has_value()) {
-            std::println("test_channel: B FAILED - send should succeed, got value back: {}", *send_res);
+            auto &[val, _] = *send_res;
+            std::println("test_channel: B FAILED - send should succeed, got value back: {}", val);
             co_return 1;
         }
 
@@ -55,8 +56,9 @@ future<int> async_main() {
         auto [tx, rx] = channel<int>();
         constexpr int N = 5;
         for (int i = 0; i < N; ++i) {
-            if (auto sr = tx.send(i); sr.has_value()) {
-                std::println("test_channel: C FAILED - send returned value {}", *sr);
+            if (auto sr = co_await tx.send(i); sr.has_value()) {
+                auto &[val, _] = *sr;
+                std::println("test_channel: C FAILED - send returned value {}", val);
                 co_return 1;
             }
         }

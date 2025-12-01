@@ -26,9 +26,12 @@ class sender {
 public:
     sender() = default;
 
-    sender(QSender &&qsender, std::shared_ptr<unlimited_semaphore> sem)
+    sender(
+        QSender &&qsender, std::shared_ptr<unlimited_semaphore> sem,
+        std::shared_ptr<unlimited_semaphore> backup_sem)
             : queue_sender{std::move(qsender)}
-            , sem{std::move(sem)} {}
+            , sem{std::move(sem)}
+            , backup_sem{std::move(backup_sem)} {}
 
     sender(const sender &rhs) = default;
     sender &operator=(const sender &rhs) = default;
@@ -36,12 +39,16 @@ public:
     sender(sender &&) = default;
     sender &operator=(sender &&) = default;
 
-    [[nodiscard("[ASCO] sender::send() maybe returns a T value")]] std::optional<T> send(passing<T> val) {
+    [[nodiscard("[ASCO] sender::send() maybe returns a T value")]] auto send(passing<T> val)
+        -> future<std::optional<std::tuple<T, queue::push_fail>>> {
+        if constexpr (QSender::max_volume != std::numeric_limits<size_t>::max()) {
+            co_await backup_sem->acquire();
+        }
         auto res = queue_sender.push(std::move(val));
         if (!res.has_value()) {
             sem->release();
         }
-        return res;
+        co_return res;
     }
 
     void stop() noexcept { queue_sender.stop(); }
@@ -51,6 +58,7 @@ public:
 private:
     QSender queue_sender;
     std::shared_ptr<unlimited_semaphore> sem;
+    std::shared_ptr<unlimited_semaphore> backup_sem;
 };
 
 template<move_secure T, queue::receiver<T> QReceiver = cq::receiver<T>>
@@ -58,9 +66,12 @@ class receiver {
 public:
     receiver() = default;
 
-    receiver(QReceiver &&qreceiver, std::shared_ptr<unlimited_semaphore> sem)
+    receiver(
+        QReceiver &&qreceiver, std::shared_ptr<unlimited_semaphore> sem,
+        std::shared_ptr<unlimited_semaphore> backup_sem)
             : queue_receiver{std::move(qreceiver)}
-            , sem{std::move(sem)} {}
+            , sem{std::move(sem)}
+            , backup_sem{std::move(backup_sem)} {}
 
     receiver(const receiver &rhs) = default;
     receiver &operator=(const receiver &rhs) = default;
@@ -72,13 +83,22 @@ public:
         if (!sem->try_acquire()) {
             return std::unexpected(queue::pop_fail::non_object);
         } else {
-            return queue_receiver.pop();
+            auto res = queue_receiver.pop();
+            if constexpr (QReceiver::max_volume != std::numeric_limits<size_t>::max()) {
+                if (res.has_value()) {
+                    backup_sem->release();
+                }
+            }
+            return res;
         }
     }
 
     [[nodiscard("[ASCO] receiver::receive() maybe fails")]] future<std::optional<T>> recv() {
         co_await sem->acquire();
         if (auto res = queue_receiver.pop(); res.has_value()) {
+            if constexpr (QReceiver::max_volume != std::numeric_limits<size_t>::max()) {
+                backup_sem->release();
+            }
             co_return *res;
         } else {
             co_return std::nullopt;
@@ -90,15 +110,17 @@ public:
 private:
     QReceiver queue_receiver;
     std::shared_ptr<unlimited_semaphore> sem;
+    std::shared_ptr<unlimited_semaphore> backup_sem;
 };
 
 template<move_secure T, queue::creator<T> Creator>
 auto channel(Creator ctor) {
     auto [tx, rx] = ctor();
     auto sem = std::make_shared<unlimited_semaphore>(0);
+    auto backup_sem = std::make_shared<unlimited_semaphore>(Creator::max_volume);
     return std::tuple{
-        sender<T, typename Creator::Sender>{std::move(tx), sem},
-        receiver<T, typename Creator::Receiver>{std::move(rx), sem}};
+        sender<T, typename Creator::Sender>{std::move(tx), sem, backup_sem},
+        receiver<T, typename Creator::Receiver>{std::move(rx), sem, backup_sem}};
 }
 
 template<move_secure T>
