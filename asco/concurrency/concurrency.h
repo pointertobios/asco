@@ -20,7 +20,7 @@ namespace asco::concurrency {
 using namespace types;
 using namespace concepts;
 
-asco_always_inline void cpu_relax() noexcept {
+inline void cpu_relax() noexcept {
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #    if defined(_MSC_VER)
     _mm_pause();
@@ -39,11 +39,11 @@ asco_always_inline void cpu_relax() noexcept {
 }
 
 template<size_t N>
-asco_always_inline void withdraw() noexcept {
+void withdraw() noexcept {
     for (size_t i{0}; i < N; ++i) concurrency::cpu_relax();
 }
 
-asco_always_inline void exp_withdraw(size_t i) noexcept {
+inline void exp_withdraw(size_t i) noexcept {
     switch (1 << i) {
     case 1:
         withdraw<1>();
@@ -79,43 +79,41 @@ public:
         T *ptr;
         size_t version{0};
 
-        asco_always_inline T *get_ptr() noexcept { return ptr; }
+        T *get_ptr() noexcept { return ptr; }
 
-        asco_always_inline operator T *() noexcept { return ptr; }
-        asco_always_inline operator const T *() const noexcept { return ptr; }
+        operator T *() noexcept { return ptr; }
+        operator const T *() const noexcept { return ptr; }
 
-        asco_always_inline T *operator->() noexcept { return ptr; }
-        asco_always_inline const T *operator->() const noexcept { return ptr; }
+        T *operator->() noexcept { return ptr; }
+        const T *operator->() const noexcept { return ptr; }
 
-        asco_always_inline T &operator*() noexcept { return *ptr; }
-        asco_always_inline const T &operator*() const noexcept { return *ptr; }
+        T &operator*() noexcept { return *ptr; }
+        const T &operator*() const noexcept { return *ptr; }
 
-        asco_always_inline bool operator==(const versioned_ptr &rhs) const noexcept {
+        bool operator==(const versioned_ptr &rhs) const noexcept {
             return ptr == rhs.ptr && version == rhs.version;
         }
 
-        asco_always_inline bool operator==(T *rhs) const noexcept { return ptr == rhs; }
+        bool operator==(T *rhs) const noexcept { return ptr == rhs; }
 
-        asco_always_inline friend bool operator==(T *lhs, const versioned_ptr &rhs) noexcept {
-            return lhs == rhs.ptr;
-        }
+        friend bool operator==(T *lhs, const versioned_ptr &rhs) noexcept { return lhs == rhs.ptr; }
     };
 
-    asco_always_inline atomic_ptr() noexcept = default;
-    asco_always_inline ~atomic_ptr() noexcept = default;
+    atomic_ptr() noexcept = default;
+    ~atomic_ptr() noexcept = default;
 
-    asco_always_inline atomic_ptr(T *ptr) noexcept
+    atomic_ptr(T *ptr) noexcept
             : ptr{{ptr}} {}
 
     atomic_ptr(const atomic_ptr &) = delete;
     atomic_ptr &operator=(const atomic_ptr &) = delete;
 
-    asco_always_inline atomic_ptr(atomic_ptr &&other) noexcept {
+    atomic_ptr(atomic_ptr &&other) noexcept {
         ptr.store(other.ptr, morder::release);
         other.ptr.store({nullptr}, morder::release);
     }
 
-    asco_always_inline atomic_ptr &operator=(atomic_ptr &&other) noexcept {
+    atomic_ptr &operator=(atomic_ptr &&other) noexcept {
         if (this != &other) {
             ptr.store(other.ptr, morder::release);
             other.ptr.store({nullptr}, morder::release);
@@ -123,32 +121,28 @@ public:
         return *this;
     }
 
-    asco_always_inline versioned_ptr load(morder mo) const noexcept { return ptr.load(mo); }
+    versioned_ptr load(morder mo) const noexcept { return ptr.load(mo); }
 
-    asco_always_inline void store(T *new_ptr, morder mo) noexcept {
+    void store(T *new_ptr, morder mo) noexcept {
         versioned_ptr curr_vp;
         do {
             curr_vp = ptr.load(mo);
         } while (!ptr.compare_exchange_weak(curr_vp, {new_ptr, curr_vp.version + 1}, mo, morder::relaxed));
     }
 
-    asco_always_inline bool
-    compare_exchange_weak(versioned_ptr &expected, T *new_ptr, morder mo = morder::seq_cst) noexcept {
+    bool compare_exchange_weak(versioned_ptr &expected, T *new_ptr, morder mo = morder::seq_cst) noexcept {
         return ptr.compare_exchange_weak(expected, {new_ptr, expected.version + 1}, mo);
     }
 
-    asco_always_inline bool
-    compare_exchange_weak(versioned_ptr &expected, T *new_ptr, morder mo1, morder mo2) noexcept {
+    bool compare_exchange_weak(versioned_ptr &expected, T *new_ptr, morder mo1, morder mo2) noexcept {
         return ptr.compare_exchange_weak(expected, {new_ptr, expected.version + 1}, mo1, mo2);
     }
 
-    asco_always_inline bool
-    compare_exchange_strong(versioned_ptr &expected, T *new_ptr, morder mo = morder::seq_cst) noexcept {
+    bool compare_exchange_strong(versioned_ptr &expected, T *new_ptr, morder mo = morder::seq_cst) noexcept {
         return ptr.compare_exchange_strong(expected, {new_ptr, expected.version + 1}, mo);
     }
 
-    asco_always_inline bool
-    compare_exchange_strong(versioned_ptr &expected, T *new_ptr, morder mo1, morder mo2) noexcept {
+    bool compare_exchange_strong(versioned_ptr &expected, T *new_ptr, morder mo1, morder mo2) noexcept {
         return ptr.compare_exchange_strong(expected, {new_ptr, expected.version + 1}, mo1, mo2);
     }
 
@@ -163,37 +157,35 @@ public:
         void *ptr;
         size_t version{0};
 
-        asco_always_inline void *get_ptr() noexcept { return ptr; }
+        void *get_ptr() noexcept { return ptr; }
 
-        asco_always_inline operator void *() noexcept { return ptr; }
-        asco_always_inline operator const void *() const noexcept { return ptr; }
+        operator void *() noexcept { return ptr; }
+        operator const void *() const noexcept { return ptr; }
 
-        asco_always_inline bool operator==(const versioned_ptr &rhs) const noexcept {
+        bool operator==(const versioned_ptr &rhs) const noexcept {
             return ptr == rhs.ptr && version == rhs.version;
         }
 
-        asco_always_inline bool operator==(void *rhs) const noexcept { return ptr == rhs; }
+        bool operator==(void *rhs) const noexcept { return ptr == rhs; }
 
-        asco_always_inline friend bool operator==(void *lhs, const versioned_ptr &rhs) noexcept {
-            return lhs == rhs.ptr;
-        }
+        friend bool operator==(void *lhs, const versioned_ptr &rhs) noexcept { return lhs == rhs.ptr; }
     };
 
-    asco_always_inline atomic_ptr() noexcept = default;
-    asco_always_inline ~atomic_ptr() noexcept = default;
+    atomic_ptr() noexcept = default;
+    ~atomic_ptr() noexcept = default;
 
-    asco_always_inline atomic_ptr(void *ptr) noexcept
+    atomic_ptr(void *ptr) noexcept
             : ptr{{ptr}} {}
 
     atomic_ptr(const atomic_ptr &) = delete;
     atomic_ptr &operator=(const atomic_ptr &) = delete;
 
-    asco_always_inline atomic_ptr(atomic_ptr &&other) noexcept {
+    atomic_ptr(atomic_ptr &&other) noexcept {
         ptr.store(other.ptr, morder::release);
         other.ptr.store({nullptr}, morder::release);
     }
 
-    asco_always_inline atomic_ptr &operator=(atomic_ptr &&other) noexcept {
+    atomic_ptr &operator=(atomic_ptr &&other) noexcept {
         if (this != &other) {
             ptr.store(other.ptr, morder::release);
             other.ptr.store({nullptr}, morder::release);
@@ -201,32 +193,29 @@ public:
         return *this;
     }
 
-    asco_always_inline versioned_ptr load(morder mo) const noexcept { return ptr.load(mo); }
+    versioned_ptr load(morder mo) const noexcept { return ptr.load(mo); }
 
-    asco_always_inline void store(void *new_ptr, morder mo) noexcept {
+    void store(void *new_ptr, morder mo) noexcept {
         versioned_ptr curr_vp;
         do {
             curr_vp = ptr.load(mo);
         } while (!ptr.compare_exchange_weak(curr_vp, {new_ptr, curr_vp.version + 1}, mo, morder::relaxed));
     }
 
-    asco_always_inline bool
-    compare_exchange_weak(versioned_ptr &expected, void *new_ptr, morder mo = morder::seq_cst) noexcept {
+    bool compare_exchange_weak(versioned_ptr &expected, void *new_ptr, morder mo = morder::seq_cst) noexcept {
         return ptr.compare_exchange_weak(expected, {new_ptr, expected.version + 1}, mo);
     }
 
-    asco_always_inline bool
-    compare_exchange_weak(versioned_ptr &expected, void *new_ptr, morder mo1, morder mo2) noexcept {
+    bool compare_exchange_weak(versioned_ptr &expected, void *new_ptr, morder mo1, morder mo2) noexcept {
         return ptr.compare_exchange_weak(expected, {new_ptr, expected.version + 1}, mo1, mo2);
     }
 
-    asco_always_inline bool
+    bool
     compare_exchange_strong(versioned_ptr &expected, void *new_ptr, morder mo = morder::seq_cst) noexcept {
         return ptr.compare_exchange_strong(expected, {new_ptr, expected.version + 1}, mo);
     }
 
-    asco_always_inline bool
-    compare_exchange_strong(versioned_ptr &expected, void *new_ptr, morder mo1, morder mo2) noexcept {
+    bool compare_exchange_strong(versioned_ptr &expected, void *new_ptr, morder mo1, morder mo2) noexcept {
         return ptr.compare_exchange_strong(expected, {new_ptr, expected.version + 1}, mo1, mo2);
     }
 

@@ -15,6 +15,40 @@ set(ASCO_SOURCES
     time/interval.cpp
 )
 
+set(PRECOMPILE_HEADERS
+    assert.h
+    compile_time/platform.h
+    concurrency/concurrency.h
+    concurrency/continuous_queue.h
+    concurrency/queue.h
+    core/daemon.h
+    core/pool_allocator.h
+    core/runtime.h
+    core/task.h
+    core/time/high_resolution_timer.h
+    core/time/timer_concept.h
+    core/time/timer.h
+    core/wait_queue.h
+    core/worker.h
+    future.h
+    invoke.h
+    panic/color.h
+    panic/panic.h
+    panic/unwind.h
+    sync/channel.h
+    sync/rwspin.h
+    sync/semaphore.h
+    sync/spin.h
+    time/interval.h
+    time/sleep.h
+    utils/concepts.h
+    utils/defines.h
+    utils/erased.h
+    utils/memory_slot.h
+    utils/types.h
+    yield.h
+)
+
 set(MDEFS ASCO __ASCO__)
 set(DEPLIBS cpptrace::cpptrace)
 
@@ -46,6 +80,19 @@ if (ASCO_IOCP)
     set (MDEFS ${MDEFS} ASCO_IOCP)
 endif()
 
+set(COMPILE_OPTIONS
+    -Wno-vla-cxx-extension
+    -Wno-zero-length-array
+    -Wno-gnu-zero-variadic-macro-arguments
+    -Wno-sign-compare
+)
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
+        -Wno-interference-size
+    )
+endif()
+
 add_library(asco_core ${ASCO_SOURCES})
 target_include_directories(asco_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
@@ -53,6 +100,8 @@ target_include_directories(asco_core PUBLIC
 )
 target_link_libraries(asco_core PUBLIC ${DEPLIBS})
 target_compile_definitions(asco_core PUBLIC ${MDEFS})
+target_compile_options(asco_core PUBLIC ${COMPILE_OPTIONS})
+target_precompile_headers(asco_core PUBLIC ${PRECOMPILE_HEADERS})
 add_library(asco::core ALIAS asco_core)
 
 add_library(asco_shared_core SHARED ${ASCO_SOURCES})
@@ -62,8 +111,10 @@ target_include_directories(asco_shared_core PUBLIC
 )
 target_link_libraries(asco_shared_core PUBLIC ${DEPLIBS})
 target_compile_definitions(asco_shared_core PUBLIC ${MDEFS})
+target_compile_options(asco_shared_core PUBLIC ${COMPILE_OPTIONS})
+target_precompile_headers(asco_shared_core PUBLIC ${PRECOMPILE_HEADERS})
 if (NOT WIN32)
-    set_target_properties(asco_shared_core PROPERTIES OUTPUT_NAME asco)
+    set_target_properties(asco_shared_core PROPERTIES OUTPUT_NAME asco_core)
 endif()
 add_library(asco::shared::core ALIAS asco_shared_core)
 

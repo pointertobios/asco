@@ -4,7 +4,5 @@
 #pragma once
 
 #ifdef __linux__
-#    define asco_always_inline __inline __attribute__((__always_inline__))
-#elif defined(_WIN32)
-#    define asco_always_inline __forceinline
+#    undef linux
 #endif

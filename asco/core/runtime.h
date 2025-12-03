@@ -31,9 +31,7 @@ public:
 
     time::timer_concept &timer() noexcept;
 
-    asco_always_inline task_id alloc_task_id() noexcept {
-        return task_id_generator.fetch_add(1, morder::acq_rel);
-    }
+    task_id alloc_task_id() noexcept { return task_id_generator.fetch_add(1, morder::acq_rel); }
 
     void register_task(task_id id, std::shared_ptr<task<>> task);
     void unregister_task(task_id id);

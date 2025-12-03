@@ -18,7 +18,7 @@ public:
         requires timer<T>
             : timer{std::move(t)} {}
 
-    asco_always_inline timer_id register_timer(
+    timer_id register_timer(
         const std::chrono::high_resolution_clock::time_point &expire_time, worker &worker_ptr,
         task_id task_id) {
         return std::visit(
@@ -28,7 +28,7 @@ public:
             timer);
     }
 
-    asco_always_inline void unregister_timer(timer_id id) {
+    void unregister_timer(timer_id id) {
         std::visit([id](auto &t) { t->unregister_timer(id); }, timer);
     }
 

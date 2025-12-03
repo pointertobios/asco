@@ -16,7 +16,7 @@ struct alignas(sizeof(uint128_t)) timer_id {
     const uint64_t meta;
     const uint64_t expire_time_nanos;
 
-    asco_always_inline std::strong_ordering operator<=>(const timer_id &other) const noexcept {
+    std::strong_ordering operator<=>(const timer_id &other) const noexcept {
         if constexpr (std::endian::native == std::endian::little) {
             return *reinterpret_cast<const uint128_t *>(this)
                    <=> *reinterpret_cast<const uint128_t *>(&other);
@@ -35,15 +35,13 @@ struct timer_entry {
     const size_t _expire_seconds_since_epoch{static_cast<size_t>(
         std::chrono::duration_cast<std::chrono::seconds>(expire_time.time_since_epoch()).count())};
 
-    asco_always_inline std::strong_ordering operator<=>(const timer_entry &other) const noexcept {
+    std::strong_ordering operator<=>(const timer_entry &other) const noexcept {
         return expire_time <=> other.expire_time;
     }
 
-    asco_always_inline timer_id id() const noexcept { return _id; }
+    timer_id id() const noexcept { return _id; }
 
-    asco_always_inline size_t expire_seconds_since_epoch() const noexcept {
-        return _expire_seconds_since_epoch;
-    }
+    size_t expire_seconds_since_epoch() const noexcept { return _expire_seconds_since_epoch; }
 
 private:
     static timer_id gen_id(

@@ -6,14 +6,14 @@ project(asco VERSION 0.1.0 LANGUAGES CXX)
 
 # Compiler and linker config
 
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_EXTENSIONS ON)
+
 include(CheckCXXCompilerFlag)
 include(CheckCXXSourceCompiles)
 include(ProcessorCount)
 
 ProcessorCount(CPUS)
-
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_EXTENSIONS ON)
 
 check_cxx_compiler_flag("-stdlib=libc++" COMPILER_SUPPORTS_LIBCXX)
 
@@ -59,11 +59,11 @@ else()
 endif()
 
 if (NOT WIN32)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-    add_compile_options(-Wall -Wextra -Wpedantic -Wno-gnu-statement-expression -Wno-gnu-statement-expression-from-macro-expansion)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+    endif()
+    add_compile_options(-Wall -Wextra -Wno-gnu-statement-expression -Wno-gnu-statement-expression-from-macro-expansion)
 endif()
-
-add_compile_options(-Wno-vla-cxx-extension -Wno-zero-length-array -Wno-gnu-zero-variadic-macro-arguments)
 
 # add_compile_options(-fsanitize=undefined -fno-omit-frame-pointer)
 # add_link_options(-fsanitize=undefined -fno-omit-frame-pointer)

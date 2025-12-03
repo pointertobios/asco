@@ -39,11 +39,11 @@ private:
         size_t earliest_expire_time;  // In seconds
         std::map<timer_id, timer_entry> entries{};
 
-        asco_always_inline std::strong_ordering operator<=>(const timer_area &other) const noexcept {
+        std::strong_ordering operator<=>(const timer_area &other) const noexcept {
             return earliest_expire_time <=> other.earliest_expire_time;
         }
 
-        asco_always_inline std::strong_ordering operator<=>(const timer_entry &entry) const noexcept {
+        std::strong_ordering operator<=>(const timer_entry &entry) const noexcept {
             return earliest_expire_time <=> entry.expire_seconds_since_epoch();
         }
     };

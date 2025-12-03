@@ -1,6 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#pragma once
+
 namespace asco::panic {
 
 inline const char *number_color{"\033[1;35m"};

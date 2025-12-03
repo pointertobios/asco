@@ -371,7 +371,7 @@ concept future_type = is_specialization_of_future_type_v<std::remove_cvref_t<F>>
 
 template<typename Fn, typename... Args>
 concept async_function = requires(Fn f) {
-    std::invocable<Fn, Args...>;
+    requires std::invocable<Fn, Args...>;
     is_specialization_of_future_type_v<std::invoke_result_t<std::remove_cvref_t<Fn>, Args...>>;
 };
 
