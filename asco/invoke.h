@@ -17,7 +17,7 @@ using namespace concepts;
 template<typename... Args, async_function<Args...> Fn>
     requires(!std::is_function_v<std::remove_cvref_t<Fn>>)
 constexpr auto co_invoke(Fn &&f, Args &&...args) {
-    if constexpr (std::is_rvalue_reference_v<Fn>) {
+    if constexpr (std::is_rvalue_reference_v<decltype(f)>) {
         using FnType = std::remove_cvref_t<Fn>;
         std::unique_ptr<utils::erased> fnp = std::make_unique<utils::erased>(
             std::forward<FnType>(f), +[](void *p) noexcept { reinterpret_cast<FnType *>(p)->~FnType(); });
