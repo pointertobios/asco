@@ -107,6 +107,8 @@ public:
         wq.notify(inc);
     }
 
+    size_t get_counter() const noexcept { return count.load(morder::acquire); }
+
 private:
     atomic_size_t count;
     core::wait_queue wq;

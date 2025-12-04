@@ -11,9 +11,9 @@ namespace asco::utils {
 class erased {
 public:
     template<typename T>
-    erased(T &&value) noexcept
+    erased(T &&value, void (*deleter)(void *)) noexcept
             : storage(sizeof(T))
-            , deleter(+[](void *p) noexcept { static_cast<T *>(p)->~T(); }) {
+            , deleter(deleter) {
         new (storage.data()) T(std::move(value));
     }
 
@@ -27,7 +27,7 @@ public:
         return *reinterpret_cast<const T *>(storage.data());
     }
 
-    ~erased() noexcept {
+    ~erased() {
         if (deleter) {
             deleter(storage.data());
         }
@@ -35,7 +35,7 @@ public:
 
 private:
     std::vector<std::byte> storage;
-    void (*deleter)(void *) noexcept;
+    void (*deleter)(void *);
 };
 
 };  // namespace asco::utils

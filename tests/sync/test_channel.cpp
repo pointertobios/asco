@@ -84,8 +84,8 @@ future<int> async_main() {
     {
         auto [tx, rx] = channel<int>();
         // enqueue a couple values
-        (void)tx.send(7);
-        (void)tx.send(8);
+        (void)co_await tx.send(7);
+        (void)co_await tx.send(8);
         tx.stop();
 
         // drain the two enqueued values

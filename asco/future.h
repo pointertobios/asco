@@ -33,10 +33,12 @@ template<move_secure T, bool Spawn, bool Core, bool UseReturnValue = true, typen
 struct future_base {
     struct promise_type;
 
-private:
+protected:
     using coroutine_handle_type = std::coroutine_handle<promise_type>;
 
     using deliver_type = T;
+
+private:
     constexpr static bool deliver_type_is_void = std::is_void_v<deliver_type>;
 
     using task_type = core::task<T, Spawn, Core, UseReturnValue, StateExtra>;
@@ -70,7 +72,9 @@ private:
     };
 
 public:
-    struct promise_type : std::conditional_t<deliver_type_is_void, promise_void_mixin, promise_value_mixin> {
+    struct promise_type
+            : std::conditional_t<
+                  deliver_type_is_void || !UseReturnValue, promise_void_mixin, promise_value_mixin> {
         future_base get_return_object(
             panic::coroutine_trace_handle caller_cthdl =
                 *cpptrace::stacktrace::current(1, 1).begin()) noexcept {
@@ -316,7 +320,7 @@ public:
 
     ~future_base() noexcept = default;
 
-private:
+protected:
     bool none{true};
 
     task_id this_id{0};
@@ -370,10 +374,8 @@ template<typename F>
 concept future_type = is_specialization_of_future_type_v<std::remove_cvref_t<F>>;
 
 template<typename Fn, typename... Args>
-concept async_function = requires(Fn f) {
-    requires std::invocable<Fn, Args...>;
-    is_specialization_of_future_type_v<std::invoke_result_t<std::remove_cvref_t<Fn>, Args...>>;
-};
+concept async_function =
+    std::invocable<Fn, Args...> && future_type<std::invoke_result_t<std::remove_cvref_t<Fn>, Args...>>;
 
 }  // namespace concepts
 

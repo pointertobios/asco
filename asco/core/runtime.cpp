@@ -5,11 +5,11 @@
 #include <fstream>
 #include <thread>
 
-#include <asco/core/runtime.h>
-
 #include <asco/compile_time/platform.h>
+#include <asco/core/runtime.h>
 #include <asco/core/worker.h>
 #include <asco/panic/panic.h>
+#include <asco/utils/defines.h>
 
 namespace asco::core {
 

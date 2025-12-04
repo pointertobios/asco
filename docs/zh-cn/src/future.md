@@ -82,8 +82,6 @@ try {
 
 ### co_invoke
 
-- 用于延长协程本身的生命周期并启动协程（通常用于 lambda 表达式）
-
 ```cpp
 auto task = co_invoke([] -> future_spawn<void> {
     // 耗时任务
@@ -92,7 +90,9 @@ auto task = co_invoke([] -> future_spawn<void> {
 co_await task;  // lambda 表达式随协程一起销毁，此处安全
 ```
 
-- 注意：**协程本身的销毁有额外的开销**
+`co_invoke` 会将以右值（包括纯右值和将亡值）传递的可调用对象移动到协程内部，确保其生命周期覆盖整个协程执行期间。
+
+- 常用于延长 lambda 表达式的生命周期，避免 use-after-free
 
 ### 值类型约束
 
