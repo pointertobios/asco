@@ -25,4 +25,8 @@ struct yield : std::suspend_always {
     T await_resume() { return std::move(value); }
 };
 
+struct noop : yield<> {
+    bool await_ready() noexcept { return true; }
+};
+
 };  // namespace asco

@@ -19,9 +19,17 @@ target_link_libraries(test_channel PRIVATE asco::core asco::main)
 add_executable(test_generator test_generator.cpp)
 target_link_libraries(test_generator PRIVATE asco::core asco::main)
 
+add_executable(test_notify sync/test_notify.cpp)
+target_link_libraries(test_notify PRIVATE asco::core asco::main)
+
+add_executable(test_context context/test_context.cpp)
+target_link_libraries(test_context PRIVATE asco::core asco::main)
+
 add_test(NAME future_base COMMAND test_future_base)
 add_test(NAME semaphore COMMAND test_semaphore)
 add_test(NAME interval COMMAND test_interval)
 add_test(NAME sleep COMMAND test_sleep)
 add_test(NAME channel COMMAND test_channel)
 add_test(NAME generator COMMAND test_generator)
+add_test(NAME notify COMMAND test_notify)
+add_test(NAME context COMMAND test_context)

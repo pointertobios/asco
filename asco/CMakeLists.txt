@@ -3,6 +3,7 @@
 
 set(ASCO_SOURCES
     assert.cpp
+    context.cpp
     core/daemon.cpp
     core/runtime.cpp
     core/time/high_resolution_timer.cpp
@@ -12,6 +13,7 @@ set(ASCO_SOURCES
     future.cpp
     panic/panic.cpp
     panic/unwind.cpp
+    sync/notify.cpp
     time/interval.cpp
 )
 
@@ -21,6 +23,7 @@ set(PRECOMPILE_HEADERS
     concurrency/concurrency.h
     concurrency/continuous_queue.h
     concurrency/queue.h
+    context.h
     core/daemon.h
     core/pool_allocator.h
     core/runtime.h
@@ -36,6 +39,7 @@ set(PRECOMPILE_HEADERS
     panic/panic.h
     panic/unwind.h
     sync/channel.h
+    sync/notify.h
     sync/rwspin.h
     sync/semaphore.h
     sync/spin.h

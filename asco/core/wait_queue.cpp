@@ -35,7 +35,7 @@ void wait_queue::interrupt_wait(decltype(waiters)::iterator it) {
     waiters.erase(it);
 }
 
-void wait_queue::notify(size_t n) {
+void wait_queue::notify(size_t n, bool record_untriggered) {
     auto _ = mut.lock();
 
     while (n) {
@@ -46,7 +46,7 @@ void wait_queue::notify(size_t n) {
         w.activate_task(task_id);
         n--;
     }
-    if (n)
+    if (record_untriggered && n)
         untriggered_notifications.fetch_add(n, morder::release);
 }
 

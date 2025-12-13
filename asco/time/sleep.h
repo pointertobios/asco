@@ -13,8 +13,7 @@ namespace asco::time {
 
 using namespace concepts;
 
-template<duration_type Dur>
-future<void> sleep_for(const Dur &duration) {
+future<void> sleep_for(const duration_type auto &duration) {
     auto &w = core::worker::this_worker();
     auto tid = w.current_task();
     auto expire_time = std::chrono::high_resolution_clock::now()
@@ -25,8 +24,7 @@ future<void> sleep_for(const Dur &duration) {
     co_return;
 }
 
-template<time_point_type Tp>
-future<void> sleep_until(const Tp &timepoint) {
+future<void> sleep_until(const time_point_type auto &timepoint) {
     auto &w = core::worker::this_worker();
     auto tid = w.current_task();
     core::runtime::this_runtime().timer().register_timer(timepoint, w, tid);

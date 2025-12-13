@@ -18,12 +18,14 @@ class wait_queue {
 public:
     wait_queue() = default;
 
-    void notify(size_t n = 1);
+    void notify(size_t n = 1, bool record_untriggered = true);
 
 private:
     spin<> mut;
-    std::list<std::tuple<worker &, task_id>> waiters;
     atomic_size_t untriggered_notifications{0};
+
+protected:
+    std::list<std::tuple<worker &, task_id>> waiters;
 
 public:
     yield<std::optional<decltype(waiters)::iterator>> wait();
