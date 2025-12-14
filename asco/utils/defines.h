@@ -6,3 +6,5 @@
 #ifdef __linux__
 #    undef linux
 #endif
+
+#define with if

@@ -21,9 +21,11 @@ public:
     rwspin(rwspin &&) = delete;
 
     class read_guard {
-        rwspin &rw;
+        friend rwspin;
 
-    public:
+        rwspin &rw;
+        bool none{false};
+
         read_guard(rwspin &rw) noexcept
                 : rw{rw} {
             size_t expected;
@@ -34,15 +36,24 @@ public:
                 !rw.state.compare_exchange_weak(expected, expected + 1, morder::acq_rel, morder::relaxed));
         }
 
+    public:
+        read_guard(read_guard &&rhs) noexcept
+                : rw{rhs.rw}
+                , none{rhs.none} {
+            rhs.none = true;
+        }
+
         ~read_guard() noexcept { rw.state.fetch_sub(1, morder::release); }
 
-        operator bool() const noexcept { return true; }
+        operator bool() const noexcept { return !none; }
     };
 
     class write_guard {
-        rwspin &rw;
+        friend rwspin;
 
-    public:
+        rwspin &rw;
+        bool none{false};
+
         write_guard(rwspin &rw) noexcept
                 : rw{rw} {
             size_t withdraw_count{0};
@@ -62,9 +73,16 @@ public:
             // not, the probability of competitors releasing this lock is the same.
         }
 
+    public:
+        write_guard(write_guard &&rhs) noexcept
+                : rw{rhs.rw}
+                , none{rhs.none} {
+            rhs.none = true;
+        }
+
         ~write_guard() noexcept { rw.state.store(0, morder::release); }
 
-        operator bool() const noexcept { return true; }
+        operator bool() const noexcept { return !none; }
     };
 
     read_guard read() noexcept { return {*this}; }
@@ -83,39 +101,63 @@ public:
     rwspin(rwspin &&) = delete;
 
     explicit rwspin(const T &val)
+        requires std::copy_constructible<T>
             : value{val} {}
+
     explicit rwspin(T &&val)
+        requires std::move_constructible<T>
             : value{std::move(val)} {}
 
     template<typename... Args>
     explicit rwspin(Args &&...args)
+        requires std::constructible_from<T, Args...>
             : value(std::forward<Args>(args)...) {}
 
     class read_guard {
-        rwspin<void>::read_guard g;
-        rwspin &rw;
+        friend rwspin;
 
-    public:
+        rwspin<>::read_guard g;
+        rwspin &rw;
+        bool none{false};
+
         read_guard(rwspin &rw) noexcept
                 : g{rw._lock.read()}
                 , rw{rw} {}
 
-        operator bool() const noexcept { return true; }
+    public:
+        read_guard(read_guard &&rhs) noexcept
+                : g{std::move(rhs.g)}
+                , rw{rhs.rw}
+                , none{rhs.none} {
+            rhs.none = true;
+        }
+
+        operator bool() const noexcept { return !none; }
 
         const T &operator*() const noexcept { return rw.value; }
         const T *operator->() const noexcept { return &rw.value; }
     };
 
     class write_guard {
-        rwspin<void>::write_guard g;
-        rwspin &rw;
+        friend rwspin;
 
-    public:
+        rwspin<>::write_guard g;
+        rwspin &rw;
+        bool none{false};
+
         write_guard(rwspin &rw) noexcept
                 : g{rw._lock.write()}
                 , rw{rw} {}
 
-        operator bool() const noexcept { return true; }
+    public:
+        write_guard(write_guard &&rhs) noexcept
+                : g{std::move(rhs.g)}
+                , rw{rhs.rw}
+                , none{rhs.none} {
+            rhs.none = true;
+        }
+
+        operator bool() const noexcept { return !none; }
 
         T &operator*() noexcept { return rw.value; }
         const T &operator*() const noexcept { return rw.value; }
@@ -127,9 +169,17 @@ public:
     read_guard read() noexcept { return {*this}; }
     write_guard write() noexcept { return {*this}; }
 
+    T &&get() noexcept
+        requires std::move_constructible<T> || std::is_move_assignable_v<T>
+    {
+        value_moved.store(true, morder::relaxed);
+        return std::move(value);
+    }
+
 private:
     T value{};
-    rwspin<void> _lock;
+    atomic_bool value_moved{false};
+    rwspin<> _lock;
 };
 
 };  // namespace asco::sync
@@ -138,4 +188,4 @@ namespace asco {
 
 using sync::rwspin;
 
-}
+};  // namespace asco

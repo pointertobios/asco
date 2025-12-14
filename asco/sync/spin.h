@@ -21,10 +21,11 @@ public:
     spin(const spin &) = delete;
     spin(spin &&) = delete;
     class guard {
+        friend spin;
+
         spin &s;
         bool none{false};
 
-    public:
         guard(spin &s) noexcept
                 : s{s} {
             size_t withdraw_count{0};
@@ -43,8 +44,10 @@ public:
             // not, the probability of competitors releasing this lock is the same.
         }
 
+    public:
         guard(guard &&rhs) noexcept
-                : s{rhs.s} {
+                : s{rhs.s}
+                , none{rhs.none} {
             rhs.none = true;
         }
 
@@ -53,7 +56,7 @@ public:
                 s.locked.store(false, morder::release);
         }
 
-        operator bool() const noexcept { return true; }
+        operator bool() const noexcept { return !none; }
     };
 
     guard lock() noexcept { return guard{*this}; }
@@ -71,31 +74,38 @@ public:
     spin(spin &&) = delete;
 
     explicit spin(const T &val)
+        requires std::copy_constructible<T>
             : value{val} {}
 
     explicit spin(T &&val)
+        requires std::move_constructible<T>
             : value{std::move(val)} {}
 
     template<typename... Args>
     explicit spin(Args &&...args)
+        requires std::constructible_from<T, Args...>
             : value(std::forward<Args>(args)...) {}
 
     class guard {
-        spin<void>::guard g;
-        spin &s;
+        friend spin;
 
-    public:
+        spin<>::guard g;
+        spin &s;
+        bool none{false};
+
         guard(spin &s) noexcept
                 : g{s._lock.lock()}
                 , s{s} {}
 
+    public:
         guard(guard &&rhs) noexcept
                 : g{std::move(rhs.g)}
-                , s{rhs.s} {}
+                , s{rhs.s}
+                , none{rhs.none} {
+            rhs.none = true;
+        }
 
-        ~guard() {}
-
-        operator bool() const noexcept { return true; }
+        operator bool() const noexcept { return !none; }
 
         T &operator*() noexcept { return s.value; }
 
@@ -108,11 +118,17 @@ public:
 
     guard lock() noexcept { return guard{*this}; }
 
-    T &&get() noexcept { return std::move(value); }
+    T &&get() noexcept
+        requires std::move_constructible<T> || std::is_move_assignable_v<T>
+    {
+        value_moved.store(true, morder::relaxed);
+        return std::move(value);
+    }
 
 private:
-    T value;
-    spin<void> _lock{};
+    T value{};
+    atomic_bool value_moved{false};
+    spin<> _lock{};
 };
 
 };  // namespace asco::sync
@@ -121,4 +137,4 @@ namespace asco {
 
 using sync::spin;
 
-}
+};  // namespace asco

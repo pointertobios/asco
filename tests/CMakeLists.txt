@@ -16,6 +16,9 @@ target_link_libraries(test_sleep PRIVATE asco::core asco::main)
 add_executable(test_channel sync/test_channel.cpp)
 target_link_libraries(test_channel PRIVATE asco::core asco::main)
 
+add_executable(test_mutex sync/test_mutex.cpp)
+target_link_libraries(test_mutex PRIVATE asco::core asco::main)
+
 add_executable(test_generator test_generator.cpp)
 target_link_libraries(test_generator PRIVATE asco::core asco::main)
 
@@ -30,6 +33,7 @@ add_test(NAME semaphore COMMAND test_semaphore)
 add_test(NAME interval COMMAND test_interval)
 add_test(NAME sleep COMMAND test_sleep)
 add_test(NAME channel COMMAND test_channel)
+add_test(NAME mutex COMMAND test_mutex)
 add_test(NAME generator COMMAND test_generator)
 add_test(NAME notify COMMAND test_notify)
 add_test(NAME context COMMAND test_context)

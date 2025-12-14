@@ -17,7 +17,7 @@ namespace asco {
 
 #define asco_assert(expr, ...)                         \
     do {                                               \
-        if (!(expr)) {                                 \
+        if (!(expr)) [[unlikely]] {                    \
             asco::assert_failed(#expr, ##__VA_ARGS__); \
         }                                              \
     } while (0)
