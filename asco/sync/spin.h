@@ -68,7 +68,8 @@ private:
 template<typename T>
 class spin {
 public:
-    spin() = default;
+    spin()
+            : value{} {}
 
     spin(const spin &) = delete;
     spin(spin &&) = delete;
@@ -126,7 +127,7 @@ public:
     }
 
 private:
-    T value{};
+    T value;
     atomic_bool value_moved{false};
     spin<> _lock{};
 };

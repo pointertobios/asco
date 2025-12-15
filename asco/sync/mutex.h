@@ -80,7 +80,8 @@ private:
 template<typename T>
 class mutex {
 public:
-    mutex() = default;
+    mutex()
+            : value{} {}
 
     mutex(const mutex &) = delete;
     mutex &operator=(const mutex &) = delete;
@@ -160,7 +161,7 @@ public:
     }
 
 private:
-    T value{};
+    T value;
     atomic_bool value_moved{false};
     mutex<> mtx;
 };

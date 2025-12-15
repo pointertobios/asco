@@ -5,6 +5,7 @@
 - [`generator<T>` 数据流](./generator.md)
 - [同步原语](./sync/同步原语.md)
   - [Mutex](./sync/mutex.md)
+  - [RWLock](./sync/rwlock.md)
   - [Semaphore](./sync/semaphore.md)
   - [Notify](./sync/notify.md)
   - [Channel](./sync/channel.md)

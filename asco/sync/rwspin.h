@@ -96,7 +96,9 @@ private:
 template<typename T>
 class rwspin {
 public:
-    rwspin() = default;
+    rwspin()
+            : value{} {}
+
     rwspin(const rwspin &) = delete;
     rwspin(rwspin &&) = delete;
 
@@ -177,7 +179,7 @@ public:
     }
 
 private:
-    T value{};
+    T value;
     atomic_bool value_moved{false};
     rwspin<> _lock;
 };

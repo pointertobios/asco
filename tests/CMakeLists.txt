@@ -25,6 +25,9 @@ target_link_libraries(test_generator PRIVATE asco::core asco::main)
 add_executable(test_notify sync/test_notify.cpp)
 target_link_libraries(test_notify PRIVATE asco::core asco::main)
 
+add_executable(test_rwlock sync/test_rwlock.cpp)
+target_link_libraries(test_rwlock PRIVATE asco::core asco::main)
+
 add_executable(test_context context/test_context.cpp)
 target_link_libraries(test_context PRIVATE asco::core asco::main)
 
@@ -36,4 +39,5 @@ add_test(NAME channel COMMAND test_channel)
 add_test(NAME mutex COMMAND test_mutex)
 add_test(NAME generator COMMAND test_generator)
 add_test(NAME notify COMMAND test_notify)
+add_test(NAME rwlock COMMAND test_rwlock)
 add_test(NAME context COMMAND test_context)

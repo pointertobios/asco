@@ -93,7 +93,7 @@ target_link_libraries(<your-target> PRIVATE asco::shared::core asco::shared::mai
     - [x] Semaphore
     - [x] Channel
     - [x] Mutex
-    - [ ] Read-Write Lock
+    - [x] Read-Write Lock
     - [ ] Condition variable
     - [ ] Barrier
   - [x] Timer and Interval
