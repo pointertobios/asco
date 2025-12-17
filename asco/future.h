@@ -118,6 +118,17 @@ public:
         }
 
         auto final_suspend() noexcept {
+            if (!this->this_task->returned.load(morder::acquire)
+                && !this->this_task->e_thrown.load(morder::acquire)) {
+                if constexpr (deliver_type_is_void || !UseReturnValue) {
+                    promise_void_mixin::return_void();
+                } else {
+                    panic::panic(
+                        "[ASCO] future_base::promise_type::final_suspend: Coroutine ended without "
+                        "returning a value or throwing an exception.");
+                }
+            }
+
             auto &worker = core::worker::this_worker();
             worker.suspend_task(promise_base::this_id);
 
