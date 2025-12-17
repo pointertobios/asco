@@ -121,10 +121,7 @@ public:
             rhs.none = true;
         }
 
-        operator bool() const noexcept {
-            asco_assert(!none);
-            return !none;
-        }
+        operator bool() const noexcept { return !none; }
 
         T &operator*() noexcept {
             asco_assert(!none);

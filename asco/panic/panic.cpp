@@ -18,7 +18,7 @@ std::vector<std::function<void(cpptrace::stacktrace &, std::string_view)>> panic
         "{}[ASCO] {}{}\nStack trace(most recent call last):\n{}", panic_color, msg, reset_color, unwind(2));
     auto st = cpptrace::stacktrace::current(1);
     for (auto &cb : panic_callbacks) { cb(st, msg); }
-    std::println(stderr, "{}", msg);
+    std::println(stderr, "{}", formatted_msg);
     std::abort();
 }
 
@@ -28,7 +28,7 @@ std::vector<std::function<void(cpptrace::stacktrace &, std::string_view)>> panic
         reset_color, co_unwind(2));
     auto st = co_stacktrace(2);
     for (auto &cb : panic_callbacks) { cb(st, msg); }
-    std::println(stderr, "{}", msg);
+    std::println(stderr, "{}", formatted_msg);
     std::abort();
 }
 
