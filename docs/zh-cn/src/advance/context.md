@@ -16,8 +16,11 @@
 
 ## 取消与状态查询
 
-- `void cancel() noexcept`
-  - 将上下文标记为已取消，并唤醒所有等待该上下文的协程。
+- `future<void> cancel()`
+  - 将上下文标记为已取消，并唤醒所有等待该上下文的协程，然后执行取消回调。该协程可以被并发调用；每次调用都会执行已注册的回调。
+- `future<void> set_cancel_callback(std::function<void()>)`
+  - 注册一个在取消发生时调用的回调。若上下文已取消，请先重新检查状态；回调仅在随后执行的 `cancel()` 协程中触发。
+  - 回调实现必须是可重入的，并且要做好幂等处理，以便在并发取消时安全地再次触发取消或操作上下文。
 - `bool is_cancelled() const noexcept`
   - 查询当前是否处于已取消状态。
 
@@ -39,7 +42,7 @@
 using namespace asco;
 
 future_spawn<void> worker(context &ctx_ref, std::atomic<bool> &flag) {
-  co_await ctx_ref;            // 等待取消信号
+    co_await ctx_ref;            // 等待取消信号
     flag.store(true, std::memory_order_release);
     co_return;
 }
@@ -48,11 +51,11 @@ future<int> async_main() {
     auto ctx = context::with_cancel();
     std::atomic<bool> flag{false};
 
-  auto w = worker(*ctx, flag);  // 也可以 co_await ctx（shared_ptr）
+    auto w = worker(*ctx, flag);  // 也可以 co_await ctx（shared_ptr）
 
     // 进行其他操作…
     co_await sleep_for(10ms);
-    ctx->cancel();               // 通知所有等待方
+    co_await ctx->cancel();      // 通知所有等待方并等待回调执行
 
     co_await w;
     return flag.load(std::memory_order_acquire) ? 0 : 1;
@@ -80,5 +83,5 @@ future<int> async_main() {
 ## 注意事项
 
 - `context` 仅负责取消信号的传播，不携带附加信息。若需要携带错误码或取消原因，请在业务代码中自行维护。
-- `co_await ctx;` 只表示“取消事件发生”，不要尝试从中读取返回值。
 - 上下文内部使用 `notify` 唤醒等待者；在没有协程等待时调用 `cancel()` 也会正确记录状态，随后等待者会立即返回。
+- 取消回调必须是可重入的，且需要自行保证并发调用时的幂等性。

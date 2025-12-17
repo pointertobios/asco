@@ -1,6 +1,7 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include <array>
 #include <atomic>
 #include <print>
 
@@ -37,7 +38,7 @@ future<int> async_main() {
             co_return 1;
         }
 
-        ctx->cancel();
+        co_await ctx->cancel();
         co_await waiter;
 
         if (!ctx->is_cancelled()) {
@@ -89,7 +90,7 @@ future<int> async_main() {
     // Test C: wait after cancellation resumes immediately
     {
         auto ctx = context::with_cancel();
-        ctx->cancel();
+        co_await ctx->cancel();
         std::atomic<bool> resumed{false};
         auto waiter = co_invoke([ctx, &resumed]() -> future_spawn<void> {
             co_await ctx;
@@ -102,6 +103,37 @@ future<int> async_main() {
             co_return 1;
         }
         std::println("test_context: C passed");
+    }
+
+    // Test D: cancellation callback tolerates concurrent cancel invocations
+    {
+        constexpr int canceller_count = 4;
+        auto ctx = context::with_cancel();
+        std::atomic<int> callback_count{0};
+        std::atomic<int> ready{0};
+
+        co_await ctx->set_cancel_callback([&]() { callback_count.fetch_add(1, std::memory_order_acq_rel); });
+
+        std::array<future_spawn<void>, canceller_count> cancellers{};
+        for (auto i = 0; i < canceller_count; ++i) {
+            cancellers[i] = co_invoke([ctx, &ready]() -> future_spawn<void> {
+                ready.fetch_add(1, std::memory_order_acq_rel);
+                while (ready.load(std::memory_order_acquire) < canceller_count) { co_await sleep_for(1us); }
+                co_await ctx->cancel();
+                co_return;
+            });
+        }
+
+        for (auto &c : cancellers) { co_await c; }
+
+        const auto observed = callback_count.load(std::memory_order_acquire);
+        if (observed != canceller_count) {
+            std::println(
+                "test_context: D FAILED - cancel callback did not run for each canceller (observed = {}, expected = {})",
+                observed, canceller_count);
+            co_return 1;
+        }
+        std::println("test_context: D passed");
     }
 
     std::println("test_context: all checks passed");
