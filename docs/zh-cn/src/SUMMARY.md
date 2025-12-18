@@ -14,3 +14,4 @@
   - [带有堆栈回溯的断言 (asco_assert)](./advance/assert.md)
   - [守护线程基类 `daemon`](./advance/daemon.md)
   - [Context 取消原语](./advance/context.md)
+  - [Join Set 聚合器](./advance/join_set.md)

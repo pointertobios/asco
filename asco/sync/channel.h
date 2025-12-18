@@ -51,7 +51,10 @@ public:
         co_return res;
     }
 
-    void stop() noexcept { queue_sender.stop(); }
+    void stop() noexcept {
+        queue_sender.stop();
+        sem->release();
+    }
 
     bool is_stopped() const noexcept { return queue_sender.is_stopped(); }
 

@@ -33,10 +33,10 @@ template<move_secure T, bool Spawn, bool Core, bool UseReturnValue = true, typen
 struct future_base {
     struct promise_type;
 
+    using deliver_type = T;
+
 protected:
     using coroutine_handle_type = std::coroutine_handle<promise_type>;
-
-    using deliver_type = T;
 
 private:
     constexpr static bool deliver_type_is_void = std::is_void_v<deliver_type>;
@@ -263,8 +263,6 @@ public:
     future_base<deliver_type, true, false, UseReturnValue, StateExtra> spawn(this future_base self)
         requires(!Spawn)
     {
-        // Copy is banned, so only move or temporary future object can be passed.
-        static_assert(!Spawn, "[ASCO] future_base::spawn: cannot spawn a coroutine whitch Spawn=true");
         if (self.this_task->scheduled.load(morder::acquire))
             self.this_task->worker_ptr->move_out_suspended_task(self.this_id);
         core::worker::this_worker().move_in_suspended_task(self.this_id, self.this_task);
@@ -277,8 +275,6 @@ public:
     future_base<deliver_type, true, true, UseReturnValue, StateExtra> spawn_core(this future_base self)
         requires(!Spawn)
     {
-        // Copy is banned, so only move or temporary future object can be passed.
-        static_assert(!Spawn, "[ASCO] future_base::spawn_core: cannot spawn a coroutine whitch Spawn=true");
         if (self.this_task->scheduled.load(morder::acquire))
             self.this_task->worker_ptr->move_out_suspended_task(self.this_id);
         core::worker::this_worker().move_in_suspended_task(self.this_id, self.this_task);
@@ -290,12 +286,12 @@ public:
 
     future_base<void, true, false> ignore(
         this future_base self,
-        std::optional<std::function<void(std::exception_ptr)>> on_exception = std::nullopt) noexcept {
+        std::function<void(std::exception_ptr)> on_exception = nullptr) noexcept {
         try {
             co_await self;
         } catch (...) {
             if (on_exception)
-                (*on_exception)(std::current_exception());
+                on_exception(std::current_exception());
         }
     }
 

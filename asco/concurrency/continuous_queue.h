@@ -444,7 +444,7 @@ struct create_s {
 static_assert(queue::creator<create_s<char>, char>);
 
 template<move_secure T>
-create_s<T> create;
+inline constexpr create_s<T> create{};
 
 };  // namespace asco::concurrency::continuous_queue
 
