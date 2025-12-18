@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <vector>
+#include <new>
 
 namespace asco::utils {
 
@@ -12,29 +12,32 @@ class erased {
 public:
     template<typename T>
     erased(T &&value, void (*deleter)(void *)) noexcept
-            : storage(sizeof(T))
+            : align{alignof(T)}
+            , storage(::operator new(sizeof(T), std::align_val_t{alignof(T)}))
             , deleter(deleter) {
-        new (storage.data()) T(std::move(value));
+        new (storage) T(std::move(value));
     }
 
     template<typename T>
     T &get() noexcept {
-        return *reinterpret_cast<T *>(storage.data());
+        return *reinterpret_cast<T *>(storage);
     }
 
     template<typename T>
     const T &get() const noexcept {
-        return *reinterpret_cast<const T *>(storage.data());
+        return *reinterpret_cast<const T *>(storage);
     }
 
     ~erased() {
         if (deleter) {
-            deleter(storage.data());
+            deleter(storage);
         }
+        ::operator delete(storage, align);
     }
 
 private:
-    std::vector<std::byte> storage;
+    std::align_val_t align;
+    void *storage;
     void (*deleter)(void *);
 };
 

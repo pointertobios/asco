@@ -13,8 +13,8 @@ namespace asco::core::time {
 using namespace types;
 
 struct alignas(sizeof(uint128_t)) timer_id {
-    const uint64_t meta;
-    const uint64_t expire_time_nanos;
+    alignas(sizeof(uint64_t)) const uint64_t meta;
+    alignas(sizeof(uint64_t)) const uint64_t expire_time_nanos;
 
     std::strong_ordering operator<=>(const timer_id &other) const noexcept {
         if constexpr (std::endian::native == std::endian::little) {
@@ -26,6 +26,8 @@ struct alignas(sizeof(uint128_t)) timer_id {
         }
     }
 };
+
+static_assert(sizeof(timer_id) == 16);
 
 struct timer_entry {
     const std::chrono::high_resolution_clock::time_point expire_time;

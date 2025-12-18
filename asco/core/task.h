@@ -80,6 +80,8 @@ struct task<> {
         call_chain.push(id);
     }
 
+    virtual ~task() noexcept = default;
+
 protected:
     void destroy() noexcept {
         if (e_thrown.load(morder::acquire) && !e_rethrown.load(morder::acquire)) {
@@ -111,7 +113,7 @@ struct task<T, Spawn, Core, UseReturnValue, StateExtra> : public task<> {
         panic::coroutine_trace_handle caller_coroutine_addr) noexcept
             : task<>{id, corohdl, Spawn, Core, caller_coroutine_addr} {}
 
-    ~task() noexcept { destroy(); }
+    ~task() noexcept override { destroy(); }
 
     void bind_lambda(std::unique_ptr<utils::erased> &&f) { bound_lambda = std::move(f); }
 
