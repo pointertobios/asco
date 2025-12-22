@@ -34,7 +34,9 @@ set(PRECOMPILE_HEADERS
     core/wait_queue.h
     core/worker.h
     future.h
+    generator.h
     invoke.h
+    join_set.h
     panic/color.h
     panic/panic.h
     panic/unwind.h

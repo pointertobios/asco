@@ -104,8 +104,9 @@ future<int> async_main() {
 
         // and no further items
         auto r = rx.try_recv();
-        if (r.has_value() || r.error() != pop_fail::non_object) {
-            std::println("test_channel: D FAILED - expected empty after stop and drain");
+        if (r.has_value() || r.error() != pop_fail::closed) {
+            std::println(
+                "test_channel: D FAILED - expected closed after stop and drain: {}", (size_t)(r.error()));
             co_return 1;
         }
         std::println("test_channel: D passed");
