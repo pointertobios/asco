@@ -260,6 +260,18 @@ public:
             return this_task->delivery_slot.move();
     }
 
+    future_base<deliver_type, false, false, UseReturnValue, StateExtra> transport(this future_base self)
+        requires(!Spawn)
+    {
+        if (self.this_task->scheduled.load(morder::acquire))
+            self.this_task->worker_ptr->move_out_suspended_task(self.this_id);
+        core::worker::this_worker().move_in_suspended_task(self.this_id, self.this_task);
+        if constexpr (deliver_type_is_void)
+            co_await self;
+        else
+            co_return co_await self;
+    }
+
     future_base<deliver_type, true, false, UseReturnValue, StateExtra> spawn(this future_base self)
         requires(!Spawn)
     {
@@ -284,9 +296,8 @@ public:
             co_return co_await self;
     }
 
-    future_base<void, true, false> ignore(
-        this future_base self,
-        std::function<void(std::exception_ptr)> on_exception = nullptr) noexcept {
+    future_base<void, true, false>
+    ignore(this future_base self, std::function<void(std::exception_ptr)> on_exception = nullptr) noexcept {
         try {
             co_await self;
         } catch (...) {
@@ -367,8 +378,8 @@ private:
     template<move_secure T, bool Spawn, bool Core, bool UseReturnValue, typename StateExtra>
     static std::true_type test(base::future_base<T, Spawn, Core, UseReturnValue, StateExtra> *);
 
-    template<typename>
-    static std::false_type test(...);
+    template<typename T>
+    static std::false_type test(T *);
 
 public:
     static constexpr bool value = decltype(test(std::declval<Fn *>()))::value;

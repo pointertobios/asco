@@ -151,6 +151,40 @@ future_core<int> to_core(future<int> f) {
 }
 ```
 
+#### `transport()`：在 worker 之间迁移 `future<T>`
+
+`transport()` 用于**不改变 Future 类型（仍是 `future<T>`）**的前提下，将一个 `future<T>` 所属的底层任务从“原 worker 的挂起任务集合”迁移到**当前 worker**，从而允许你在另一个 worker 上安全地 `co_await` 它。
+
+这在以下场景非常常见：
+
+- 你把一个 `future<T>` 作为值传递/移动到了另一个以 `future_spawn<T>` 运行的协程里（例如 `select` 内部为每个分支启动的任务）。
+- 该 `future<T>` 可能已经在某个 worker 上注册并进入挂起状态；此时直接在另一个 worker 上等待它，会导致任务仍挂在旧 worker 的内部容器里，从而出现“在错误的 worker 上管理挂起/唤醒”的问题。
+
+`transport()` 的核心效果：
+
+- 若任务已被调度并处于某个 worker 管理之下，会先从原 worker 的挂起任务集合中移出，再迁入到当前 worker。
+- 随后返回一个新的 `future<T>`，其行为等价于等待原 future：返回值与异常传播规则完全一致。
+
+约束与注意事项：
+
+- 仅适用于 `future<T>`（非 spawn 模式的 future）。
+- 需要在运行时 worker 线程上下文中调用（因为它依赖 `core::worker::this_worker()` 取得“当前 worker”）。
+- 它**不会**把任务变成异步调度任务；如果你的目的是让任务进入线程池异步执行，请使用 `.spawn()`/`.spawn_core()`。
+
+示例：在 `future_spawn` 中等待一个来自外部的 `future`：
+
+```cpp
+future<int> make_sync_work();
+
+future_spawn<int> async_main() {
+    auto f = make_sync_work();
+
+    // 假设这里之后的执行发生在某个 worker 上，且 f 可能来自/挂起于其它 worker
+    int v = co_await std::move(f).transport();
+    co_return v;
+}
+```
+
 ### 异常处理与忽略
 
 `ignore()` 用于忽略对应 `future` 对象所代表的协程的返回值，并吞掉其抛出的异常（可选提供回调用于观测）。
