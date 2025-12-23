@@ -83,11 +83,25 @@ target_link_libraries(<your-target> PRIVATE asco::shared::core asco::shared::mai
 
 ## Features
 
-- [x] Basic async runtime
-  - [x] Linux full support
-  - [ ] Windows full support
-  - [ ] MacOS full support
-- [ ] Basic tools for parallel programming
+- [ ] Basic async runtime
+  - [ ] Platform support
+    - [x] Linux full support
+    - [ ] Windows full support
+    - [ ] MacOS full support
+  - [x] Runtime core
+    - [x] Worker thread pool
+    - [x] Task scheduling
+    - [ ] Task stealing
+    - [ ] Timers
+      - [x] High resolution timer
+      - [ ] Timer wheel
+    - [x] Cancellation with context
+    - [ ] IO
+      - [ ] io_uring (Linux)
+      - [ ] Epoll (Linux)
+      - [ ] IOCP (Windows)
+      - [ ] Kqueue (MacOS) (Wait please)
+- [ ] Basic tools for concurrent programming
   - [ ] Sync Primitives
     - [x] Spin
     - [x] Semaphore
@@ -96,14 +110,18 @@ target_link_libraries(<your-target> PRIVATE asco::shared::core asco::shared::mai
     - [x] Read-Write Lock
     - [ ] Condition variable
     - [ ] Barrier
-  - [x] Timer and Interval
+    - [ ] Latch
+  - [x] Sleep and Interval
+  - [x] Join set
+  - [ ] Select
 - [ ] Async IO
-  - [ ] Buffred IO
   - [ ] Async file IO
   - [ ] Async TCP/UDP stream
+  - [ ] Buffered IO
 - [ ] No lock data structures and parallel algorithms
   - [x] continuous_queue
-  - and so on...
+  - [ ] ring_queue
+- [ ] More to come...
 
 ## Compilers
 
