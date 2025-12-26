@@ -204,7 +204,12 @@ runtime::~runtime() {
     io_task_tx.stop();
     calcu_task_tx.stop();
     awake_all();
-    worker_count.wait(0);
+    while (true) {
+        auto c = worker_count.load(morder::acquire);
+        if (c == 0)
+            break;
+        worker_count.wait(c, morder::acquire);
+    }
 }
 
 };  // namespace asco::core
