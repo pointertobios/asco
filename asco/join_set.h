@@ -32,12 +32,12 @@ public:
     // Just call but do not co_await
     template<async_function Fn>
         requires std::is_same_v<typename std::invoke_result_t<Fn>::deliver_type, T>
-    future_spawn<void> spawn(Fn &&fn) {
+    future_spawn<void> spawn(Fn fn) {
         active_count.fetch_add(1, std::memory_order_acq_rel);
         if constexpr (std::is_same_v<std::invoke_result_t<std::remove_cvref_t<Fn>>, future<T>>) {
-            co_await tx.send(co_await co_invoke(std::forward<Fn>(fn)).spawn());
+            co_await tx.send(co_await co_invoke(std::move(fn)).spawn());
         } else {
-            co_await tx.send(co_await co_invoke(std::forward<Fn>(fn)));
+            co_await tx.send(co_await co_invoke(std::move(fn)));
         }
     }
 
