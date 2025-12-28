@@ -35,9 +35,9 @@ public:
     future_spawn<void> spawn(Fn &&fn) {
         active_count.fetch_add(1, std::memory_order_acq_rel);
         if constexpr (std::is_same_v<std::invoke_result_t<std::remove_cvref_t<Fn>>, future<T>>) {
-            co_await tx.send(co_await co_invoke(std::forward<std::remove_cvref_t<Fn>>(fn)).spawn());
+            co_await tx.send(co_await co_invoke(std::forward<Fn>(fn)).spawn());
         } else {
-            co_await tx.send(co_await co_invoke(std::forward<std::remove_cvref_t<Fn>>(fn)));
+            co_await tx.send(co_await co_invoke(std::forward<Fn>(fn)));
         }
     }
 

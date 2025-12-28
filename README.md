@@ -113,7 +113,7 @@ target_link_libraries(<your-target> PRIVATE asco::shared::core asco::shared::mai
     - [ ] Latch
   - [x] Sleep and Interval
   - [x] Join set
-  - [ ] Select
+  - [x] Select
 - [ ] Async IO
   - [ ] Async file IO
   - [ ] Async TCP/UDP stream

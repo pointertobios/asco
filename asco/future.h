@@ -35,6 +35,11 @@ struct future_base {
 
     using deliver_type = T;
 
+    // Only use for select_task()
+    struct element_type {
+        using deliver_type = T;
+    };
+
 protected:
     using coroutine_handle_type = std::coroutine_handle<promise_type>;
 

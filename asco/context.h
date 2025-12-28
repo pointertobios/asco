@@ -19,8 +19,11 @@ namespace asco::contexts {
 using namespace types;
 using namespace concepts;
 
-class context {
+class context : std::enable_shared_from_this<context> {
 public:
+    using deliver_type = void;
+
+    // !!! NEVER !!! construct from this function directly
     context() = default;
 
     static std::shared_ptr<context> with_cancel();
@@ -42,10 +45,12 @@ public:
     future<void> cancel();
     bool is_cancelled() const noexcept;
 
-    yield<> operator co_await() noexcept;
+    yield<notify *> operator co_await() noexcept;
 
     // This callback must be reentrant
     future<void> set_cancel_callback(std::function<void()> &&callback);
+
+    notify &get_notify() noexcept { return _notify; }
 
 private:
     atomic_bool _cancelled{false};
@@ -57,11 +62,30 @@ private:
 
 inline std::pmr::synchronized_pool_resource &context::_allocator{core::mm::default_pool<context>()};
 
-yield<> operator co_await(const std::shared_ptr<context> &ctx) noexcept;
+yield<notify *> operator co_await(const std::shared_ptr<context> &ctx) noexcept;
 
 };  // namespace asco::contexts
 
 namespace asco {
+
+namespace concepts {
+
+template<typename Fn, typename... Args>
+concept cancellable_function = async_function<Fn, std::shared_ptr<contexts::context>, Args...>;
+
+template<typename W>
+concept cancellable_waitable = requires(W w) {
+    { w->operator co_await() } -> std::same_as<yield<notify *>>;
+    { w->get_notify() } -> std::same_as<notify &>;
+    typename W::element_type::deliver_type;
+    requires std::is_void_v<typename W::element_type::deliver_type>;
+};
+
+template<typename Fn, typename... Args>
+    requires cancellable_function<Fn, Args...>
+using cancellable_invoke_result_t = std::invoke_result_t<Fn, std::shared_ptr<contexts::context>, Args...>;
+
+};  // namespace concepts
 
 using contexts::context;
 

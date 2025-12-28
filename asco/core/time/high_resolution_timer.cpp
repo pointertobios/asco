@@ -15,9 +15,12 @@ high_resolution_timer::high_resolution_timer()
 
 bool high_resolution_timer::init() { return true; }
 
-bool high_resolution_timer::run_once(std::stop_token &) {
+bool high_resolution_timer::run_once(std::stop_token &st) {
     if (timer_tree.lock()->empty()) {
         sleep_until_awake();
+        if (st.stop_requested()) {
+            return false;
+        }
         return true;
     }
 
@@ -34,6 +37,9 @@ bool high_resolution_timer::run_once(std::stop_token &) {
         *reinterpret_cast<timer_entry *>(&res);
     });
     sleep_until_awake_before(e.expire_time);
+    if (st.stop_requested()) {
+        return false;
+    }
     if (std::chrono::high_resolution_clock::now() >= e.expire_time) {
         e.worker_ref.activate_task(e.tid);
         if (auto g = timer_tree.lock(); g->contains(e.expire_seconds_since_epoch())) {

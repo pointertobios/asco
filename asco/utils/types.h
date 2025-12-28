@@ -33,4 +33,7 @@ struct type_erase {};
 template<typename T>
 using passing = std::conditional_t<concepts::base_type<T>, T, T &&>;
 
+template<typename T>
+using passing_ref = std::conditional_t<concepts::base_type<T>, T, T &>;
+
 };  // namespace asco::types

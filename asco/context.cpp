@@ -19,17 +19,20 @@ future<void> context::cancel() {
 
 bool context::is_cancelled() const noexcept { return _cancelled.load(morder::relaxed); }
 
-yield<> context::operator co_await() noexcept {
-    if (!is_cancelled())
+yield<notify *> context::operator co_await() noexcept {
+    if (!is_cancelled()) {
         return _notify.wait();
-    else
-        return yield<>{};
+    } else {
+        return {nullptr};
+    }
 }
-
-yield<> operator co_await(const std::shared_ptr<context> &ctx) noexcept { return ctx->operator co_await(); }
 
 future<void> context::set_cancel_callback(std::function<void()> &&callback) {
     *(co_await _cancel_callback.write()) = std::move(callback);
+}
+
+yield<notify *> operator co_await(const std::shared_ptr<context> &ctx) noexcept {
+    return ctx->operator co_await();
 }
 
 };  // namespace asco::contexts

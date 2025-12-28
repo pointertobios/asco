@@ -40,6 +40,7 @@ set(PRECOMPILE_HEADERS
     panic/color.h
     panic/panic.h
     panic/unwind.h
+    select.h
     sync/channel.h
     sync/notify.h
     sync/rwspin.h

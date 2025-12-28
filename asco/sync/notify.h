@@ -4,6 +4,7 @@
 #pragma once
 
 #include <asco/core/wait_queue.h>
+#include <asco/yield.h>
 
 namespace asco::sync {
 
@@ -11,11 +12,10 @@ class notify : private core::wait_queue {
 public:
     notify() = default;
 
-    yield<> wait();
+    // Notifiable wait
+    yield<notify *> wait();
     void notify_one();
     void notify_all();
-
-private:
 };
 
 };  // namespace asco::sync

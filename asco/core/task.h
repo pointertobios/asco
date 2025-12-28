@@ -28,6 +28,9 @@ using namespace concepts;
 
 using concurrency::atomic_ptr;
 
+// Only used for select cancellation
+struct cancelled_exception {};
+
 class worker;
 
 using task_id = size_t;
@@ -48,8 +51,6 @@ struct task<> {
 
     atomic_bool await_started{false};
     atomic_bool returned{false};
-
-    atomic_bool cancelled{false};
 
     atomic_bool e_thrown{false};
     atomic_bool e_rethrown{false};
@@ -91,6 +92,8 @@ protected:
                 panic::panic(
                     std::format(
                         "Exception thrown by task {} hasn't been caught:\n  what(): {}", id, e.what()));
+            } catch (cancelled_exception) {
+                // ignore cancelled_exception here
             } catch (...) {
                 panic::panic(std::format("Unknown exception thrown by task {} hasn't been caught.", id));
             }

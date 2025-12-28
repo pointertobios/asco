@@ -1,12 +1,15 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include "asco/yield.h"
 #include <asco/sync/notify.h>
+#include <asco/yield.h>
 
 namespace asco::sync {
 
-yield<> notify::wait() { return static_cast<yield<>>(core::wait_queue::wait()); }
+yield<notify *> notify::wait() {
+    core::wait_queue::wait();
+    return {this};
+}
 
 void notify::notify_one() { core::wait_queue::notify(1, false); }
 
