@@ -168,7 +168,8 @@ namespace base {
 // Pipe operator
 template<generator_type G, async_function<std::remove_cvref_t<G>> Fn>
 constexpr auto operator|(G &&source, Fn &&consumer) {
-    return co_invoke(consumer, std::forward<std::remove_cvref_t<G>>(source));
+    return co_invoke(
+        std::forward<std::remove_cvref_t<Fn>>(consumer), std::forward<std::remove_cvref_t<G>>(source));
 }
 
 };  // namespace base
