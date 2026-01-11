@@ -102,7 +102,9 @@ endif()
 
 add_library(asco_core ${ASCO_SOURCES})
 target_include_directories(asco_core PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    # NOTE: when used via FetchContent/add_subdirectory, CMAKE_SOURCE_DIR points to the parent project.
+    # PROJECT_SOURCE_DIR always points to this project root (the directory containing the `asco/` folder).
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(asco_core PUBLIC ${DEPLIBS})
@@ -113,7 +115,7 @@ add_library(asco::core ALIAS asco_core)
 
 add_library(asco_shared_core SHARED ${ASCO_SOURCES})
 target_include_directories(asco_shared_core PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(asco_shared_core PUBLIC ${DEPLIBS})
@@ -146,10 +148,10 @@ add_library(asco::shared::base ALIAS asco_shared_base)
 option(ASCO_ENABLE_INSTALL "Enable install() rules for packaging" OFF)
 if(ASCO_ENABLE_INSTALL)
     include(GNUInstallDirs)
-    # Install headers (public API) under include/asco
+    # Install headers (public API) under include/
     install(
         DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
-        DESTINATION include/asco
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/asco
         FILES_MATCHING
         PATTERN "*.h"
     )

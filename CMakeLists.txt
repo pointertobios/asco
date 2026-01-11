@@ -155,3 +155,23 @@ configure_package_config_file(
 
 # Register build tree in the User Package Registry so consumers can find it via find_package(asco)
 export(PACKAGE asco)
+
+# Install rules for packaging (when ASCO_ENABLE_INSTALL is ON)
+if(ASCO_ENABLE_INSTALL)
+    include(GNUInstallDirs)
+    
+    # Install export targets
+    install(
+        EXPORT ascoTargets
+        NAMESPACE asco::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/asco
+    )
+    
+    # Install package config files
+    install(
+        FILES
+            "${CMAKE_CURRENT_BINARY_DIR}/ascoConfig.cmake"
+            "${CMAKE_CURRENT_BINARY_DIR}/ascoConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/asco
+    )
+endif()
