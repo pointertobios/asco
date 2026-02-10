@@ -1,0 +1,8 @@
+/.vscode
+/.idea
+/.cache
+/build
+callgrind.out.*
+core.*
+book
+perf.data

@@ -1,0 +1,6 @@
+[book]
+authors = ["pointertobios"]
+language = "en"
+multilingual = false
+src = "src"
+title = "ASCO Coroutine Async Framework"
