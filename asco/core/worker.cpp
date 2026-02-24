@@ -92,7 +92,7 @@ void worker::push_handle(std::coroutine_handle<> handle) noexcept {
 std::coroutine_handle<> worker::pop_handle() noexcept {
     auto res = m_current_stack.back();
     if (m_current_stack.size() == 1) {
-        m_cancel_sources.lock()->erase(m_current_stack.back());
+        m_coroutine_metas.lock()->erase(m_current_stack.back());
     }
     m_current_stack.pop_back();
     if (m_current_stack.size()) {
@@ -154,7 +154,8 @@ bool worker::run_once(std::stop_token &st) {
     }
 
     if (m_current_stack.size()) {
-        m_current_cancel_token = m_cancel_sources.lock()->at(m_current_stack.front())->get_token();
+        m_current_cancel_token =
+            m_coroutine_metas.lock()->at(m_current_stack.front()).cancel_source->get_token();
     } else {
         m_current_cancel_token = cancel_token{};
     }
@@ -179,10 +180,10 @@ bool worker::run_once(std::stop_token &st) {
 void worker::shutdown() {}
 
 bool worker::fetch_task() {
-    if (auto obj = m_coroutine_rx.try_recv()) {
-        auto [handle, cancel_source] = *obj;
+    if (auto meta = m_coroutine_rx.try_recv()) {
+        auto handle = meta->handle;
         m_backsem->release();
-        m_cancel_sources.lock()->emplace(handle, cancel_source);
+        m_coroutine_metas.lock()->emplace(handle, std::move(*meta));
         m_active_stacks.lock()->push_back(std::vector{handle});
         m_top_of_join_handle.lock()->emplace(handle, handle);
         auto _ = _corohandle_worker_map->lock()->emplace(handle, this);

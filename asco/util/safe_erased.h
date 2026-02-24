@@ -11,8 +11,20 @@ namespace asco::util {
 class safe_erased final {
 public:
     template<typename T>
+    using ref = erased::ref<T>;
+
+    safe_erased() = default;
+
+    static safe_erased of_void() noexcept { return {type_id::of<void>()}; }
+
+    template<typename T>
     safe_erased(T &&value) noexcept
             : m_erased{std::forward<T>(value)}
+            , m_tid{type_id::of<std::remove_cvref_t<T>>()} {}
+
+    template<typename T>
+    safe_erased(ref<T> &&value) noexcept
+            : m_erased(erased::ref<T>{value.v})
             , m_tid{type_id::of<std::remove_cvref_t<T>>()} {}
 
     safe_erased(const safe_erased &) = delete;
@@ -44,6 +56,9 @@ public:
     }
 
 private:
+    safe_erased(type_id tid) noexcept
+            : m_tid{tid} {}
+
     erased m_erased;
     type_id m_tid;
 };

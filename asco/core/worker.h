@@ -15,22 +15,24 @@
 #include <asco/core/daemon.h>
 #include <asco/sync/spinlock.h>
 #include <asco/this_task.h>
+#include <asco/util/safe_erased.h>
 #include <asco/yield.h>
 
 namespace asco::core {
 
 namespace detail {
 
-struct coroutine_queue_obj {
+struct coroutine_meta {
     std::coroutine_handle<> handle;
     cancel_source *cancel_source;
+    util::safe_erased tls;
 };
 
 static constexpr std::size_t coroutine_queue_capacity = 1024;
-using coroutine_sender = concurrency::ring_queue::sender<coroutine_queue_obj, coroutine_queue_capacity>;
-using coroutine_receiver = concurrency::ring_queue::receiver<coroutine_queue_obj, coroutine_queue_capacity>;
+using coroutine_sender = concurrency::ring_queue::sender<coroutine_meta, coroutine_queue_capacity>;
+using coroutine_receiver = concurrency::ring_queue::receiver<coroutine_meta, coroutine_queue_capacity>;
 static constexpr auto coroutine_queue_create =
-    concurrency::ring_queue::create<coroutine_queue_obj, coroutine_queue_capacity>;
+    concurrency::ring_queue::create<coroutine_meta, coroutine_queue_capacity>;
 
 static constexpr std::size_t idle_workers_capacity = 1024;
 using idle_workers_sender = concurrency::ring_queue::sender<std::size_t, idle_workers_capacity>;
@@ -47,6 +49,8 @@ class worker final : public daemon {
     friend std::suspend_always asco::this_task::yield();
     friend void asco::this_task::close_cancellation() noexcept;
     friend cancel_token &asco::this_task::get_cancel_token() noexcept;
+    template<typename TaskLocalStorage>
+    friend TaskLocalStorage &asco::this_task::task_local() noexcept;
 
 public:
     worker(
@@ -91,7 +95,7 @@ private:
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::coroutine_handle<>>> m_top_of_join_handle;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::vector<std::coroutine_handle<>>>>
         m_suspended_stacks;
-    sync::spinlock<std::unordered_map<std::coroutine_handle<>, cancel_source *>> m_cancel_sources;
+    sync::spinlock<std::unordered_map<std::coroutine_handle<>, detail::coroutine_meta>> m_coroutine_metas;
 
     const std::size_t m_id;
 
@@ -111,3 +115,18 @@ private:
 };
 
 };  // namespace asco::core
+
+namespace asco::this_task {
+
+template<typename TaskLocalStorage>
+TaskLocalStorage &task_local() noexcept {
+    auto &w = core::worker::current();
+    if (w.m_current_stack.size()) {
+        auto &tls = w.m_coroutine_metas.lock()->at(w.m_current_stack.front()).tls;
+        return tls.get<TaskLocalStorage>();
+    } else {
+        panic("asco::this_task::task_local: 当前没有正在运行的任务");
+    }
+}
+
+};  // namespace asco::this_task

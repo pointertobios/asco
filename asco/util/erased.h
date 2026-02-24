@@ -10,6 +10,11 @@ namespace asco::util {
 // 无类型安全保证的类型擦除容器
 class erased final {
 public:
+    template<typename T>
+    struct ref {
+        T &v;
+    };
+
     erased() = default;
 
     template<typename T>
@@ -19,6 +24,12 @@ public:
             , m_deleter(default_deleter<T>) {
         new (m_storage) T(std::move(value));
     }
+
+    template<typename T>
+    erased(ref<T> &&value) noexcept
+            : m_align{alignof(T)}
+            , m_storage{&value.v}
+            , m_deleter{nullptr} {}
 
     erased(const erased &) = delete;
     erased &operator=(const erased &) = delete;
@@ -64,8 +75,8 @@ public:
         if (m_storage) {
             if (m_deleter) {
                 m_deleter(m_storage);
+                ::operator delete(m_storage, m_align);
             }
-            ::operator delete(m_storage, m_align);
         }
     }
 

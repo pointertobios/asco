@@ -2,6 +2,8 @@
 
 ASCO 自带一个**轻量级测试框架**，用于为协程/异步代码编写测试用例。
 
+它并不只用于本项目自身：只要你的程序/库是基于 ASCO 构建的（能链接到 `asco::test`，通常还需要 `asco::core`），就可以直接复用这套测试框架来编写与运行测试。
+
 它的核心特点是：
 
 - 测试用例本身是 `future<test_result>`，可以在测试里直接 `co_await`。
@@ -48,6 +50,30 @@ ASCO_TEST(my_first_test) {
 
 - 让 `fmt` 清晰描述期望条件与实际情况
 - 对于会等待的异步条件，配合 `co_await this_task::yield()` 自旋等待（见下文示例）
+
+补充：
+
+- 在测试框架下，`asco::panic(...)` 会抛出 `asco::panicked`，从而允许你在测试中捕获它，用于验证“应该 panic 的错误行为”。
+- `asco::panicked` 不能通过 `std::exception &` 捕获，请按 `asco::panicked &` 捕获。
+
+示例：
+
+```cpp
+#include <asco/panic.h>
+
+ASCO_TEST(expect_panic) {
+    bool caught = false;
+    try {
+        asco::panic("boom");
+    } catch (asco::panicked &e) {
+        (void)e; // 如需信息可用 e.to_string()
+        caught = true;
+    }
+
+    ASCO_CHECK(caught, "panic should throw asco::panicked under ASCO_TESTING");
+    ASCO_SUCCESS();
+}
+```
 
 ### 3) 异步/并发测试写法
 

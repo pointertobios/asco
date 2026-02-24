@@ -15,11 +15,12 @@
 #include <asco/future.h>
 #include <asco/util/erased.h>
 #include <asco/util/raw_storage.h>
+#include <asco/util/safe_erased.h>
 #include <asco/util/types.h>
 
 namespace asco {
 
-template<util::types::move_secure Output>
+template<util::types::move_secure Output, typename TaskLocalStorage = void>
 class [[nodiscard]] join_handle final {
     friend class core::runtime;
 
@@ -35,7 +36,7 @@ private:
         coroutine_handle this_handle;
 
         std::exception_ptr e_ptr{};
-        util::raw_storage<util::types::monostate_if_void<output_type>> value{};
+        [[no_unique_address]] util::raw_storage<output_type> value{};
         std::atomic_bool result_completed{false};
         std::binary_semaphore sync_awaiter{0};
 
@@ -44,6 +45,21 @@ private:
         util::erased bound_lambda{};
 
         core::cancel_source cancel_source{};
+
+        [[no_unique_address]] util::raw_storage<TaskLocalStorage> task_local_storage{};
+
+        ~task_state() {
+            if (this->result_completed.load(std::memory_order_acquire)) {
+                if (!this->e_ptr) {
+                    if constexpr (!std::is_void_v<output_type>) {
+                        this->value.get()->~output_type();
+                    }
+                }
+            }
+            if constexpr (!std::is_void_v<TaskLocalStorage>) {
+                this->task_local_storage.get()->~TaskLocalStorage();
+            }
+        }
     };
 
 public:
@@ -156,7 +172,7 @@ public:
         if constexpr (output_void) {
             return;
         } else {
-            return std::move(*this->m_state->value);
+            return std::move(*this->m_state->value.get());
         }
     }
 
@@ -210,6 +226,15 @@ private:
             return;
         } else {
             return std::move(*this->m_state->value.get());
+        }
+    }
+
+    util::safe_erased initialize_task_local_storage(util::types::monostate_if_void<TaskLocalStorage> &&tls) {
+        if constexpr (!std::is_void_v<TaskLocalStorage>) {
+            new (m_state->task_local_storage.get()) TaskLocalStorage{std::forward<TaskLocalStorage>(tls)};
+            return util::safe_erased{util::safe_erased::ref{*m_state->task_local_storage.get()}};
+        } else {
+            return util::safe_erased{};
         }
     }
 

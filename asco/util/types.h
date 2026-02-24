@@ -13,6 +13,9 @@ template<typename T>
 using monostate_if_void = std::conditional_t<std::is_void_v<T>, std::monostate, T>;
 
 template<typename T>
+using void_if_monostate = std::conditional_t<std::is_same_v<T, std::monostate>, void, T>;
+
+template<typename T>
 concept move_secure = std::movable<T> || std::is_void_v<T> || std::is_pointer_v<T>;
 
 template<typename K>

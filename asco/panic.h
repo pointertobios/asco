@@ -69,26 +69,17 @@ template<typename... Args>
 
 };  // namespace asco
 
-#ifndef NDEBUG
+#define asco_assert(expr)                               \
+    do {                                                \
+        if (!(expr)) [[unlikely]] {                     \
+            asco::panic("表达式 '{}' 断言失败", #expr); \
+        }                                               \
+    } while (0)
 
-#    define asco_assert(expr)                               \
-        do {                                                \
-            if (!(expr)) [[unlikely]] {                     \
-                asco::panic("表达式 '{}' 断言失败", #expr); \
-            }                                               \
-        } while (0)
-
-#    define asco_assert_lint(expr, fmt, ...)                           \
-        do {                                                           \
-            if (!(expr)) [[unlikely]] {                                \
-                auto msg = std::format(fmt, ##__VA_ARGS__);            \
-                asco::panic("表达式 '{}' 断言失败\n  {}", #expr, msg); \
-            }                                                          \
-        } while (0)
-
-#else
-
-#    define asco_assert(expr) ((void)0)
-#    define asco_assert_lint(expr, fmt, ...) ((void)0)
-
-#endif
+#define asco_assert_lint(expr, fmt, ...)                           \
+    do {                                                           \
+        if (!(expr)) [[unlikely]] {                                \
+            auto msg = std::format(fmt, ##__VA_ARGS__);            \
+            asco::panic("表达式 '{}' 断言失败\n  {}", #expr, msg); \
+        }                                                          \
+    } while (0)

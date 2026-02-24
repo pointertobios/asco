@@ -86,7 +86,7 @@ FetchContent_MakeAvailable(asco)
     - [ ] 计时器
       - [ ] 高分辨率计时器
       - [ ] 时间轮
-    - [ ] 任务本地变量
+    - [x] 异步任务本地存储
     - [ ] IO 兼容层
       - [ ] io_uring (Linux)
       - [ ] Epoll (Linux)

@@ -26,4 +26,7 @@ private:
     alignas(alignof(T)) unsigned char storage[sizeof(T)];
 };
 
+template<>
+class raw_storage<void> {};
+
 };  // namespace asco::util

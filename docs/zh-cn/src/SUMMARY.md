@@ -8,4 +8,6 @@
   - [信号量](./sync/semaphore.md)
 - [进阶](./advanced/README.md)
   - [任务取消机制](./advanced/cancellation.md)
+  - [任务本地存储（Task-local storage）](./advanced/task_local_storage.md)
+  - [`asco::core::daemon`](./advanced/daemon.md)
   - [测试框架](./advanced/testing.md)

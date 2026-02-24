@@ -124,7 +124,6 @@ public:
             , m_result_completed{rhs.m_result_completed.load(std::memory_order::relaxed)}
             , m_caller_handle{rhs.m_caller_handle}
             , m_bound_lambda{std::move(rhs.m_bound_lambda)} {
-        new (m_value.get()) util::types::monostate_if_void<output_type>{std::move(*rhs.m_value.get())};
         *m_promise_storage_ptr = this;
     }
 
@@ -134,6 +133,16 @@ public:
             new (this) future(std::move(rhs));
         }
         return *this;
+    }
+
+    ~future() {
+        if (m_result_completed.load(std::memory_order::acquire)) {
+            if (!m_e_ptr) {
+                if constexpr (!output_void) {
+                    m_value.get()->~output_type();
+                }
+            }
+        }
     }
 
 private:
@@ -148,7 +157,7 @@ private:
     std::coroutine_handle<promise_type> m_this_handle;
 
     std::exception_ptr m_e_ptr;
-    util::raw_storage<util::types::monostate_if_void<output_type>> m_value{};
+    [[no_unique_address]] util::raw_storage<output_type> m_value{};
     std::atomic_bool m_result_completed{false};
 
     std::coroutine_handle<> m_caller_handle;

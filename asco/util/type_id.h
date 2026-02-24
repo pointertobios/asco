@@ -14,7 +14,8 @@ class type_id {
 public:
     using type_hash = std::array<std::uint64_t, 2>;
 
-    type_id() = delete;
+    type_id()
+            : m_hash{} {}
 
     type_id(const type_id &) = default;
     type_id &operator=(const type_id &) = delete;
