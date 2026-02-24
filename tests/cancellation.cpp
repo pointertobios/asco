@@ -9,6 +9,7 @@
 
 #include <asco/cancellation.h>
 #include <asco/core/runtime.h>
+#include <asco/sync/semaphore.h>
 #include <asco/test/test.h>
 #include <asco/this_task.h>
 #include <asco/yield.h>
@@ -17,20 +18,9 @@ using namespace asco;
 
 namespace {
 
-template<typename Pred>
-future<bool> wait_until(Pred &&pred, std::size_t max_spins = 4096) {
-    for (std::size_t i = 0; i < max_spins; i++) {
-        if (std::invoke(pred)) {
-            co_return true;
-        }
-        co_await this_task::yield();
-    }
-    co_return false;
-}
-
 struct cancellable_never_ready {
-    std::atomic_bool *started{};
-    std::atomic_bool *callback_called{};
+    sync::binary_semaphore *started{};
+    sync::binary_semaphore *callback_called{};
 
     std::unique_ptr<cancel_callback> cb;
 
@@ -39,16 +29,13 @@ struct cancellable_never_ready {
     void await_suspend(std::coroutine_handle<> h) noexcept {
         auto &token = this_task::get_cancel_token();
         cb = std::make_unique<cancel_callback>(token, [this]() {
-            if (callback_called) {
-                callback_called->store(true, std::memory_order::release);
-            }
+            if (callback_called)
+                callback_called->release();
         });
-
-        if (started) {
-            started->store(true, std::memory_order::release);
-        }
-
         core::worker::current().suspend_current_handle(h);
+
+        if (started)
+            started->release();
     }
 
     void await_resume() noexcept { cb.reset(); }
@@ -100,28 +87,24 @@ ASCO_TEST(cancel_source_token_and_callback_basic) {
 }
 
 ASCO_TEST(join_handle_cancel_triggers_callback_and_throws) {
-    std::atomic_bool cb_registered{false};
-    std::atomic_bool cancel_cb_called{false};
+    sync::binary_semaphore cb_registered{0};
+    sync::binary_semaphore cancel_cb_called{0};
 
     auto h = spawn([&]() -> future<void> {
         auto &token = this_task::get_cancel_token();
-        cancel_callback cb{token, [&]() { cancel_cb_called.store(true, std::memory_order::release); }};
-        cb_registered.store(true, std::memory_order::release);
+        cancel_callback cb{token, [&]() { cancel_cb_called.release(); }};
+        cb_registered.release();
 
         while (true) {
             co_await this_task::yield();
         }
     });
 
-    ASCO_CHECK(
-        co_await wait_until([&]() { return cb_registered.load(std::memory_order::acquire); }),
-        "task should register cancel callback before cancellation");
+    co_await cb_registered.acquire();
 
-    co_await h.cancel();
+    h.cancel();
 
-    ASCO_CHECK(
-        co_await wait_until([&]() { return cancel_cb_called.load(std::memory_order::acquire); }),
-        "cancel callback should eventually be invoked after join_handle::cancel()");
+    co_await cancel_cb_called.acquire();
 
     bool threw_cancelled = false;
     try {
@@ -135,21 +118,17 @@ ASCO_TEST(join_handle_cancel_triggers_callback_and_throws) {
 }
 
 ASCO_TEST(join_handle_cancel_works_when_task_is_suspended) {
-    std::atomic_bool started{false};
-    std::atomic_bool cancel_cb_called{false};
+    sync::binary_semaphore started{0};
+    sync::binary_semaphore cancel_cb_called{0};
 
     auto h = spawn(
         [&]() -> future<void> { co_await cancellable_never_ready{&started, &cancel_cb_called, nullptr}; });
 
-    ASCO_CHECK(
-        co_await wait_until([&]() { return started.load(std::memory_order::acquire); }),
-        "task should reach suspension point before cancellation");
+    co_await started.acquire();
 
-    co_await h.cancel();
+    h.cancel();
 
-    ASCO_CHECK(
-        co_await wait_until([&]() { return cancel_cb_called.load(std::memory_order::acquire); }),
-        "cancel callback should eventually be invoked even if the task is suspended");
+    co_await cancel_cb_called.acquire();
 
     bool threw_cancelled = false;
     try {

@@ -42,9 +42,6 @@ public:
     }
 
     future<void> acquire() {
-        util::raw_storage<typename decltype(m_wait_queue)::guard> g_storage;
-        new (g_storage.get()) decltype(m_wait_queue)::guard{m_wait_queue.lock()};
-
         std::size_t oldc;
         do {
         fetch:
@@ -52,17 +49,13 @@ public:
             if (oldc == 0) {
                 auto &w = core::worker::current();
                 auto h = w.this_coroutine();
+                m_wait_queue.lock()->push_back(h);
                 w.suspend_current_handle(h);
-                (*g_storage.get())->push_back(h);
-
-                g_storage.get()->~guard();
                 co_await this_task::yield();
-                new (g_storage.get()) decltype(m_wait_queue)::guard{m_wait_queue.lock()};
                 goto fetch;
             }
         } while (!m_count.compare_exchange_weak(
             oldc, oldc - 1, std::memory_order::acq_rel, std::memory_order::relaxed));
-        g_storage.get()->~guard();
     }
 
     std::size_t release(std::size_t n = 1) {

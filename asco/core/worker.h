@@ -9,6 +9,7 @@
 #include <memory>
 #include <semaphore>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <asco/core/cancellation.h>
@@ -96,6 +97,8 @@ private:
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::vector<std::coroutine_handle<>>>>
         m_suspended_stacks;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, detail::coroutine_meta>> m_coroutine_metas;
+
+    sync::spinlock<std::unordered_set<std::coroutine_handle<>>> m_preawake_handles;
 
     const std::size_t m_id;
 

@@ -36,7 +36,7 @@ ASCO 的“任务取消”主要面向由 runtime 调度的任务（`join_handle
 
 ---
 
-## 2. 如何取消一个任务：`co_await join_handle::cancel()`
+## 2. 如何取消一个任务：`join_handle::cancel()`
 
 外部取消的标准方式是：对 `join_handle<T>` 调用并等待 `cancel()`：
 
@@ -47,7 +47,7 @@ ASCO 的“任务取消”主要面向由 runtime 调度的任务（`join_handle
 using namespace asco;
 
 future<void> example_cancel(join_handle<void> &h) {
-    co_await h.cancel();
+    h.cancel();
 
     bool cancelled = false;
     try {
@@ -141,7 +141,7 @@ using namespace asco;
 future<void> critical_section() {
     this_task::close_cancellation();
 
-    // ... 做一些你不希望被外部取消打断的工作
+    // ... 做一些你不希望被外部打断的工作
 
     co_return;
 }

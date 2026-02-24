@@ -71,6 +71,8 @@ void worker::awake_handle(std::coroutine_handle<> handle) noexcept {
         m_active_stacks.lock()->emplace_back(std::move(g->at(handle)));
         g->erase(handle);
         awake();
+    } else {
+        m_preawake_handles.lock()->insert(handle);
     }
 }
 
@@ -79,6 +81,10 @@ void worker::suspend_current_handle(std::coroutine_handle<> handle) noexcept {
         panic(
             "worker::suspend_current_handle: 挂起当前协程错误；挂起：{{{}}}，当前：{{{}}}", handle.address(),
             m_current_stack.size() ? m_current_stack.back().address() : nullptr);
+    }
+    if (auto g = m_preawake_handles.lock(); g->contains(handle)) {
+        g->erase(handle);
+        return;
     }
     m_suspended_stacks.lock()->emplace(handle, std::move(m_current_stack));
 }
@@ -108,7 +114,7 @@ std::coroutine_handle<> worker::top_of_join_handle(std::coroutine_handle<> handl
     if (auto g = m_top_of_join_handle.lock(); g->contains(handle)) {
         return g->at(handle);
     } else {
-        panic("worker::top_of_join_handle: 无效的 coroutine_handle {{{}}}", handle.address());
+        return {};
     }
 }
 

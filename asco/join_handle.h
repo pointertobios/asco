@@ -32,15 +32,21 @@ public:
     using coroutine_handle = std::coroutine_handle<promise_type>;
 
 private:
+    enum class complete_state {
+        not_completed,
+        awaitable_waiting,
+        completed,
+    };
+
     struct task_state {
         coroutine_handle this_handle;
 
         std::exception_ptr e_ptr{};
         [[no_unique_address]] util::raw_storage<output_type> value{};
-        std::atomic_bool result_completed{false};
+        std::atomic<complete_state> cstate{complete_state::not_completed};
         std::binary_semaphore sync_awaiter{0};
 
-        std::coroutine_handle<> caller_handle{};
+        std::atomic<std::coroutine_handle<>> caller_handle{};
 
         util::erased bound_lambda{};
 
@@ -49,7 +55,7 @@ private:
         [[no_unique_address]] util::raw_storage<TaskLocalStorage> task_local_storage{};
 
         ~task_state() {
-            if (this->result_completed.load(std::memory_order_acquire)) {
+            if (this->cstate.load(std::memory_order_acquire) == complete_state::completed) {
                 if (!this->e_ptr) {
                     if constexpr (!std::is_void_v<output_type>) {
                         this->value.get()->~output_type();
@@ -59,6 +65,18 @@ private:
             if constexpr (!std::is_void_v<TaskLocalStorage>) {
                 this->task_local_storage.get()->~TaskLocalStorage();
             }
+        }
+
+        bool try_mark_completed() noexcept {
+            complete_state e;
+            do {
+                e = this->cstate.load(std::memory_order::acquire);
+                if (e == complete_state::completed) {
+                    return false;
+                }
+            } while (!this->cstate.compare_exchange_weak(
+                e, complete_state::completed, std::memory_order::acq_rel, std::memory_order::relaxed));
+            return true;
         }
     };
 
@@ -73,11 +91,9 @@ public:
     class promise_void_mixin : public promise_base {
     public:
         void return_void() noexcept {
-            if (bool b = false;  //
-                this->m_state->result_completed.compare_exchange_strong(
-                    b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+            if (this->m_state->try_mark_completed()) {
                 this->m_state->sync_awaiter.release();
-                auto handle = this->m_state->caller_handle;
+                auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
                     core::worker::of_handle(handle).awake_handle(handle);
                 }
@@ -88,13 +104,11 @@ public:
     class promise_nonvoid_mixin : public promise_base {
     public:
         void return_value(output_type value) noexcept {
-            if (bool b = false;  //
-                this->m_state->result_completed.compare_exchange_strong(
-                    b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+            if (this->m_state->try_mark_completed()) {
                 new (this->m_state->value.get())
                     util::types::monostate_if_void<output_type>{std::move(value)};
                 this->m_state->sync_awaiter.release();
-                auto handle = this->m_state->caller_handle;
+                auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
                     core::worker::of_handle(handle).awake_handle(handle);
                 }
@@ -114,12 +128,10 @@ public:
         auto initial_suspend() noexcept { return std::suspend_always{}; }
 
         void unhandled_exception() noexcept {
-            if (bool b = false;  //
-                this->m_state->result_completed.compare_exchange_strong(
-                    b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+            if (this->m_state->try_mark_completed()) {
                 this->m_state->e_ptr = std::current_exception();
                 this->m_state->sync_awaiter.release();
-                auto handle = this->m_state->caller_handle;
+                auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
                     core::worker::of_handle(handle).awake_handle(handle);
                 }
@@ -127,11 +139,9 @@ public:
         }
 
         auto final_suspend() noexcept {
-            if (bool b = false;  //
-                this->m_state->result_completed.compare_exchange_strong(
-                    b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+            if (this->m_state->try_mark_completed()) {
                 this->m_state->sync_awaiter.release();
-                auto handle = this->m_state->caller_handle;
+                auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
                     core::worker::of_handle(handle).awake_handle(handle);
                 }
@@ -155,16 +165,26 @@ public:
         }
     };
 
-    bool await_ready() noexcept { return this->m_state->result_completed.load(std::memory_order::acquire); }
+    bool await_ready() noexcept {
+        return this->m_state->cstate.load(std::memory_order::acquire) == complete_state::completed;
+    }
 
     void await_suspend(std::coroutine_handle<> handle) noexcept {
-        this->m_state->caller_handle = handle;
+        this->m_state->caller_handle.store(handle, std::memory_order::release);
+        complete_state e;
+        do {
+            e = this->m_state->cstate.load(std::memory_order::acquire);
+            if (e == complete_state::completed) {
+                return;
+            }
+        } while (!this->m_state->cstate.compare_exchange_weak(
+            e, complete_state::awaitable_waiting, std::memory_order::acq_rel, std::memory_order::relaxed));
 
         core::worker::current().suspend_current_handle(handle);
     }
 
     output_type await_resume() {
-        this->m_state->result_completed.load(std::memory_order::acquire);
+        this->m_state->cstate.load(std::memory_order::acquire);
 
         if (this->m_state->e_ptr) {
             std::rethrow_exception(this->m_state->e_ptr);
@@ -183,23 +203,22 @@ public:
         return this->m_state->bound_lambda;
     }
 
-    future<void> cancel() noexcept {
-        if (bool b = false;  //
-            this->m_state->result_completed.compare_exchange_strong(
-                b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+    void cancel() noexcept {
+        if (this->m_state->try_mark_completed()) {
             this->m_state->e_ptr = std::make_exception_ptr(core::coroutine_cancelled{});
             this->m_state->cancel_source.request_cancel();
 
             this->m_state->sync_awaiter.release();
-            auto h = this->m_state->caller_handle;
-            if (h) {
-                core::worker::of_handle(h).awake_handle(h);
+            auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
+            if (handle) {
+                core::worker::of_handle(handle).awake_handle(handle);
             }
 
-            h = this->m_state->this_handle;
-            co_await core::wait_for_valid(h);
-            if (auto w = core::worker::optional_of_handle(h)) {
-                w->awake_handle(w->top_of_join_handle(h));
+            handle = this->m_state->this_handle;
+            if (auto w = core::worker::optional_of_handle(handle)) {
+                if (auto th = w->top_of_join_handle(handle)) {
+                    w->awake_handle(th);
+                }
             }
         }
     }
