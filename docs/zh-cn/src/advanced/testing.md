@@ -51,7 +51,7 @@ ASCO_TEST(my_first_test) {
 - 让 `fmt` 清晰描述期望条件与实际情况
 - 对于会等待的异步条件，配合 `co_await this_task::yield()` 自旋等待（见下文示例）
 
-补充：
+### 3) 验证 panic 行为
 
 - 在测试框架下，`asco::panic(...)` 会抛出 `asco::panicked`，从而允许你在测试中捕获它，用于验证“应该 panic 的错误行为”。
 - `asco::panicked` 不能通过 `std::exception &` 捕获，请按 `asco::panicked &` 捕获。
@@ -75,7 +75,7 @@ ASCO_TEST(expect_panic) {
 }
 ```
 
-### 3) 异步/并发测试写法
+### 4) 异步/并发测试写法
 
 测试是协程，因此可以自然地写异步逻辑，例如：
 

@@ -3,7 +3,7 @@
 
 add_executable(tests
     cancellation.cpp
-    semaphore.cpp
+    sync/semaphore.cpp
     task_local.cpp
 )
 target_link_libraries(tests PRIVATE asco::core asco::test)

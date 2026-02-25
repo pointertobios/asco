@@ -120,6 +120,7 @@ if (LINUX AND ASCO_IOCP)
 endif()
 
 add_subdirectory(asco)
+add_subdirectory(benchmarks)
 add_subdirectory(examples)
 add_subdirectory(tests)
 

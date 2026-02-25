@@ -1,13 +1,13 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include "asco/panic.h"
 #include <functional>
 #include <optional>
 #include <print>
 
 #include <asco/future.h>
 #include <asco/join_set.h>
+#include <asco/panic.h>
 #include <asco/test/test.h>
 
 namespace asco::test {

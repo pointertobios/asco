@@ -7,6 +7,7 @@
 #include <concepts>
 #include <coroutine>
 #include <exception>
+#include <memory_resource>
 #include <type_traits>
 
 #include <asco/core/worker.h>
@@ -16,6 +17,18 @@
 #include <asco/util/types.h>
 
 namespace asco {
+
+namespace allocator {
+
+inline std::pmr::polymorphic_allocator<> &get() noexcept {
+    static util::raw_storage<std::pmr::synchronized_pool_resource> pool_storage;
+    static std::once_flag flag;
+    std::call_once(flag, [] { new (pool_storage.get()) std::pmr::synchronized_pool_resource{}; });
+    static std::pmr::polymorphic_allocator<> alloc{pool_storage.get()};
+    return alloc;
+}
+
+};  // namespace allocator
 
 template<util::types::move_secure Output>
 class [[nodiscard]] future final {
@@ -55,6 +68,14 @@ public:
 
     class promise_type final : public promise_spanwidth {
     public:
+        void *operator new(std::size_t size) noexcept { return allocator::get().allocate(size); }
+
+        void operator delete(void *ptr, std::size_t size) noexcept {
+            allocator::get().deallocate(reinterpret_cast<std::byte *>(ptr), size);
+        }
+
+        static future get_return_object_on_allocation_failure() { throw std::bad_alloc(); }
+
         future get_return_object() noexcept {
             return future{std::coroutine_handle<promise_type>::from_promise(*this), &this->m_future_object};
         }

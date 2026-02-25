@@ -28,6 +28,7 @@ set(PRECOMPILE_HEADERS
     sync/channel.h
     sync/semaphore.h
     sync/spinlock.h
+    test/bench.h
     test/test.h
     this_task.h
     util/consts.h
@@ -159,7 +160,7 @@ if(ASCO_ENABLE_INSTALL)
     )
 endif()
 
-# Tests and benchmarks
+# Test library
 
 add_library(asco_test test/test_main.cpp)
 target_link_libraries(asco_test PRIVATE asco::core asco::base)

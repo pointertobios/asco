@@ -43,15 +43,25 @@ public:
 
     future<void> acquire() {
         std::size_t oldc;
+        std::size_t i{std::numeric_limits<std::size_t>::max()};
         do {
         fetch:
             oldc = m_count.load(std::memory_order::acquire);
             if (oldc == 0) {
-                auto &w = core::worker::current();
-                auto h = w.this_coroutine();
-                m_wait_queue.lock()->push_back(h);
-                w.suspend_current_handle(h);
-                co_await this_task::yield();
+                ++i;
+                if (i <= 100) {
+                } else if (i <= 1000) {
+                    concurrency::exp_withdraw(i);
+                } else if (i <= 2000) {
+                    co_await this_task::yield();
+                } else {
+                    auto &w = core::worker::current();
+                    auto h = w.this_coroutine();
+                    m_wait_queue.lock()->push_back(h);
+                    w.suspend_current_handle(h);
+                    co_await this_task::yield();
+                    i = std::numeric_limits<std::size_t>::max();
+                }
                 goto fetch;
             }
         } while (!m_count.compare_exchange_weak(

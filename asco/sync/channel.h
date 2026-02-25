@@ -13,6 +13,7 @@
 #include <asco/future.h>
 #include <asco/panic.h>
 #include <asco/sync/semaphore.h>
+#include <asco/util/consts.h>
 #include <asco/util/types.h>
 
 namespace asco::sync {
@@ -28,9 +29,9 @@ template<typename T>
 using q_receiver = concurrency::ring_queue::receiver<T, channel_capacity>;
 
 struct channel_cntrl {
-    std::atomic_bool closed{false};
-    semaphore<channel_capacity> count_sem{0};
-    semaphore<channel_capacity> backpress_sem{channel_capacity};
+    alignas(util::cacheline) std::atomic_bool closed{false};
+    alignas(util::cacheline) semaphore<channel_capacity> count_sem{0};
+    alignas(util::cacheline) semaphore<channel_capacity> backpress_sem{channel_capacity};
 };
 
 };  // namespace detail
@@ -79,7 +80,9 @@ public:
         if (m_sem_cntrl->closed.load(std::memory_order::acquire)) {
             co_return std::unexpected{std::move(value)};
         }
-        co_await m_sem_cntrl->backpress_sem.acquire();
+        if (!m_sem_cntrl->backpress_sem.try_acquire()) {
+            co_await m_sem_cntrl->backpress_sem.acquire();
+        }
         if (m_sem_cntrl->closed.load(std::memory_order::acquire)) {
             m_sem_cntrl->backpress_sem.release();
             co_return std::unexpected{std::move(value)};
@@ -97,7 +100,9 @@ public:
         if (m_sem_cntrl->closed.load(std::memory_order::acquire)) {
             co_return false;
         }
-        co_await m_sem_cntrl->backpress_sem.acquire();
+        if (!m_sem_cntrl->backpress_sem.try_acquire()) {
+            co_await m_sem_cntrl->backpress_sem.acquire();
+        }
         if (m_sem_cntrl->closed.load(std::memory_order::acquire)) {
             m_sem_cntrl->backpress_sem.release();
             co_return false;
@@ -162,7 +167,9 @@ public:
         if (!m_sem_cntrl->count_sem.get_count() && m_sem_cntrl->closed.load(std::memory_order::acquire)) {
             co_return std::nullopt;
         }
-        co_await m_sem_cntrl->count_sem.acquire();
+        if (!m_sem_cntrl->count_sem.try_acquire()) {
+            co_await m_sem_cntrl->count_sem.acquire();
+        }
         if (!m_sem_cntrl->count_sem.get_count() && m_sem_cntrl->closed.load(std::memory_order::acquire)) {
             co_return std::nullopt;
         }
@@ -194,5 +201,4 @@ std::tuple<sender<T>, receiver<T>> channel() {
     auto [tx, rx] = concurrency::ring_queue::create<T, detail::channel_capacity>();
     return {sender<T>{tx, cntrl}, receiver<T>{rx, cntrl}};
 }
-
 };  // namespace asco::sync
