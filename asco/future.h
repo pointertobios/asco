@@ -8,6 +8,7 @@
 #include <coroutine>
 #include <exception>
 #include <memory_resource>
+#include <mutex>
 #include <type_traits>
 
 #include <asco/core/worker.h>
