@@ -13,6 +13,7 @@
 #include <asco/core/cancellation.h>
 #include <asco/core/runtime.h>
 #include <asco/panic.h>
+#include <asco/util/tsc.h>
 
 namespace asco::core {
 
@@ -59,16 +60,16 @@ bool worker::handle_valid(std::coroutine_handle<> handle) {
 std::size_t worker::id() const { return m_id; }
 
 std::coroutine_handle<> worker::this_coroutine() const {
-    if (m_current_stack.size()) {
-        return m_current_stack.back();
+    if (m_current_task.size()) {
+        return m_current_task.back();
     } else {
         panic("worker::this_coroutine: 当前 worker 没有正在运行的协程");
     }
 }
 
 void worker::awake_handle(std::coroutine_handle<> handle) noexcept {
-    if (auto g = m_suspended_stacks.lock(); g->contains(handle)) {
-        m_active_stacks.lock()->emplace_back(std::move(g->at(handle)));
+    if (auto g = m_suspended_tasks.lock(); g->contains(handle)) {
+        m_active_tasks.lock()->emplace(0, std::move(g->at(handle)));
         g->erase(handle);
         awake();
     } else {
@@ -77,32 +78,32 @@ void worker::awake_handle(std::coroutine_handle<> handle) noexcept {
 }
 
 void worker::suspend_current_handle(std::coroutine_handle<> handle) noexcept {
-    if (m_current_stack.size() == 0 || m_current_stack.back() != handle) {
+    if (m_current_task.size() == 0 || m_current_task.back() != handle) {
         panic(
             "worker::suspend_current_handle: 挂起当前协程错误；挂起：{{{}}}，当前：{{{}}}", handle.address(),
-            m_current_stack.size() ? m_current_stack.back().address() : nullptr);
+            m_current_task.size() ? m_current_task.back().address() : nullptr);
     }
     if (auto g = m_preawake_handles.lock(); g->contains(handle)) {
         g->erase(handle);
         return;
     }
-    m_suspended_stacks.lock()->emplace(handle, std::move(m_current_stack));
+    m_suspended_tasks.lock()->emplace(handle, std::move(m_current_task));
 }
 
 void worker::push_handle(std::coroutine_handle<> handle) noexcept {
     _corohandle_worker_map->lock()->emplace(handle, this);
-    m_current_stack.push_back(handle);
-    m_top_of_join_handle.lock()->at(m_current_stack.front()) = handle;
+    m_current_task.push_back(handle);
+    m_top_of_join_handle.lock()->at(m_current_task.front()) = handle;
 }
 
 std::coroutine_handle<> worker::pop_handle() noexcept {
-    auto res = m_current_stack.back();
-    if (m_current_stack.size() == 1) {
-        m_coroutine_metas.lock()->erase(m_current_stack.back());
+    auto res = m_current_task.back();
+    if (m_current_task.size() == 1) {
+        m_coroutine_metas.lock()->erase(m_current_task.back());
     }
-    m_current_stack.pop_back();
-    if (m_current_stack.size()) {
-        m_top_of_join_handle.lock()->at(m_current_stack.front()) = m_current_stack.back();
+    m_current_task.pop_back();
+    if (m_current_task.size()) {
+        m_top_of_join_handle.lock()->at(m_current_task.front()) = m_current_task.back();
     } else {
         m_top_of_join_handle.lock()->erase(res);
     }
@@ -119,7 +120,7 @@ std::coroutine_handle<> worker::top_of_join_handle(std::coroutine_handle<> handl
 }
 
 void worker::close_cancellation(std::coroutine_handle<> handle) noexcept {
-    if (m_current_stack.size() && m_current_stack.front() == handle) {
+    if (m_current_task.size() && m_current_task.front() == handle) {
         m_current_cancel_token.close_cancellation();
     }
 }
@@ -146,41 +147,69 @@ bool worker::init() {
 }
 
 bool worker::run_once(std::stop_token &st) {
-    if (!fetch_task() && m_active_stacks.lock()->empty()) {
+    if (!fetch_task() && m_active_tasks.lock()->empty()) {
         m_idle_workers_tx.try_send(m_id);
         sleep_until_awake();
         return true;
     }
 
-    if (auto g = m_active_stacks.lock()) {
-        if (!g->front().empty()) {
-            m_current_stack = std::move(g->front());
-        }
-        g->pop_front();
-    }
-
-    if (m_current_stack.size()) {
+    auto put_current_task = [&](decltype(m_active_tasks)::guard &g) {
+        auto p = g->begin();
+        m_current_task = std::move(p->second);
+        m_current_task_time = p->first;
+        g->erase(p);
         m_current_cancel_token =
-            m_coroutine_metas.lock()->at(m_current_stack.front()).cancel_source->get_token();
-    } else {
-        m_current_cancel_token = cancel_token{};
+            m_coroutine_metas.lock()->at(m_current_task.front()).cancel_source->get_token();
+    };
+
+    if (auto g = m_active_tasks.lock()) {
+        while (!g->empty() && g->begin()->second.empty()) {
+            g->erase(g->begin());
+        }
+
+        if (!g->empty()) {
+            put_current_task(g);
+        }
     }
 
-    while (m_current_stack.size()) {
+    while (m_current_task.size()) {
         if (cancel_cleanup()) {
             break;
         }
 
-        m_current_stack.back().resume();
+        m_start_tsc = util::get_tsc();
+
+        m_current_task.back().resume();
+
+        if (m_current_task.size() == 0) {
+            // 要么是异步任务已经完成，要么是任务主动挂起或 yield，都不需要进行后续处理
+            break;
+        }
 
         if (cancel_cleanup()) {
             break;
+        }
+
+        auto dur = util::get_tsc() - m_start_tsc;
+        m_current_task_time += dur;
+
+        if (auto g = m_active_tasks.lock()) {
+            while (!g->empty() && g->begin()->second.empty()) {
+                g->erase(g->begin());
+            }
+
+            if (!g->empty() && g->begin()->first < m_current_task_time) {
+                g->emplace(m_current_task_time, std::move(m_current_task));
+
+                put_current_task(g);
+            }
         }
     }
 
     m_current_cancel_token = cancel_token{};
 
-    return !st.stop_requested();
+    return !st.stop_requested() ||  //
+           m_active_tasks.lock()->size() || m_suspended_tasks.lock()->size() || fetch_task();
 }
 
 void worker::shutdown() {}
@@ -190,7 +219,7 @@ bool worker::fetch_task() {
         auto handle = meta->handle;
         m_backsem->release();
         m_coroutine_metas.lock()->emplace(handle, std::move(*meta));
-        m_active_stacks.lock()->push_back(std::vector{handle});
+        m_active_tasks.lock()->emplace(0, std::vector{handle});
         m_top_of_join_handle.lock()->emplace(handle, handle);
         auto _ = _corohandle_worker_map->lock()->emplace(handle, this);
         return true;
@@ -199,23 +228,31 @@ bool worker::fetch_task() {
 }
 
 bool worker::cancel_cleanup() noexcept {
-    if (m_current_stack.size() && m_current_cancel_token) {
-        if (m_current_cancel_token.cancel_requested()) {
-            if (auto s = m_current_cancel_token.source(); !m_current_cancel_token.cancellation_closed()) {
-                s->invoke_callbacks();
-                while (m_current_stack.size()) {
-                    auto h = pop_handle();
-                    h.destroy();
-                }
-                return true;
-            } else {
-                panic("asco::worker: 外部取消了已被关闭取消的任务 {{{}}}", m_current_stack.front().address());
-            }
-        } else {
-            return false;
-        }
+    if (!m_current_task.size() ||  //
+        !m_current_cancel_token || !m_current_cancel_token.cancel_requested()) {
+        return false;
     }
-    return false;
+
+    if (m_current_cancel_token.cancellation_closed()) {
+        panic("asco::worker: 外部取消了已被关闭取消的任务 {{{}}}", m_current_task.front().address());
+    }
+
+    auto s = m_current_cancel_token.source();
+    s->invoke_callbacks();
+    while (m_current_task.size()) {
+        auto h = pop_handle();
+        h.destroy();
+    }
+    return true;
+}
+
+void worker::yield_current() {
+    if (m_current_task.size() == 0) {
+        return;
+    }
+
+    auto stack_time = m_current_task_time + util::get_tsc() - m_start_tsc;
+    m_active_tasks.lock()->emplace(stack_time, std::move(m_current_task));
 }
 
 };  // namespace asco::core

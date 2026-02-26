@@ -10,10 +10,7 @@
 namespace asco::this_task {
 
 std::suspend_always yield() {
-    auto &w = core::worker::current();
-    if (auto g = w.m_active_stacks.lock(); !w.m_current_stack.empty()) {
-        g->emplace_back(std::move(w.m_current_stack));
-    }
+    core::worker::current().yield_current();
     return {};
 }
 

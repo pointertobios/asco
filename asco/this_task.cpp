@@ -14,8 +14,8 @@ void close_cancellation() noexcept {
         panic("asco::this_task::stop_cancellation: 不在 runtime 中");
     }
     auto &worker = core::worker::current();
-    if (worker.m_current_stack.size()) {
-        worker.close_cancellation(worker.m_current_stack.front());
+    if (worker.m_current_task.size()) {
+        worker.close_cancellation(worker.m_current_task.front());
     } else {
         panic("asco::this_task::stop_cancellation: 当前没有正在运行的任务");
     }
@@ -26,7 +26,7 @@ core::cancel_token &get_cancel_token() noexcept {
         panic("asco::this_task::get_cancel_token: 不在 runtime 中");
     }
     auto &worker = core::worker::current();
-    if (worker.m_current_stack.size()) {
+    if (worker.m_current_task.size()) {
         return worker.m_current_cancel_token;
     } else {
         panic("asco::this_task::get_cancel_token: 当前没有正在运行的任务");

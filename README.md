@@ -81,7 +81,7 @@ FetchContent_MakeAvailable(asco)
   - [x] 核心运行时
     - [x] 线程池 runtime
     - [x] 任务取消机制
-    - [ ] 动态优先级
+    - [x] 动态优先级
     - [ ] 任务偷窃
     - [ ] 计时器
       - [ ] 高分辨率计时器

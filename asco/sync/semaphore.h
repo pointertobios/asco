@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <coroutine>
+#include <deque>
 #include <limits>
 
 #include <asco/concurrency/concurrency.h>

@@ -35,6 +35,7 @@ set(PRECOMPILE_HEADERS
     util/erased.h
     util/raw_storage.h
     util/safe_erased.h
+    util/tsc.h
     util/type_id.h
     util/types.h
     yield.h

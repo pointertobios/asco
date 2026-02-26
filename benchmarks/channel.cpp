@@ -58,8 +58,8 @@ int main() {
         std::min<std::size_t>(2, std::max<std::size_t>(1, std::thread::hardware_concurrency()));
     core::runtime rt{nthreads};
 
-    constexpr std::size_t warmup = 10'000;
-    constexpr std::size_t measure = 200'000;
+    constexpr std::size_t warmup = 1'000;
+    constexpr std::size_t measure = 100'000;
 
     try {
         rt.block_on([&]() -> future<void> { co_await bench_channel_e2e_latency(warmup, measure); });

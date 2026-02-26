@@ -5,7 +5,8 @@
 
 #include <coroutine>
 #include <cstddef>
-#include <deque>
+#include <cstdint>
+#include <map>
 #include <memory>
 #include <semaphore>
 #include <unordered_map>
@@ -90,12 +91,16 @@ private:
 
     bool cancel_cleanup() noexcept;
 
-    std::vector<std::coroutine_handle<>> m_current_stack;
+    void yield_current();
+
+    std::vector<std::coroutine_handle<>> m_current_task;
     cancel_token m_current_cancel_token;
-    sync::spinlock<std::deque<std::vector<std::coroutine_handle<>>>> m_active_stacks;
+    std::uint64_t m_current_task_time;
+    std::uint64_t m_start_tsc;
+    sync::spinlock<std::map<std::uint64_t, std::vector<std::coroutine_handle<>>>> m_active_tasks;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::coroutine_handle<>>> m_top_of_join_handle;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::vector<std::coroutine_handle<>>>>
-        m_suspended_stacks;
+        m_suspended_tasks;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, detail::coroutine_meta>> m_coroutine_metas;
 
     sync::spinlock<std::unordered_set<std::coroutine_handle<>>> m_preawake_handles;
@@ -124,8 +129,8 @@ namespace asco::this_task {
 template<typename TaskLocalStorage>
 TaskLocalStorage &task_local() noexcept {
     auto &w = core::worker::current();
-    if (w.m_current_stack.size()) {
-        auto &tls = w.m_coroutine_metas.lock()->at(w.m_current_stack.front()).tls;
+    if (w.m_current_task.size()) {
+        auto &tls = w.m_coroutine_metas.lock()->at(w.m_current_task.front()).tls;
         return tls.get<TaskLocalStorage>();
     } else {
         panic("asco::this_task::task_local: 当前没有正在运行的任务");
