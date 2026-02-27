@@ -71,7 +71,7 @@ std::coroutine_handle<> worker::this_coroutine() const {
 void worker::awake_handle(std::coroutine_handle<> handle) noexcept {
     if (auto g = m_suspended_tasks.lock(); g->contains(handle)) {
         if (auto ag = m_active_tasks.lock()) {
-            ag->push_back({0, std::move(g->at(handle))});
+            ag->push_back(std::move(g->at(handle)));
             std::push_heap(ag->begin(), ag->end());
         }
         g->erase(handle);
@@ -91,7 +91,7 @@ void worker::suspend_current_handle(std::coroutine_handle<> handle) noexcept {
         g->erase(handle);
         return;
     }
-    m_suspended_tasks.lock()->emplace(handle, std::move(m_current_task));
+    m_suspended_tasks.lock()->emplace(handle, detail::task{m_current_task_time, std::move(m_current_task)});
 }
 
 void worker::push_handle(std::coroutine_handle<> handle) noexcept {
@@ -161,15 +161,21 @@ bool worker::run_once(std::stop_token &st) {
         auto p = g->begin();
         m_current_task = std::move(p->stack);
         m_current_task_time = p->prio;
-        g->erase(p);
+        std::pop_heap(g->begin(), g->end());
+        g->pop_back();
         m_current_cancel_token =
             m_coroutine_metas.lock()->at(m_current_task.front()).cancel_source->get_token();
     };
 
-    if (auto g = m_active_tasks.lock()) {
+    auto clean_empty_tasks = [&](decltype(m_active_tasks)::guard &g) {
         while (!g->empty() && g->begin()->stack.empty()) {
-            g->erase(g->begin());
+            std::pop_heap(g->begin(), g->end());
+            g->pop_back();
         }
+    };
+
+    if (auto g = m_active_tasks.lock()) {
+        clean_empty_tasks(g);
 
         if (!g->empty()) {
             put_current_task(g);
@@ -198,13 +204,11 @@ bool worker::run_once(std::stop_token &st) {
         m_current_task_time += dur;
 
         if (auto g = m_active_tasks.lock()) {
-            while (!g->empty() && g->begin()->stack.empty()) {
-                g->erase(g->begin());
-            }
+            clean_empty_tasks(g);
 
             if (!g->empty() && g->begin()->prio < m_current_task_time) {
                 g->push_back({m_current_task_time, std::move(m_current_task)});
-                std::make_heap(g->begin(), g->end());
+                std::push_heap(g->begin(), g->end());
 
                 put_current_task(g);
             }
@@ -226,7 +230,7 @@ bool worker::fetch_task() {
         m_coroutine_metas.lock()->emplace(handle, std::move(*meta));
         if (auto g = m_active_tasks.lock()) {
             g->push_back({0, std::vector{handle}});
-            std::make_heap(g->begin(), g->end());
+            std::push_heap(g->begin(), g->end());
         }
         m_top_of_join_handle.lock()->emplace(handle, handle);
         auto _ = _corohandle_worker_map->lock()->emplace(handle, this);
@@ -262,7 +266,7 @@ void worker::yield_current() {
     auto stack_time = m_current_task_time + util::get_tsc() - m_start_tsc;
     if (auto g = m_active_tasks.lock()) {
         g->push_back({stack_time, std::move(m_current_task)});
-        std::make_heap(g->begin(), g->end());
+        std::push_heap(g->begin(), g->end());
     }
 }
 

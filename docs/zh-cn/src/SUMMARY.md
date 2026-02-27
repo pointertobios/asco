@@ -4,6 +4,7 @@
 - [`join_set<T>`：批量任务收集](./join_set.md)
 - [同步原语](./sync/README.md)
   - [通道](./sync/channel.md)
+  - [互斥锁](./sync/mutex.md)
   - [自旋锁](./sync/spinlock.md)
   - [信号量](./sync/semaphore.md)
 - [进阶](./advanced/README.md)

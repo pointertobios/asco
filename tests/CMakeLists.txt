@@ -3,6 +3,7 @@
 
 add_executable(tests
     cancellation.cpp
+    sync/mutex.cpp
     sync/semaphore.cpp
     task_local.cpp
 )

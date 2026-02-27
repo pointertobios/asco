@@ -3,25 +3,25 @@
 
 #pragma once
 
-#include <atomic>
-#include <type_traits>
 #ifdef LOCKS_DEBUG
 #    include <thread>
 #endif
 
-#include <asco/concurrency/concurrency.h>
+#include <asco/core/runtime.h>
+#include <asco/future.h>
 #include <asco/panic.h>
+#include <asco/sync/semaphore.h>
 
 namespace asco::sync {
 
 template<typename T = void>
-class spinlock;
+class mutex;
 
 template<>
-class spinlock<> final {
+class mutex<> final {
 public:
     class guard {
-        friend class spinlock;
+        friend class mutex;
 
     public:
         guard() = default;
@@ -34,7 +34,7 @@ public:
 #ifdef LOCKS_DEBUG
             m_lock->m_locker_id = std::thread::id{0};
 #endif
-            m_lock->m_locked.store(false, std::memory_order::release);
+            m_lock->m_locked.release();
         }
 
         guard(const guard &) = delete;
@@ -57,65 +57,64 @@ public:
         operator bool() noexcept { return m_lock; }
 
     private:
-        guard(spinlock *lock)
+        guard(mutex<> *lock)
                 : m_lock{lock} {}
 
-        spinlock *m_lock{nullptr};
+        mutex<> *m_lock{nullptr};
     };
 
-    spinlock() = default;
+    mutex() = default;
 
-    ~spinlock() {
-        if (m_locked.load(std::memory_order::acquire)) {
-            panic("asco::sync::spinlock: 析构 spinlock 时依旧有线程持有锁");
+    ~mutex() {
+        if (m_locked.get_count() == 0) {
+            panic("asco::sync::mutex: 析构 mutex 时依旧有线程持有锁");
         }
     }
 
-    spinlock(const spinlock &) = delete;
-    spinlock &operator=(const spinlock &) = delete;
+    mutex(const mutex &) = delete;
+    mutex &operator=(const mutex &) = delete;
 
-    spinlock(spinlock &&rhs) = delete;
-    spinlock &operator=(spinlock &&rhs) = delete;
+    mutex(mutex &&rhs) = delete;
+    mutex &operator=(mutex &&rhs) = delete;
 
-    guard lock() noexcept {
-        std::size_t lc{0};
-        for (  //
-            bool b = false;
-            !m_locked.compare_exchange_weak(b, true, std::memory_order::acq_rel, std::memory_order::relaxed);
-            b = false, lc++) {
-            concurrency::exp_withdraw(lc);
-        }
+    future<guard> lock() {
+        co_await m_locked.acquire();
 #ifdef LOCKS_DEBUG
         m_locker_id = std::this_thread::get_id();
 #endif
-        return {this};
+        co_return guard{this};
+    }
+
+    guard blocking_lock() {
+        if (in_runtime()) [[unlikely]] {
+            panic("asco::sync::mutex: 在 runtime 中禁止使用同步阻塞调用");
+        }
+        return core::runtime::current().block_on([this]() -> future<guard> { co_return co_await lock(); });
     }
 
     guard try_lock() noexcept {
-        bool b = false;
-        if (m_locked.compare_exchange_strong(
-                b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+        if (m_locked.try_acquire()) {
 #ifdef LOCKS_DEBUG
             m_locker_id = std::this_thread::get_id();
 #endif
-            return {this};
+            return guard{this};
         } else {
             return {};
         }
     }
 
 private:
-    std::atomic_bool m_locked{false};
+    binary_semaphore m_locked{1};
 #ifdef LOCKS_DEBUG
     std::thread::id m_locker_id{0};
 #endif
 };
 
 template<typename T>
-class spinlock final {
+class mutex final {
 public:
     class guard {
-        friend class spinlock<T>;
+        friend class mutex;
 
     public:
         guard() = default;
@@ -143,67 +142,74 @@ public:
 
         const T &operator*() const {
             if (!m_lock) {
-                panic("asco::sync::spinlock: 解引用失败，空的守卫");
+                panic("asco::sync::mutex: 解引用失败，空的守卫");
             }
             return m_lock->m_value;
         }
 
         T &operator*() {
             if (!m_lock) {
-                panic("asco::sync::spinlock: 解引用失败，空的守卫");
+                panic("asco::sync::mutex: 解引用失败，空的守卫");
             }
             return m_lock->m_value;
         }
 
         const T *operator->() const {
             if (!m_lock) {
-                panic("asco::sync::spinlock: 解引用失败，空的守卫");
+                panic("asco::sync::mutex: 解引用失败，空的守卫");
             }
             return &m_lock->m_value;
         }
 
         T *operator->() {
             if (!m_lock) {
-                panic("asco::sync::spinlock: 解引用失败，空的守卫");
+                panic("asco::sync::mutex: 解引用失败，空的守卫");
             }
             return &m_lock->m_value;
         }
 
     private:
-        guard(spinlock *lock, spinlock<>::guard &&guard)
+        guard(mutex *lock, mutex<>::guard &&guard)
                 : m_lock{lock}
                 , m_guard{std::move(guard)} {}
 
-        spinlock *m_lock{nullptr};
-        spinlock<>::guard m_guard;
+        mutex *m_lock{nullptr};
+        mutex<>::guard m_guard;
     };
 
-    spinlock()
-        requires(!std::is_same_v<std::remove_cvref_t<T>, spinlock> && std::is_default_constructible_v<T>)
+    mutex()
+        requires(!std::is_same_v<std::remove_cvref_t<T>, mutex> && std::is_default_constructible_v<T>)
     = default;
 
     template<typename... Args>
-    spinlock(Args &&...args)
-        requires(!std::is_same_v<std::remove_cvref_t<T>, spinlock>)
+    mutex(Args &&...args)
+        requires(!std::is_same_v<std::remove_cvref_t<T>, mutex>)
             : m_value{args...} {}
 
-    spinlock(T &&value)
-        requires(!std::is_same_v<std::remove_cvref_t<T>, spinlock> && std::is_move_constructible_v<T>)
+    mutex(T &&value)
+        requires(!std::is_same_v<std::remove_cvref_t<T>, mutex> && std::is_move_constructible_v<T>)
             : m_value{std::move(value)} {}
 
-    ~spinlock() = default;
+    ~mutex() = default;
 
-    spinlock(const spinlock &) = delete;
-    spinlock &operator=(const spinlock &) = delete;
+    mutex(const mutex &) = delete;
+    mutex &operator=(const mutex &) = delete;
 
-    spinlock(spinlock &&rhs) = delete;
-    spinlock &operator=(spinlock &&rhs) = delete;
+    mutex(mutex &&) = delete;
+    mutex &operator=(mutex &&) = delete;
 
-    guard lock() noexcept { return {this, m_lock.lock()}; }
+    future<guard> lock() { co_return {this, co_await m_lock.lock()}; }
+
+    guard blocking_lock() {
+        if (in_runtime()) [[unlikely]] {
+            panic("asco::sync::mutex: 在 runtime 中禁止使用同步阻塞调用");
+        }
+        return core::runtime::current().block_on([this]() -> future<guard> { co_return co_await lock(); });
+    }
 
     guard try_lock() noexcept {
         if (auto g = m_lock.try_lock()) {
-            return {this, g};
+            return guard{this, std::move(g)};
         } else {
             return {};
         }
@@ -211,7 +217,7 @@ public:
 
 private:
     T m_value;
-    spinlock<> m_lock;
+    mutex<> m_lock;
 };
 
 };  // namespace asco::sync

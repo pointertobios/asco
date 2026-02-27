@@ -26,6 +26,7 @@ set(PRECOMPILE_HEADERS
     join_set.h
     panic.h
     sync/channel.h
+    sync/mutex.h
     sync/semaphore.h
     sync/spinlock.h
     test/bench.h

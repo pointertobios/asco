@@ -10,7 +10,9 @@
 #include <limits>
 
 #include <asco/concurrency/concurrency.h>
+#include <asco/core/runtime.h>
 #include <asco/core/worker.h>
+#include <asco/panic.h>
 #include <asco/sync/spinlock.h>
 #include <asco/util/raw_storage.h>
 #include <asco/yield.h>
@@ -20,6 +22,9 @@ namespace asco::sync {
 template<std::size_t N>
     requires(N > 0)
 class semaphore final {
+    using counter_type =
+        std::conditional_t<N <= std::numeric_limits<std::uint8_t>::max(), std::uint8_t, std::size_t>;
+
 public:
     semaphore(std::size_t count)
             : m_count{std::min(N, count)} {}
@@ -31,7 +36,7 @@ public:
     semaphore &operator=(semaphore &&) = delete;
 
     bool try_acquire() {
-        std::size_t oldc;
+        counter_type oldc;
         do {
             oldc = m_count.load(std::memory_order::acquire);
             if (oldc == 0) {
@@ -42,8 +47,15 @@ public:
         return true;
     }
 
+    void blocking_acquire() {
+        if (in_runtime()) [[unlikely]] {
+            panic("asco::sync::semaphore: 在 runtime 中禁止使用同步阻塞调用");
+        }
+        core::runtime::current().block_on([this]() -> future<void> { co_await acquire(); });
+    }
+
     future<void> acquire() {
-        std::size_t oldc;
+        counter_type oldc;
         std::size_t i{std::numeric_limits<std::size_t>::max()};
         do {
         fetch:
@@ -78,8 +90,8 @@ public:
     std::size_t release(std::size_t n = 1) {
         auto g = m_wait_queue.lock();
 
-        std::size_t oldc;
-        std::size_t diff;
+        counter_type oldc;
+        counter_type diff;
         do {
             oldc = m_count.load(std::memory_order::acquire);
             diff = std::min(n, N - oldc);
@@ -96,10 +108,10 @@ public:
         return diff;
     }
 
-    std::size_t get_count() const { return m_count.load(std::memory_order::acquire); }
+    counter_type get_count() const { return m_count.load(std::memory_order::acquire); }
 
 private:
-    std::atomic_size_t m_count;
+    std::atomic<counter_type> m_count;
     spinlock<std::deque<std::coroutine_handle<>>> m_wait_queue;
 };
 

@@ -9,6 +9,7 @@
 ## 目录
 
 - [通道 `channel`](./channel.md)
+- [互斥锁 `mutex`](./mutex.md)
 - [自旋锁 `spinlock`](./spinlock.md)
 - [信号量 `semaphore`](./semaphore.md)
 

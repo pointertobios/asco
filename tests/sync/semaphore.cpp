@@ -6,6 +6,7 @@
 #include <functional>
 #include <vector>
 
+#include <asco/panic.h>
 #include <asco/sync/semaphore.h>
 #include <asco/test/test.h>
 #include <asco/yield.h>
@@ -52,6 +53,32 @@ ASCO_TEST(semaphore_basic_try_acquire_release) {
     ASCO_SUCCESS();
 }
 
+ASCO_TEST(semaphore_count_and_release_return_value) {
+    sync::semaphore<3> sem{0};
+
+    ASCO_CHECK(sem.get_count() == 0, "initial count should be 0");
+
+    ASCO_CHECK(sem.release(0) == 0, "release(0) should add 0 permits");
+    ASCO_CHECK(sem.get_count() == 0, "count should remain 0 after release(0)");
+
+    ASCO_CHECK(sem.release(10) == 3, "release saturates to N and returns actual increment");
+    ASCO_CHECK(sem.get_count() == 3, "count should saturate to N");
+
+    ASCO_CHECK(sem.release(1) == 0, "release on full semaphore should return 0");
+    ASCO_CHECK(sem.get_count() == 3, "count should stay at N when full");
+
+    ASCO_CHECK(sem.try_acquire(), "try_acquire should succeed when count > 0");
+    ASCO_CHECK(sem.get_count() == 2, "count should decrement after successful try_acquire");
+
+    ASCO_CHECK(sem.release(2) == 1, "release should only fill up to N");
+    ASCO_CHECK(sem.get_count() == 3, "count should return to N after release");
+
+    sync::semaphore<3> sem2{100};
+    ASCO_CHECK(sem2.get_count() == 3, "constructor should clamp initial count to N");
+
+    ASCO_SUCCESS();
+}
+
 ASCO_TEST(semaphore_acquire_blocks_and_release_wakes) {
     sync::binary_semaphore sem{0};
 
@@ -70,6 +97,54 @@ ASCO_TEST(semaphore_acquire_blocks_and_release_wakes) {
         "release(1) should wake one waiter");
 
     co_await waiter;
+
+    ASCO_SUCCESS();
+}
+
+ASCO_TEST(semaphore_release_wakes_at_most_n_waiters) {
+    sync::semaphore<2> sem{0};
+
+    std::atomic_size_t passed{0};
+
+    auto w1 = spawn([&]() -> future<void> {
+        co_await sem.acquire();
+        passed.fetch_add(1, std::memory_order::acq_rel);
+    });
+    auto w2 = spawn([&]() -> future<void> {
+        co_await sem.acquire();
+        passed.fetch_add(1, std::memory_order::acq_rel);
+    });
+
+    co_await yield_n(64);
+    ASCO_CHECK(passed.load(std::memory_order::acquire) == 0, "both waiters should be blocked initially");
+
+    sem.release(1);
+    ASCO_CHECK(
+        co_await wait([&]() { return passed.load(std::memory_order::acquire) >= 1; }),
+        "release(1) should wake one waiter");
+    ASCO_CHECK(
+        passed.load(std::memory_order::acquire) == 1, "release(1) should not wake more than one waiter");
+
+    sem.release(1);
+    ASCO_CHECK(
+        co_await wait([&]() { return passed.load(std::memory_order::acquire) == 2; }),
+        "second release(1) should wake the other waiter");
+
+    co_await w1;
+    co_await w2;
+
+    ASCO_SUCCESS();
+}
+
+ASCO_TEST(semaphore_blocking_acquire_panics_in_runtime) {
+    sync::binary_semaphore sem{1};
+
+    bool panicked_now = false;
+    try {
+        sem.blocking_acquire();
+    } catch (asco::panicked &) { panicked_now = true; }
+
+    ASCO_CHECK(panicked_now, "blocking_acquire() should panic when called inside runtime");
 
     ASCO_SUCCESS();
 }

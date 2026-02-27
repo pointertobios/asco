@@ -1,6 +1,6 @@
 # `sync::semaphore<N>`：信号量
 
-`sync::semaphore<N>` 表示一个“最多拥有 `N` 个许可（permit）”的信号量。
+`sync::semaphore<N>` 表示一个“最多拥有 `N` 个许可（permit）”的计数信号量。
 
 - 当许可数大于 0 时，`acquire()`/`try_acquire()` 会消耗 1 个许可并成功返回。
 - 当许可数为 0 时，`acquire()` 会等待，直到有许可被释放。
@@ -23,7 +23,7 @@ sync::semaphore<3> sem{2};
 语义：
 
 - 初始许可数为 `min(N, count)`。
-- `get_count()` 返回当前许可数（用于观测/调试）。
+- `get_count()` 返回当前许可数的一个**瞬时值**（可用于观测与调试；并发访问下不保证与后续操作之间的时序关系）。
 
 ---
 
@@ -54,6 +54,17 @@ co_await sem.acquire();
 
 > `acquire()` 返回 `future<void>`，需要在 ASCO runtime 上下文中 `co_await`。
 
+### 2.3 `blocking_acquire()`：同步等待获取
+
+```cpp
+sem.blocking_acquire();
+```
+
+语义：
+
+- 同步地等待并获取 1 个许可。
+- **禁止**在 ASCO runtime 上下文中调用；若在 runtime 中调用会触发 `panic`。
+
 ---
 
 ## 3. 释放许可
@@ -70,7 +81,7 @@ std::size_t released = sem.release(5);
 - 许可数不会超过上限 `N`。
 - 返回值为“本次实际增加的许可数”。
 
-当存在等待 `acquire()` 的执行流时，释放许可会让其中最多 `released` 个等待方继续执行。
+当存在等待 `acquire()` 的执行流时，释放许可会让其中最多 `released` 个等待方继续执行；被唤醒的具体等待方不作保证。
 
 ---
 

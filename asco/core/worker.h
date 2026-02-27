@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <compare>
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
@@ -35,7 +34,7 @@ struct task {
     std::uint64_t prio;
     std::vector<std::coroutine_handle<>> stack;
 
-    std::strong_ordering operator<=>(const task &rhs) const { return prio <=> rhs.prio; }
+    bool operator<(const task &rhs) const { return prio > rhs.prio; }
 };
 
 static constexpr std::size_t coroutine_queue_capacity = 1024;
@@ -108,8 +107,7 @@ private:
 
     sync::spinlock<std::deque<detail::task>> m_active_tasks;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::coroutine_handle<>>> m_top_of_join_handle;
-    sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::vector<std::coroutine_handle<>>>>
-        m_suspended_tasks;
+    sync::spinlock<std::unordered_map<std::coroutine_handle<>, detail::task>> m_suspended_tasks;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, detail::coroutine_meta>> m_coroutine_metas;
 
     sync::spinlock<std::unordered_set<std::coroutine_handle<>>> m_preawake_handles;

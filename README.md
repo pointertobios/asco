@@ -82,11 +82,11 @@ FetchContent_MakeAvailable(asco)
     - [x] 线程池 runtime
     - [x] 任务取消机制
     - [x] 动态优先级
+    - [x] 异步任务本地存储
     - [ ] 任务偷窃
     - [ ] 计时器
       - [ ] 高分辨率计时器
       - [ ] 时间轮
-    - [x] 异步任务本地存储
     - [ ] IO 兼容层
       - [ ] io_uring (Linux)
       - [ ] Epoll (Linux)
@@ -97,9 +97,9 @@ FetchContent_MakeAvailable(asco)
     - [x] 自旋锁
     - [x] 信号量
       - [x] 任务取消支持
-    - [x] 管道
+    - [x] 通道
       - [ ] 任务取消支持
-    - [ ] 互斥锁
+    - [x] 互斥锁
       - [ ] 任务取消支持
     - [ ] 读写锁
       - [ ] 任务取消支持
