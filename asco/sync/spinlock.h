@@ -95,6 +95,9 @@ public:
         bool b = false;
         if (m_locked.compare_exchange_strong(
                 b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+#ifdef LOCKS_DEBUG
+            m_locker_id = std::this_thread::get_id();
+#endif
             return {this};
         } else {
             return {};
