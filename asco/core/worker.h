@@ -3,10 +3,11 @@
 
 #pragma once
 
+#include <compare>
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
-#include <map>
+#include <deque>
 #include <memory>
 #include <semaphore>
 #include <unordered_map>
@@ -28,6 +29,13 @@ struct coroutine_meta {
     std::coroutine_handle<> handle;
     cancel_source *cancel_source;
     util::safe_erased tls;
+};
+
+struct task {
+    std::uint64_t prio;
+    std::vector<std::coroutine_handle<>> stack;
+
+    std::strong_ordering operator<=>(const task &rhs) const { return prio <=> rhs.prio; }
 };
 
 static constexpr std::size_t coroutine_queue_capacity = 1024;
@@ -98,7 +106,7 @@ private:
     std::uint64_t m_current_task_time;
     std::uint64_t m_start_tsc;
 
-    sync::spinlock<std::multimap<std::uint64_t, std::vector<std::coroutine_handle<>>>> m_active_tasks;
+    sync::spinlock<std::deque<detail::task>> m_active_tasks;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::coroutine_handle<>>> m_top_of_join_handle;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::vector<std::coroutine_handle<>>>>
         m_suspended_tasks;

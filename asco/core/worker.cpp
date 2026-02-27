@@ -1,6 +1,7 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include <algorithm>
 #include <asco/core/worker.h>
 
 #include <coroutine>
@@ -69,7 +70,10 @@ std::coroutine_handle<> worker::this_coroutine() const {
 
 void worker::awake_handle(std::coroutine_handle<> handle) noexcept {
     if (auto g = m_suspended_tasks.lock(); g->contains(handle)) {
-        m_active_tasks.lock()->emplace(0, std::move(g->at(handle)));
+        if (auto ag = m_active_tasks.lock()) {
+            ag->push_back({0, std::move(g->at(handle))});
+            std::push_heap(ag->begin(), ag->end());
+        }
         g->erase(handle);
         awake();
     } else {
@@ -155,15 +159,15 @@ bool worker::run_once(std::stop_token &st) {
 
     auto put_current_task = [&](decltype(m_active_tasks)::guard &g) {
         auto p = g->begin();
-        m_current_task = std::move(p->second);
-        m_current_task_time = p->first;
+        m_current_task = std::move(p->stack);
+        m_current_task_time = p->prio;
         g->erase(p);
         m_current_cancel_token =
             m_coroutine_metas.lock()->at(m_current_task.front()).cancel_source->get_token();
     };
 
     if (auto g = m_active_tasks.lock()) {
-        while (!g->empty() && g->begin()->second.empty()) {
+        while (!g->empty() && g->begin()->stack.empty()) {
             g->erase(g->begin());
         }
 
@@ -194,12 +198,13 @@ bool worker::run_once(std::stop_token &st) {
         m_current_task_time += dur;
 
         if (auto g = m_active_tasks.lock()) {
-            while (!g->empty() && g->begin()->second.empty()) {
+            while (!g->empty() && g->begin()->stack.empty()) {
                 g->erase(g->begin());
             }
 
-            if (!g->empty() && g->begin()->first < m_current_task_time) {
-                g->emplace(m_current_task_time, std::move(m_current_task));
+            if (!g->empty() && g->begin()->prio < m_current_task_time) {
+                g->push_back({m_current_task_time, std::move(m_current_task)});
+                std::make_heap(g->begin(), g->end());
 
                 put_current_task(g);
             }
@@ -219,7 +224,10 @@ bool worker::fetch_task() {
         auto handle = meta->handle;
         m_backsem->release();
         m_coroutine_metas.lock()->emplace(handle, std::move(*meta));
-        m_active_tasks.lock()->emplace(0, std::vector{handle});
+        if (auto g = m_active_tasks.lock()) {
+            g->push_back({0, std::vector{handle}});
+            std::make_heap(g->begin(), g->end());
+        }
         m_top_of_join_handle.lock()->emplace(handle, handle);
         auto _ = _corohandle_worker_map->lock()->emplace(handle, this);
         return true;
@@ -252,7 +260,10 @@ void worker::yield_current() {
     }
 
     auto stack_time = m_current_task_time + util::get_tsc() - m_start_tsc;
-    m_active_tasks.lock()->emplace(stack_time, std::move(m_current_task));
+    if (auto g = m_active_tasks.lock()) {
+        g->push_back({stack_time, std::move(m_current_task)});
+        std::make_heap(g->begin(), g->end());
+    }
 }
 
 };  // namespace asco::core

@@ -54,6 +54,8 @@ public:
             return *new (this) guard{std::move(rhs)};
         }
 
+        operator bool() noexcept { return m_lock; }
+
     private:
         guard(spinlock *lock)
                 : m_lock{lock} {}
@@ -87,6 +89,16 @@ public:
         m_locker_id = std::this_thread::get_id();
 #endif
         return {this};
+    }
+
+    guard try_lock() noexcept {
+        bool b = false;
+        if (m_locked.compare_exchange_strong(
+                b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+            return {this};
+        } else {
+            return {};
+        }
     }
 
 private:
@@ -178,6 +190,14 @@ public:
     spinlock &operator=(spinlock &&rhs) = delete;
 
     guard lock() noexcept { return {this, m_lock.lock()}; }
+
+    guard try_lock() noexcept {
+        if (auto g = m_lock.try_lock()) {
+            return {this, g};
+        } else {
+            return {};
+        }
+    }
 
 private:
     T m_value;
