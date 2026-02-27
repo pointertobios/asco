@@ -15,3 +15,6 @@ template<typename TaskLocalStorage>
 TaskLocalStorage &task_local() noexcept;
 
 };  // namespace asco::this_task
+
+// task_local 的实现在此头文件中
+#include <asco/core/worker.h>  // IWYU pragma: keep

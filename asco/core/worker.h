@@ -97,6 +97,7 @@ private:
     cancel_token m_current_cancel_token;
     std::uint64_t m_current_task_time;
     std::uint64_t m_start_tsc;
+
     sync::spinlock<std::map<std::uint64_t, std::vector<std::coroutine_handle<>>>> m_active_tasks;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::coroutine_handle<>>> m_top_of_join_handle;
     sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::vector<std::coroutine_handle<>>>>
