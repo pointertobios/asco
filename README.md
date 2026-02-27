@@ -21,7 +21,7 @@ future<void> foo() {
     co_return;
 }
 
-future<int> async_main() {
+future<int> async_main() { // asco::main 提供的入口
     auto f = foo();
     std::println("async_main() running");
     co_await f;
@@ -96,7 +96,7 @@ FetchContent_MakeAvailable(asco)
   - [x] 同步原语
     - [x] 自旋锁
     - [x] 信号量
-      - [ ] 任务取消支持
+      - [x] 任务取消支持
     - [x] 管道
       - [ ] 任务取消支持
     - [ ] 互斥锁

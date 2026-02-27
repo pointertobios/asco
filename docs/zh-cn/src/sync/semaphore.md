@@ -50,6 +50,7 @@ co_await sem.acquire();
 
 - 若当前许可数大于 0：消耗 1 个许可并返回。
 - 若当前许可数为 0：挂起等待，直到有其它执行流释放许可。
+- 支持任务取消。
 
 > `acquire()` 返回 `future<void>`，需要在 ASCO runtime 上下文中 `co_await`。
 
