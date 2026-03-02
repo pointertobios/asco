@@ -99,6 +99,16 @@ future<void> parent() {
 
 `detach()` 表示调用方不再等待结果，任务将独立执行直至完成/失败。
 
+### 2.4 `spawn_blocking`：启动“blocking 环境”的任务
+
+当你需要在 runtime 内部执行少量同步逻辑（例如调用一个必须同步等待的第三方 API）时，可以使用 `spawn_blocking(fn)` 提交一个同步函数作为任务执行。
+
+语义要点：
+
+- `spawn_blocking(fn)` **不会**把工作自动转移到“后台线程池”；它仍然运行在 ASCO runtime 的 worker 线程上。
+- 该任务会被标记为“blocking 环境”（`asco::this_task::is_blocking_env() == true`），因此在该任务内部允许调用一些同步阻塞接口（例如 `runtime::block_on(...)`、`blocking_lock()`、`blocking_acquire()`）。
+- 由于它会阻塞 worker 线程，应避免长时间阻塞操作；若 runtime 线程数过少（尤其是单线程 runtime），在 blocking 任务中再调用 `block_on()` 这类同步等待接口可能导致死锁。
+
 ---
 
 ## 3. `join_set<T>`：批量管理并发任务
@@ -211,6 +221,11 @@ auto naive_invoke(Fn&& fn) {
 
 - 用户实现 `future<int> async_main()`。
 - `main()` 创建 `core::runtime` 并调用 `block_on(async_main)`。
+
+补充说明：
+
+- `block_on(...)` 是同步阻塞接口，要求当前处于“blocking 环境”（`asco::this_task::is_blocking_env() == true`）。
+- 因此它最常见的用法是在 runtime 之外（例如 `main()`）作为入口；在 runtime 内也只有在 `spawn_blocking(...)` 任务里才允许使用。
 
 链接目标 `asco::main` 已提供默认 `main()`；使用者仅需定义 `async_main()`。
 

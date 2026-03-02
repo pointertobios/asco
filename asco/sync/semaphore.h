@@ -14,6 +14,7 @@
 #include <asco/core/worker.h>
 #include <asco/panic.h>
 #include <asco/sync/spinlock.h>
+#include <asco/this_task.h>
 #include <asco/util/raw_storage.h>
 #include <asco/yield.h>
 
@@ -48,8 +49,8 @@ public:
     }
 
     void blocking_acquire() {
-        if (in_runtime()) [[unlikely]] {
-            panic("asco::sync::semaphore: 在 runtime 中禁止使用同步阻塞调用");
+        if (!this_task::is_blocking_env()) [[unlikely]] {
+            panic("asco::sync::semaphore: 在异步任务中禁止使用同步阻塞调用");
         }
         core::runtime::current().block_on([this]() -> future<void> { co_await acquire(); });
     }

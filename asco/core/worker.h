@@ -28,6 +28,7 @@ struct coroutine_meta {
     std::coroutine_handle<> handle;
     cancel_source *cancel_source;
     util::safe_erased tls;
+    bool blocking;
 };
 
 struct task {
@@ -60,6 +61,7 @@ class worker final : public daemon {
     friend cancel_token &asco::this_task::get_cancel_token() noexcept;
     template<typename TaskLocalStorage>
     friend TaskLocalStorage &asco::this_task::task_local() noexcept;
+    friend bool asco::this_task::is_blocking_env() noexcept;
 
 public:
     worker(

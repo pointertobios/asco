@@ -61,7 +61,9 @@ auto g = m.blocking_lock();
 语义：
 
 - 同步阻塞直到获得锁，并返回 guard。
-- **禁止**在 ASCO runtime 上下文中调用；若在 runtime 中调用会触发 `panic`。
+- 仅允许在“blocking 环境”中调用；否则会触发 `panic`。
+  - runtime 之外：允许（此时会阻塞当前线程）。
+  - runtime 之内：仅当当前任务由 `spawn_blocking(...)` 启动（即 `asco::this_task::is_blocking_env() == true`）时允许。
 
 ---
 
@@ -103,4 +105,5 @@ future<void> inc() {
 
 - `try_lock()` 适合实现“不等待的快速路径”；失败时走其它分支。
 - 互斥锁的临界区尽量保持短小，避免把长时间运行的工作放在持锁期间。
-- `blocking_lock()` 仅用于 runtime 之外的同步代码；在 runtime 内请使用 `co_await lock()`。
+- 在普通异步任务中不要使用 `blocking_lock()`；请使用 `co_await lock()`。
+- 只有当你确实处于“blocking 环境”（例如同步代码、或 `spawn_blocking` 任务内）时，才考虑 `blocking_lock()`。

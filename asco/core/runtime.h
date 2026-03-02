@@ -39,16 +39,15 @@ public:
 
     static runtime &current();
 
-    template<typename TaskLocalStrorage>
-    auto block_on(
-        async_function<> auto &&fn, TaskLocalStrorage &&task_local_storage) {
-        asco_assert(!in_runtime());
+    template<typename TaskLocalStorage>
+    auto block_on(async_function<> auto &&fn, TaskLocalStorage &&task_local_storage) {
+        asco_assert(this_task::is_blocking_env());
 
         using return_type = std::invoke_result_t<decltype(fn)>::output_type;
 
-        auto jh = spawn_impl<TaskLocalStrorage>(std::forward<decltype(fn)>(fn));
+        auto jh = spawn_impl<TaskLocalStorage>(std::forward<decltype(fn)>(fn));
         util::safe_erased tls;
-        if constexpr (!std::is_void_v<TaskLocalStrorage>) {
+        if constexpr (!std::is_void_v<TaskLocalStorage>) {
             tls = jh.initialize_task_local_storage(
                 std::forward<decltype(task_local_storage)>(task_local_storage));
         } else {
@@ -56,7 +55,7 @@ public:
         }
 
         m_backsem_sync->acquire();
-        m_coroutine_tx.try_send({jh.m_state->this_handle, &jh.get_cancel_source(), std::move(tls)});
+        m_coroutine_tx.try_send({jh.m_state->this_handle, &jh.get_cancel_source(), std::move(tls), false});
         awake_next();
         if constexpr (std::is_void_v<return_type>) {
             jh.await();
@@ -70,14 +69,13 @@ public:
         return block_on(std::forward<decltype(fn)>(fn), std::monostate{});
     }
 
-    template<typename TaskLocalStrorage>
-    auto spawn(
-        async_function<> auto &&fn, TaskLocalStrorage &&task_local_storage) {
+    template<typename TaskLocalStorage>
+    auto spawn(async_function<> auto &&fn, TaskLocalStorage &&task_local_storage) {
         using output_type = std::invoke_result_t<decltype(fn)>::output_type;
 
-        auto jh = spawn_impl<TaskLocalStrorage>(std::forward<decltype(fn)>(fn));
+        auto jh = spawn_impl<TaskLocalStorage>(std::forward<decltype(fn)>(fn));
         util::safe_erased tls;
-        if constexpr (!std::is_void_v<TaskLocalStrorage>) {
+        if constexpr (!std::is_void_v<TaskLocalStorage>) {
             tls = jh.initialize_task_local_storage(
                 std::forward<decltype(task_local_storage)>(task_local_storage));
         } else {
@@ -91,33 +89,40 @@ public:
         } else {
             m_backsem_sync->acquire();
         }
-        m_coroutine_tx.try_send({jh.m_state->this_handle, &jh.get_cancel_source(), std::move(tls)});
+        m_coroutine_tx.try_send({jh.m_state->this_handle, &jh.get_cancel_source(), std::move(tls), false});
         awake_next();
 
         return jh;
     }
 
-    auto spawn(async_function<> auto &&fn) {
-        return spawn(std::forward<decltype(fn)>(fn), std::monostate{});
-    }
+    auto spawn(async_function<> auto &&fn) { return spawn(std::forward<decltype(fn)>(fn), std::monostate{}); }
 
-    template<typename TaskLocalStrorage>
-    auto spawn_blocking(
-        std::invocable<> auto &&fn, TaskLocalStrorage &&task_local_storage)
+    template<typename TaskLocalStorage>
+    auto spawn_blocking(std::invocable<> auto &&fn, TaskLocalStorage &&task_local_storage)
         requires(!async_function<decltype(fn)>)
     {
         using output_type = std::invoke_result_t<decltype(fn)>;
 
-        return spawn(
-            [fn = std::forward<decltype(fn)>(fn)]() -> future<output_type> {
-                if constexpr (std::is_void_v<output_type>) {
-                    std::invoke(std::forward<decltype(fn)>(fn));
-                    co_return;
-                } else {
-                    co_return std::invoke(std::forward<decltype(fn)>(fn));
-                }
-            },
-            std::forward<decltype(task_local_storage)>(task_local_storage));
+        auto jh = spawn_blocking_impl<TaskLocalStorage>(std::forward<decltype(fn)>(fn));
+        util::safe_erased tls;
+        if constexpr (!std::is_void_v<TaskLocalStorage>) {
+            tls = jh.initialize_task_local_storage(
+                std::forward<decltype(task_local_storage)>(task_local_storage));
+        } else {
+            tls = util::safe_erased::of_void();
+        }
+
+        if (in_runtime()) {
+            if (!m_backsem_sync->try_acquire()) {
+                worker::current().fetch_task();
+            }
+        } else {
+            m_backsem_sync->acquire();
+        }
+        m_coroutine_tx.try_send({jh.m_state->this_handle, &jh.get_cancel_source(), std::move(tls), true});
+        awake_next();
+
+        return jh;
     }
 
     auto spawn_blocking(std::invocable<> auto &&fn)
@@ -129,9 +134,10 @@ public:
 private:
     void awake_next() noexcept;
 
-    template<typename TaskLocalStrorage>
-    auto spawn_impl(async_function<> auto fn)
-        -> join_handle<typename std::invoke_result_t<decltype(fn)>::output_type, util::types::void_if_monostate<TaskLocalStrorage>> {
+    template<typename TaskLocalStorage>
+    auto spawn_impl(async_function<> auto fn) -> join_handle<
+        typename std::invoke_result_t<decltype(fn)>::output_type,
+        util::types::void_if_monostate<TaskLocalStorage>> {
         using output_type = std::invoke_result_t<decltype(fn)>::output_type;
         auto coro = co_invoke(fn);
         if constexpr (std::is_void_v<output_type>) {
@@ -139,6 +145,18 @@ private:
             co_return;
         } else {
             co_return co_await coro;
+        }
+    }
+
+    template<typename TaskLocalStorage>
+    auto spawn_blocking_impl(std::invocable<> auto fn)
+        -> join_handle<std::invoke_result_t<decltype(fn)>, util::types::void_if_monostate<TaskLocalStorage>> {
+        using output_type = std::invoke_result_t<decltype(fn)>;
+        if constexpr (std::is_void_v<output_type>) {
+            std::invoke(fn);
+            co_return;
+        } else {
+            co_return std::invoke(fn);
         }
     }
 
@@ -159,8 +177,7 @@ private:
 };  // namespace core
 
 template<typename TaskLocalStorage>
-auto spawn(
-    async_function<> auto &&fn, TaskLocalStorage &&task_local_storage) {
+auto spawn(async_function<> auto &&fn, TaskLocalStorage &&task_local_storage) {
     return core::runtime::current().spawn(
         std::forward<decltype(fn)>(fn), std::forward<decltype(task_local_storage)>(task_local_storage));
 }
@@ -168,8 +185,7 @@ auto spawn(
 auto spawn(async_function<> auto &&fn) { return spawn(std::forward<decltype(fn)>(fn), std::monostate{}); }
 
 template<typename TaskLocalStorage>
-auto spawn_blocking(
-    std::invocable<> auto &&fn, TaskLocalStorage &&task_local_storage)
+auto spawn_blocking(std::invocable<> auto &&fn, TaskLocalStorage &&task_local_storage)
     requires(!async_function<decltype(fn)>)
 {
     return core::runtime::current().spawn_blocking(

@@ -11,6 +11,7 @@
 #include <asco/future.h>
 #include <asco/panic.h>
 #include <asco/sync/semaphore.h>
+#include <asco/this_task.h>
 
 namespace asco::sync {
 
@@ -86,8 +87,8 @@ public:
     }
 
     guard blocking_lock() {
-        if (in_runtime()) [[unlikely]] {
-            panic("asco::sync::mutex: 在 runtime 中禁止使用同步阻塞调用");
+        if (!this_task::is_blocking_env()) [[unlikely]] {
+            panic("asco::sync::mutex: 在异步任务中禁止使用同步阻塞调用");
         }
         return core::runtime::current().block_on([this]() -> future<guard> { co_return co_await lock(); });
     }
@@ -201,8 +202,8 @@ public:
     future<guard> lock() { co_return {this, co_await m_lock.lock()}; }
 
     guard blocking_lock() {
-        if (in_runtime()) [[unlikely]] {
-            panic("asco::sync::mutex: 在 runtime 中禁止使用同步阻塞调用");
+        if (!this_task::is_blocking_env()) [[unlikely]] {
+            panic("asco::sync::mutex: 在异步任务中禁止使用同步阻塞调用");
         }
         return core::runtime::current().block_on([this]() -> future<guard> { co_return co_await lock(); });
     }

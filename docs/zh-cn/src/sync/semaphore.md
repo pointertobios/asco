@@ -63,7 +63,9 @@ sem.blocking_acquire();
 语义：
 
 - 同步地等待并获取 1 个许可。
-- **禁止**在 ASCO runtime 上下文中调用；若在 runtime 中调用会触发 `panic`。
+- 仅允许在“blocking 环境”中调用；否则会触发 `panic`。
+  - runtime 之外：允许（此时会阻塞当前线程）。
+  - runtime 之内：仅当当前任务由 `spawn_blocking(...)` 启动（即 `asco::this_task::is_blocking_env() == true`）时允许。
 
 ---
 

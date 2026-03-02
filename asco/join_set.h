@@ -49,14 +49,7 @@ public:
     void spawn_blocking(std::invocable<> auto &&fn)
         requires(!async_function<decltype(fn)>)
     {
-        spawn([fn = std::forward<decltype(fn)>(fn)]() -> future<output_type> {
-            if constexpr (std::is_void_v<output_type>) {
-                std::invoke(std::forward<decltype(fn)>(fn));
-                co_return;
-            } else {
-                co_return std::invoke(std::forward<decltype(fn)>(fn));
-            }
-        });
+        m_runtime.spawn_blocking(std::forward<decltype(fn)>(fn));
     }
 
     future<std::conditional_t<std::is_void_v<output_type>, bool, std::optional<output_type>>>

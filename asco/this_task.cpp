@@ -33,4 +33,13 @@ core::cancel_token &get_cancel_token() noexcept {
     }
 }
 
+bool is_blocking_env() noexcept {
+    if (!in_runtime()) {
+        return true;
+    }
+
+    auto &w = core::worker::current();
+    return w.m_coroutine_metas.lock()->at(w.m_current_task.front()).blocking;
+}
+
 };  // namespace asco::this_task

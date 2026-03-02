@@ -14,6 +14,8 @@ core::cancel_token &get_cancel_token() noexcept;
 template<typename TaskLocalStorage>
 TaskLocalStorage &task_local() noexcept;
 
+bool is_blocking_env() noexcept;
+
 };  // namespace asco::this_task
 
 // task_local 的实现在此头文件中
