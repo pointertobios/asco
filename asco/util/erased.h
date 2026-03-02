@@ -44,19 +44,8 @@ public:
 
     erased &operator=(erased &&rhs) noexcept {
         if (this != &rhs) {
-            if (m_storage) {
-                if (m_deleter) {
-                    m_deleter(m_storage);
-                }
-                ::operator delete(m_storage, m_align);
-            }
-
-            m_align = rhs.m_align;
-            m_storage = rhs.m_storage;
-            m_deleter = rhs.m_deleter;
-
-            rhs.m_storage = nullptr;
-            rhs.m_deleter = nullptr;
+            this->~erased();
+            new (this) erased(std::move(rhs));
         }
         return *this;
     }
