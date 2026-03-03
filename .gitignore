@@ -5,4 +5,6 @@
 callgrind.out.*
 core.*
 book
-perf.data
+perf.data*
+out.*
+fg.svg

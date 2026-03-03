@@ -4,6 +4,7 @@
 set(ASCO_SOURCES
     core/cancellation.cpp
     core/daemon.cpp
+    core/mm/pool.cpp
     core/runtime.cpp
     core/wait_for_valid.cpp
     core/worker.cpp
@@ -17,6 +18,7 @@ set(PRECOMPILE_HEADERS
     concurrency/ring_queue.h
     core/cancellation.h
     core/daemon.h
+    core/mm/pool.h
     core/runtime.h
     core/wait_for_valid.h
     core/worker.h
@@ -80,6 +82,7 @@ set(COMPILE_OPTIONS
     -Wall
     -Wextra
     -Wpedantic
+    -Wno-zero-length-array
 )
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
