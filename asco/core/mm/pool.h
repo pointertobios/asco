@@ -5,6 +5,7 @@
 
 #include <array>
 #include <memory_resource>
+#include <mutex>
 
 #include <asco/util/raw_storage.h>
 
