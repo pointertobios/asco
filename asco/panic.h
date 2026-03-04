@@ -39,7 +39,6 @@ using format_string_with_location = format_string_with_location_type<std::type_i
 
 };  // namespace detail
 
-#ifdef ASCO_TESTING
 class panicked : std::exception {
 public:
     panicked(std::string msg, std::string loc)
@@ -52,7 +51,6 @@ private:
     std::string m_msg;
     std::string m_loc;
 };
-#endif
 
 template<typename... Args>
 [[noreturn]] void panic(detail::format_string_with_location<Args...> fmt, Args &&...args) {
@@ -69,17 +67,24 @@ template<typename... Args>
 
 };  // namespace asco
 
-#define asco_assert(expr)                               \
-    do {                                                \
-        if (!(expr)) [[unlikely]] {                     \
-            asco::panic("表达式 '{}' 断言失败", #expr); \
-        }                                               \
-    } while (0)
+#ifndef NDEBUG
 
-#define asco_assert_lint(expr, fmt, ...)                           \
-    do {                                                           \
-        if (!(expr)) [[unlikely]] {                                \
-            auto msg = std::format(fmt, ##__VA_ARGS__);            \
-            asco::panic("表达式 '{}' 断言失败\n  {}", #expr, msg); \
-        }                                                          \
-    } while (0)
+#    define asco_assert(expr)                               \
+        do {                                                \
+            if (!(expr)) [[unlikely]] {                     \
+                asco::panic("表达式 '{}' 断言失败", #expr); \
+            }                                               \
+        } while (0)
+
+#    define asco_assert_lint(expr, fmt, ...)                           \
+        do {                                                           \
+            if (!(expr)) [[unlikely]] {                                \
+                auto msg = std::format(fmt, ##__VA_ARGS__);            \
+                asco::panic("表达式 '{}' 断言失败\n  {}", #expr, msg); \
+            }                                                          \
+        } while (0)
+
+#else
+#    define asco_assert(expr) ((void)(expr))
+#    define asco_assert_lint(expr, fmt, ...) ((void)(expr))
+#endif

@@ -83,6 +83,7 @@ set(COMPILE_OPTIONS
     -Wall
     -Wextra
     -Wpedantic
+    -Werror
     -Wno-zero-length-array
 )
 
