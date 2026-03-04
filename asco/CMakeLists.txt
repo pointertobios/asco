@@ -36,6 +36,7 @@ set(PRECOMPILE_HEADERS
     this_task.h
     util/consts.h
     util/erased.h
+    util/murmur.h
     util/raw_storage.h
     util/safe_erased.h
     util/tsc.h

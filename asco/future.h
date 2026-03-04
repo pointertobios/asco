@@ -174,28 +174,8 @@ private:
     util::erased m_bound_lambda;
 };
 
-namespace detail {
-
-template<typename Fn>
-struct is_specialization_of_future_type {
-private:
-    template<util::types::move_secure T>
-    static std::true_type test(future<T> *);
-
-    template<typename T>
-    static std::false_type test(T *);
-
-public:
-    static constexpr bool value = decltype(test(std::declval<Fn *>()))::value;
-};
-
-template<typename T>
-constexpr bool is_specialization_of_future_type_v = is_specialization_of_future_type<T>::value;
-
-};  // namespace detail
-
 template<typename F>
-concept future_type = detail::is_specialization_of_future_type_v<std::remove_cvref_t<F>>;
+concept future_type = util::types::specialization_of<std::remove_cvref_t<F>, future>;
 
 template<typename Fn, typename... Args>
 concept async_function =

@@ -17,6 +17,7 @@
 #include <asco/util/raw_storage.h>
 #include <asco/util/safe_erased.h>
 #include <asco/util/types.h>
+#include <type_traits>
 
 namespace asco {
 
@@ -260,27 +261,8 @@ private:
     std::shared_ptr<task_state> m_state;
 };
 
-namespace detail {
-
-template<typename Fn>
-struct is_specialization_of_join_handle {
-private:
-    template<util::types::move_secure T>
-    static std::true_type test(join_handle<T> *);
-
-    template<typename T>
-    static std::false_type test(T *);
-
-public:
-    static constexpr bool value = decltype(test(std::declval<Fn *>()))::value;
-};
-
-template<typename T>
-constexpr bool is_specialization_of_join_handle_v = is_specialization_of_join_handle<T>::value;
-};  // namespace detail
-
 template<typename F>
-concept join_handle_type = detail::is_specialization_of_join_handle_v<std::remove_cvref_t<F>>;
+concept join_handle_type = util::types::specialization_of<std::remove_cvref_t<F>, join_handle>;
 
 template<typename Fn, typename... Args>
 concept spawned_function =
