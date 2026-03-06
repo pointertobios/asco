@@ -3,7 +3,6 @@
 
 #include <asco/core/mm/pool.h>
 
-#include <algorithm>
 #include <atomic>
 
 namespace asco::core::mm {
@@ -17,7 +16,9 @@ void *coroutine_pool::allocate(std::size_t n) noexcept {
     n = needed_size(n);
 
     if (n > max_object_size - block_unit) [[unlikely]] {
-        return pmr::get<coroutine_pmr_tag>().allocate_bytes(n);
+        try {
+            return pmr::get<coroutine_pmr_tag>().allocate_bytes(n);
+        } catch (const std::bad_alloc &) { return nullptr; }
     }
 
     auto &self = get();
@@ -27,6 +28,8 @@ void *coroutine_pool::allocate(std::size_t n) noexcept {
     std::size_t index = (n - 1) / block_unit;
     if (auto obj = self.freelist[index]) {
         self.freelist[index] = obj->next;
+
+        self.update_block_allocate_exp();
 
         return obj;
     }
@@ -57,8 +60,10 @@ void *coroutine_pool::allocate(std::size_t n) noexcept {
     self.update_block_allocate_exp();
 
     auto block_count = 1ull << self.block_allocate_exp;
-    auto new_block =
-        reinterpret_cast<block *>(pmr::get_local().allocate_bytes(max_object_size * block_count));
+    block *new_block;
+    try {
+        new_block = reinterpret_cast<block *>(pmr::get_local().allocate_bytes(max_object_size * block_count));
+    } catch (const std::bad_alloc &) { return nullptr; }
     new (new_block) block(block_count);
 
     new_block->prev = nullptr;
@@ -104,7 +109,7 @@ void coroutine_pool::update_block_allocate_exp() noexcept {
     if (allocate_count / block_miss_count <= 2) {
         block_allocate_exp++;
     } else {
-        block_allocate_exp = std::max(block_allocate_exp - 1, static_cast<std::size_t>(1));
+        block_allocate_exp = block_allocate_exp == 0 ? 0 : block_allocate_exp - 1;
     }
 }
 
