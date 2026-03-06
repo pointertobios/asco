@@ -145,6 +145,10 @@ bool worker::init() {
             panic("worker::init: 设置线程亲和性失败");
         }
     }
+#else
+    if (!os::set_thread_affinity(daemon::m_dthread.native_handle(), os::cpu_set{}.with(m_id))) {
+        panic("worker::init: 设置线程亲和性失败");
+    }
 #endif
 
     return true;

@@ -48,7 +48,7 @@ endif()
 
 set(USING_LIBCXX OFF)
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if(NOT WIN32)
 
 if (LIBCXX_COMPILES)
     set(USING_LIBCXX ON)
@@ -60,10 +60,8 @@ else()
     message(STATUS "LLVM libc++ is recommended")
 endif()
 
-if (NOT WIN32)
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-    endif()
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 endif()
 
 endif()

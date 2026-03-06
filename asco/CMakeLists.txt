@@ -5,6 +5,7 @@ set(ASCO_SOURCES
     core/cancellation.cpp
     core/daemon.cpp
     core/mm/pool.cpp
+    core/os/process.cpp
     core/runtime.cpp
     core/wait_for_valid.cpp
     core/worker.cpp
@@ -19,6 +20,7 @@ set(PRECOMPILE_HEADERS
     core/cancellation.h
     core/daemon.h
     core/mm/pool.h
+    core/os/process.h
     core/runtime.h
     core/wait_for_valid.h
     core/worker.h
@@ -66,6 +68,18 @@ if (LINUX)
 
     if (ASCO_IO_URING)
         set(DEPLIBS ${DEPLIBS} uring)
+    endif()
+elseif (WIN32)
+    set(ASCO_SOURCES ${ASCO_SOURCES}
+        core/os/windows/process.cpp
+    )
+
+    if (ASCO_IOCP)
+        set(ASCO_SOURCES ${ASCO_SOURCES}
+        )
+    else()
+        set(ASCO_SOURCES ${ASCO_SOURCES}
+        )
     endif()
 endif()
 

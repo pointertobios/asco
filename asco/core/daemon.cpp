@@ -1,13 +1,16 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include <asco/core/daemon.h>
+
 #include <semaphore>
 #include <stop_token>
+#include <thread>
 #ifdef __linux__
 #    include <pthread.h>
 #endif
 
-#include <asco/core/daemon.h>
+#include <asco/core/os/process.h>
 
 namespace asco::core {
 
@@ -17,23 +20,25 @@ daemon::daemon(std::string name)
 void daemon::awake() { m_sem.release(); }
 
 daemon::init_waiter daemon::start() {
-    m_dthread = std::jthread{[&self = *this](std::stop_token st) {
+    m_dthread = std::jthread{[this](std::stop_token st) {
 #ifdef __linux__
         auto ptid = ::pthread_self();
-        ::pthread_setname_np(ptid, self.m_name.c_str());
+        ::pthread_setname_np(ptid, m_name.c_str());
+#else
+        os::set_thread_name(m_dthread.native_handle(), m_name);
 #endif
 
-        if (!self.init()) {
-            self.m_init_sem.release();
-            self.shutdown();
+        if (!init()) {
+            m_init_sem.release();
+            shutdown();
             return;
         }
-        self.m_init_sem.release();
+        m_init_sem.release();
 
-        while (!st.stop_requested() && self.run_once(st))
+        while (!st.stop_requested() && run_once(st))
             ;
 
-        self.shutdown();
+        shutdown();
     }};
 
     return {*this};
