@@ -58,7 +58,11 @@ if (USING_LIBCXX)
 endif()
 
 if (LINUX)
-    if (NOT ASCO_IO_URING)
+    set(ASCO_SOURCES ${ASCO_SOURCES}
+        core/os/linux/process.cpp
+    )
+
+    if (ASCO_IO_URING)
         set(ASCO_SOURCES ${ASCO_SOURCES}
         )
     else()

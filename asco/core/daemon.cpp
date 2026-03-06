@@ -3,12 +3,10 @@
 
 #include <asco/core/daemon.h>
 
+#include <barrier>
 #include <semaphore>
 #include <stop_token>
 #include <thread>
-#ifdef __linux__
-#    include <pthread.h>
-#endif
 
 #include <asco/core/os/process.h>
 
@@ -20,13 +18,11 @@ daemon::daemon(std::string name)
 void daemon::awake() { m_sem.release(); }
 
 daemon::init_waiter daemon::start() {
-    m_dthread = std::jthread{[this](std::stop_token st) {
-#ifdef __linux__
-        auto ptid = ::pthread_self();
-        ::pthread_setname_np(ptid, m_name.c_str());
-#else
+    std::barrier<> b{2};
+    m_dthread = std::jthread{[this, &b](std::stop_token st) {
+        b.arrive_and_wait();
+
         os::set_thread_name(m_dthread.native_handle(), m_name);
-#endif
 
         if (!init()) {
             m_init_sem.release();
@@ -40,6 +36,8 @@ daemon::init_waiter daemon::start() {
 
         shutdown();
     }};
+
+    b.arrive_and_wait();
 
     return {*this};
 }

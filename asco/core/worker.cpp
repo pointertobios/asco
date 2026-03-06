@@ -6,10 +6,6 @@
 
 #include <coroutine>
 #include <format>
-#ifdef __linux__
-#    include <pthread.h>
-#    include <sched.h>
-#endif
 
 #include <asco/core/cancellation.h>
 #include <asco/core/runtime.h>
@@ -136,20 +132,9 @@ bool worker::init() {
     runtime::_current_runtime = reinterpret_cast<runtime *>(m_runtime_ptr);
     _current_worker = this;
 
-#ifdef __linux__
-    {
-        ::cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        CPU_SET(m_id, &cpuset);
-        if (::pthread_setaffinity_np(::pthread_self(), sizeof(cpuset), &cpuset) == -1) {
-            panic("worker::init: 设置线程亲和性失败");
-        }
-    }
-#else
     if (!os::set_thread_affinity(daemon::m_dthread.native_handle(), os::cpu_set{}.with(m_id))) {
         panic("worker::init: 设置线程亲和性失败");
     }
-#endif
 
     return true;
 }

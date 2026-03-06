@@ -44,7 +44,7 @@ protected:
 private:
     std::counting_semaphore<> m_init_sem{0};
 
-    std::counting_semaphore<std::numeric_limits<int>::max()> m_sem{0};
+    std::counting_semaphore<> m_sem{0};
 };
 
 };  // namespace asco::core
