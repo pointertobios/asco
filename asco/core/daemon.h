@@ -41,7 +41,6 @@ protected:
 private:
     std::jthread m_dthread;
     std::string m_name{"asco::daemon"};
-    ::pthread_t m_ptid{0};
     std::counting_semaphore<> m_init_sem{0};
 
     std::counting_semaphore<std::numeric_limits<int>::max()> m_sem{0};

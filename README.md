@@ -123,7 +123,7 @@ FetchContent_MakeAvailable(asco)
 
 - Clang: 完整支持
 - GCC: 不完全支持
-- MSVC: 暂不支持
+- MSVC: 仅支持 VS 2026 及以上版本的 clang 模式
 
 ## 开发与贡献
 

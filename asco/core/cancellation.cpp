@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 #include <asco/core/cancellation.h>
+
 #include <atomic>
 
 namespace asco::core {
 
-cancel_token cancel_source::get_token() noexcept { return cancel_token{*this, m_stop_source.get_token()}; }
+cancel_token cancel_source::get_token() noexcept {
+    return cancel_token{*this, m_stop_source.get_token()};
+}
 
 void cancel_source::request_cancel() noexcept {
     m_stop_source.request_stop();

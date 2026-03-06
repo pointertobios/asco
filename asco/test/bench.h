@@ -58,8 +58,8 @@ public:
         const auto p99 = m_measurements[n * 99 / 100];
         const auto p999 = m_measurements[n * 999 / 1000];
         std::println(
-            "{}: avg = {}, max = {}, p50 = {}, p90 = {}, p99 = {}, p999 = {}",  //
-            m_name, avg, max, p50, p90, p99, p999);
+            "{}: avg = {}ns, max = {}ns, p50 = {}ns, p90 = {}ns, p99 = {}ns, p999 = {}ns",  //
+            m_name, avg.count(), max.count(), p50.count(), p90.count(), p99.count(), p999.count());
     }
 
 private:

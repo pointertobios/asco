@@ -33,7 +33,7 @@ public:
             }
 
 #ifdef LOCKS_DEBUG
-            m_lock->m_locker_id = std::thread::id{0};
+            m_lock->m_locker_id = std::thread::id{};
 #endif
             m_lock->m_locked.release();
         }
@@ -107,7 +107,7 @@ public:
 private:
     binary_semaphore m_locked{1};
 #ifdef LOCKS_DEBUG
-    std::thread::id m_locker_id{0};
+    std::thread::id m_locker_id;
 #endif
 };
 

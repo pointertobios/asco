@@ -80,20 +80,27 @@ if (ASCO_IOCP)
 endif()
 
 set(COMPILE_OPTIONS
-    -Wall
-    -Wextra
-    -Wpedantic
-    -Werror
-    -Wno-zero-length-array
 )
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
         -Wno-interference-size
     )
-else()
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
-        -ferror-limit=99999
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Werror
+        -Wno-zero-length-array
+    )
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
+        -ferror-limit=9999999
+    )
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
+        /utf-8
     )
 endif()
 
@@ -131,11 +138,11 @@ target_link_libraries(asco_base PUBLIC asco_core)
 target_compile_definitions(asco_base PRIVATE __ASCORT__)
 add_library(asco::base ALIAS asco_base)
 
-add_library(asco_shared_main SHARED asco_main.cpp)
+add_library(asco_shared_main asco_main.cpp)
 target_link_libraries(asco_shared_main PUBLIC asco_shared_core)
 add_library(asco::shared::main ALIAS asco_shared_main)
 
-add_library(asco_shared_base SHARED asco_main.cpp)
+add_library(asco_shared_base asco_main.cpp)
 target_link_libraries(asco_shared_base PUBLIC asco_shared_core)
 target_compile_definitions(asco_shared_base PRIVATE __ASCORT__)
 add_library(asco::shared::base ALIAS asco_shared_base)

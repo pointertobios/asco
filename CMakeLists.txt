@@ -48,6 +48,8 @@ endif()
 
 set(USING_LIBCXX OFF)
 
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+
 if (LIBCXX_COMPILES)
     set(USING_LIBCXX ON)
     message(STATUS "C++ stdlib: LLVM libc++")
@@ -62,6 +64,8 @@ if (NOT WIN32)
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
     endif()
+endif()
+
 endif()
 
 # add_compile_options(-fsanitize=address -fno-omit-frame-pointer)

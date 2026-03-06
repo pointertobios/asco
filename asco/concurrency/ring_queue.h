@@ -79,7 +79,7 @@ private:
     static constexpr std::size_t slot_pack_cap = cache_line_cap ? cache_line_cap : 1;
 
     using slot_pack_type = std::conditional_t<
-        cache_line_cap, std::array<util::raw_storage<T>, slot_pack_cap>, util::raw_storage<T>>;
+        cache_line_cap != 0, std::array<util::raw_storage<T>, slot_pack_cap>, util::raw_storage<T>>;
 
     struct alignas(util::cacheline) slot_pack : public slot_pack_type {};
 

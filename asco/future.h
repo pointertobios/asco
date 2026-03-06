@@ -106,7 +106,7 @@ public:
     }
 
     output_type await_resume() {
-        m_result_completed.load(std::memory_order::acquire);
+        (void)m_result_completed.load(std::memory_order::acquire);
 
         if (m_e_ptr) {
             std::rethrow_exception(m_e_ptr);

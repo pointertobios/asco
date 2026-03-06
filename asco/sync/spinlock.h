@@ -32,7 +32,7 @@ public:
             }
 
 #ifdef LOCKS_DEBUG
-            m_lock->m_locker_id = std::thread::id{0};
+            m_lock->m_locker_id = std::thread::id{};
 #endif
             m_lock->m_locked.store(false, std::memory_order::release);
         }
@@ -107,7 +107,7 @@ public:
 private:
     std::atomic_bool m_locked{false};
 #ifdef LOCKS_DEBUG
-    std::thread::id m_locker_id{0};
+    std::thread::id m_locker_id;
 #endif
 };
 

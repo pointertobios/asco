@@ -31,7 +31,13 @@ public:
 
     template<typename T>
     consteval static type_id of() noexcept {
+#ifdef __clang__
         constexpr std::string_view funcname = __PRETTY_FUNCTION__;
+#elif defined(__FUNCSIG__)
+        constexpr std::string_view funcname = __FUNCSIG__;
+#else
+#    error "Unsupported compiler"
+#endif
 
         std::size_t start = funcname.find_first_of('=') + 2;
         std::size_t end = funcname.find_last_of(']');
