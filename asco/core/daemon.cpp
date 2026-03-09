@@ -22,7 +22,7 @@ daemon::init_waiter daemon::start() {
     m_dthread = std::jthread{[this, &b](std::stop_token st) {
         b.arrive_and_wait();
 
-        os::set_thread_name(m_dthread.native_handle(), m_name);
+        os::thread_handle::from(m_dthread).set_name(m_name);
 
         if (!init()) {
             m_init_sem.release();

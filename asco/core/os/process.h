@@ -26,8 +26,19 @@ private:
     std::vector<std::size_t> m_cpus;
 };
 
-bool set_thread_affinity(std::thread::native_handle_type tid, cpu_set cpuset) noexcept;
+class thread_handle final {
+public:
+    thread_handle(std::thread::native_handle_type tid) noexcept;
 
-bool set_thread_name(std::thread::native_handle_type tid, const std::string &name) noexcept;
+    static thread_handle from(std::thread &t) noexcept;
+    static thread_handle from(std::jthread &t) noexcept;
+
+    bool set_name(const std::string &name) noexcept;
+
+    bool set_affinity(cpu_set cpuset) noexcept;
+
+private:
+    std::thread::native_handle_type m_tid;
+};
 
 };  // namespace asco::core::os

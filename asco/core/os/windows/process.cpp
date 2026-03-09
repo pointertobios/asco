@@ -54,4 +54,10 @@ bool set_thread_name(std::thread::native_handle_type tid, const std::string &nam
     return SUCCEEDED(hr);
 }
 
+bool thread_handle::set_name(const std::string &name) noexcept { return set_thread_name(m_tid, name); }
+
+bool thread_handle::set_affinity(cpu_set cpuset) noexcept {
+    return set_thread_affinity(m_tid, std::move(cpuset));
+}
+
 };  // namespace asco::core::os

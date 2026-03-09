@@ -1,6 +1,7 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include "os/process.h"
 #include <algorithm>
 #include <asco/core/worker.h>
 
@@ -132,7 +133,7 @@ bool worker::init() {
     runtime::_current_runtime = reinterpret_cast<runtime *>(m_runtime_ptr);
     _current_worker = this;
 
-    if (!os::set_thread_affinity(daemon::m_dthread.native_handle(), os::cpu_set{}.with(m_id))) {
+    if (!os::thread_handle::from(daemon::m_dthread).set_affinity(os::cpu_set{}.with(m_id))) {
         panic("worker::init: 设置线程亲和性失败");
     }
 
