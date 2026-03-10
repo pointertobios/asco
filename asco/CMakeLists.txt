@@ -33,6 +33,7 @@ set(PRECOMPILE_HEADERS
     sync/mutex.h
     sync/semaphore.h
     sync/spinlock.h
+    sync/spinrwlock.h
     test/bench.h
     test/test.h
     this_task.h
