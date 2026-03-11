@@ -13,7 +13,7 @@ namespace asco::core {
 class daemon {
 public:
     daemon(std::string name);
-    ~daemon();
+    virtual ~daemon();
 
     void awake();
 
@@ -32,7 +32,7 @@ protected:
     void sleep_until_awake_for(const std::chrono::milliseconds &duration);
     void sleep_until_awake_for(const std::chrono::microseconds &duration);
     void sleep_until_awake_for(const std::chrono::nanoseconds &duration);
-    void sleep_until_awake_before(const std::chrono::high_resolution_clock::time_point &time_point);
+    void sleep_until_awake_before(const std::chrono::steady_clock::time_point &time_point);
 
     virtual bool init();
     virtual bool run_once(std::stop_token &st);

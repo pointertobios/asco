@@ -68,7 +68,6 @@ public:
         std::size_t id, detail::coroutine_receiver rx,
         std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity>> backsem,
         void *runtime_storage_ptr, void *runtime_ptr, detail::idle_workers_sender idle_tx);
-    ~worker() = default;
 
     static worker &current();
 
