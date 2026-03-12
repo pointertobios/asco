@@ -14,7 +14,7 @@ namespace detail {
 
 using hash_val = std::array<std::uint64_t, 2>;
 
-static consteval std::uint64_t fmix(std::uint64_t x) noexcept {
+static constexpr std::uint64_t fmix(std::uint64_t x) noexcept {
     x ^= x >> 33;
     x *= 0xff51afd7ed558ccd;
     x ^= x >> 33;

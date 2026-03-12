@@ -195,11 +195,11 @@ public:
         }
 
     private:
-        read_guard(spinrwlock *p, spinrwlock<>::read_guard &&guard) noexcept
+        read_guard(const spinrwlock *p, spinrwlock<>::read_guard &&guard) noexcept
                 : m_spinrwlock{p}
                 , m_guard{std::move(guard)} {}
 
-        spinrwlock *m_spinrwlock{nullptr};
+        const spinrwlock *m_spinrwlock{nullptr};
         spinrwlock<>::read_guard m_guard;
     };
 
