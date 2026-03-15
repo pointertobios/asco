@@ -14,7 +14,7 @@ namespace detail {
 
 using hash_val = std::array<std::uint64_t, 2>;
 
-static constexpr std::uint64_t fmix(std::uint64_t x) noexcept {
+static constexpr std::uint64_t mix64(std::uint64_t x) noexcept {
     x ^= x >> 33;
     x *= 0xff51afd7ed558ccd;
     x ^= x >> 33;
@@ -72,8 +72,8 @@ static consteval hash_val hash_str(std::string_view str) noexcept {
     h2 ^= len;
     h1 += h2;
     h2 += h1;
-    h1 = fmix(h1);
-    h2 = fmix(h2);
+    h1 = mix64(h1);
+    h2 = mix64(h2);
     h1 += h2;
     h2 += h1;
 

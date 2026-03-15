@@ -16,6 +16,7 @@ set(ASCO_SOURCES
 set(PRECOMPILE_HEADERS
     cancellation.h
     concurrency/concurrency.h
+    concurrency/hash_map.h
     concurrency/ring_queue.h
     core/cancellation.h
     core/daemon.h

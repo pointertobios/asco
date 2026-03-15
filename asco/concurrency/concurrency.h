@@ -40,7 +40,7 @@ void withdraw() noexcept {
 }
 
 inline void exp_withdraw(std::size_t i) noexcept {
-    switch (1 << i) {
+    switch (1 << (i >= 6 ? 6 : i)) {
     case 1:
         withdraw<1>();
         break;

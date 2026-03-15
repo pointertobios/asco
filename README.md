@@ -113,6 +113,7 @@ FetchContent_MakeAvailable(asco)
     - [ ] 任务取消支持
   - [x] 无锁数据结构与算法
     - [x] 环形队列
+    - [x] 哈希表
     - [ ] 双端队列
 - [ ] 异步 IO
   - [ ] 文件
