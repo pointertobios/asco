@@ -35,25 +35,22 @@ worker &worker::current() {
 }
 
 worker &worker::of_handle(std::coroutine_handle<> handle) {
-    if (auto g = _corohandle_worker_map->lock(); g->contains(handle)) {
-        return *g->at(handle);
+    if (auto g = _corohandle_worker_map->get(handle)) {
+        return *g.value();
     } else {
         panic("worker::of_handle: 无效的 coroutine_handle {{{}}}", handle.address());
     }
 }
 
 worker *worker::optional_of_handle(std::coroutine_handle<> handle) {
-    if (auto g = _corohandle_worker_map->lock(); g->contains(handle)) {
-        return g->at(handle);
+    if (auto g = _corohandle_worker_map->get(handle)) {
+        return g.value();
     } else {
         return nullptr;
     }
 }
 
-bool worker::handle_valid(std::coroutine_handle<> handle) {
-    auto g = _corohandle_worker_map->lock();
-    return g->contains(handle) && g->at(handle) != nullptr;
-}
+bool worker::handle_valid(std::coroutine_handle<> handle) { return _corohandle_worker_map->contains(handle); }
 
 std::size_t worker::id() const { return m_id; }
 
@@ -66,15 +63,12 @@ std::coroutine_handle<> worker::this_coroutine() const {
 }
 
 void worker::awake_handle(std::coroutine_handle<> handle) noexcept {
-    if (auto g = m_suspended_tasks.lock(); g->contains(handle)) {
-        if (auto ag = m_active_tasks.lock()) {
-            ag->push_back(std::move(g->at(handle)));
-            std::push_heap(ag->begin(), ag->end());
-        }
-        g->erase(handle);
+    if (auto task = m_suspended_tasks.remove(handle)) {
+        m_active_tasks.push_back(std::move(*task));
+        std::push_heap(m_active_tasks.begin(), m_active_tasks.end());
         awake();
     } else {
-        m_preawake_handles.lock()->insert(handle);
+        m_preawake_handles.insert(handle);
     }
 }
 
@@ -84,37 +78,36 @@ void worker::suspend_current_handle(std::coroutine_handle<> handle) noexcept {
             "worker::suspend_current_handle: 挂起当前协程错误；挂起：{{{}}}，当前：{{{}}}", handle.address(),
             m_current_task.size() ? m_current_task.back().address() : nullptr);
     }
-    if (auto g = m_preawake_handles.lock(); g->contains(handle)) {
-        g->erase(handle);
+    if (m_preawake_handles.remove(handle)) {
         return;
     }
-    m_suspended_tasks.lock()->emplace(handle, detail::task{m_current_task_time, std::move(m_current_task)});
+    m_suspended_tasks.insert(handle, detail::task{m_current_task_time, std::move(m_current_task)});
 }
 
 void worker::push_handle(std::coroutine_handle<> handle) noexcept {
-    _corohandle_worker_map->lock()->emplace(handle, this);
+    _corohandle_worker_map->insert(handle, this);
     m_current_task.push_back(handle);
-    m_top_of_join_handle.lock()->at(m_current_task.front()) = handle;
+    m_top_of_join_handle.get(m_current_task.front()).value() = handle;
 }
 
 std::coroutine_handle<> worker::pop_handle() noexcept {
     auto res = m_current_task.back();
     if (m_current_task.size() == 1) {
-        m_coroutine_metas.lock()->erase(m_current_task.back());
+        m_coroutine_metas.remove(m_current_task.back());
     }
     m_current_task.pop_back();
     if (m_current_task.size()) {
-        m_top_of_join_handle.lock()->at(m_current_task.front()) = m_current_task.back();
+        m_top_of_join_handle.get(m_current_task.front()).value() = m_current_task.back();
     } else {
-        m_top_of_join_handle.lock()->erase(res);
+        m_top_of_join_handle.remove(res);
     }
-    _corohandle_worker_map->lock()->erase(res);
+    _corohandle_worker_map->remove(res);
     return res;
 }
 
 std::coroutine_handle<> worker::top_of_join_handle(std::coroutine_handle<> handle) noexcept {
-    if (auto g = m_top_of_join_handle.lock(); g->contains(handle)) {
-        return g->at(handle);
+    if (auto g = m_top_of_join_handle.get(handle)) {
+        return g.value();
     } else {
         return {};
     }
@@ -141,35 +134,32 @@ bool worker::init() {
 }
 
 bool worker::run_once(std::stop_token &st) {
-    if (!fetch_task() && m_active_tasks.lock()->empty()) {
+    if (!fetch_task() && m_active_tasks.empty()) {
         m_idle_workers_tx.try_send(m_id);
         sleep_until_awake();
         return true;
     }
 
-    auto put_current_task = [&](decltype(m_active_tasks)::guard &g) {
-        auto p = g->begin();
+    auto put_current_task = [&]() {
+        auto p = m_active_tasks.begin();
         m_current_task = std::move(p->stack);
         m_current_task_time = p->prio;
-        std::pop_heap(g->begin(), g->end());
-        g->pop_back();
+        std::pop_heap(m_active_tasks.begin(), m_active_tasks.end());
+        m_active_tasks.pop_back();
         m_current_cancel_token =
-            m_coroutine_metas.lock()->at(m_current_task.front()).cancel_source->get_token();
+            m_coroutine_metas.get(m_current_task.front()).value().cancel_source->get_token();
     };
 
-    auto clean_empty_tasks = [&](decltype(m_active_tasks)::guard &g) {
-        while (!g->empty() && g->begin()->stack.empty()) {
-            std::pop_heap(g->begin(), g->end());
-            g->pop_back();
+    auto clean_empty_tasks = [&]() {
+        while (!m_active_tasks.empty() && m_active_tasks.begin()->stack.empty()) {
+            std::pop_heap(m_active_tasks.begin(), m_active_tasks.end());
+            m_active_tasks.pop_back();
         }
     };
 
-    if (auto g = m_active_tasks.lock()) {
-        clean_empty_tasks(g);
-
-        if (!g->empty()) {
-            put_current_task(g);
-        }
+    clean_empty_tasks();
+    if (!m_active_tasks.empty()) {
+        put_current_task();
     }
 
     while (m_current_task.size()) {
@@ -193,22 +183,20 @@ bool worker::run_once(std::stop_token &st) {
         auto dur = util::get_tsc() - m_start_tsc;
         m_current_task_time += dur;
 
-        if (auto g = m_active_tasks.lock()) {
-            clean_empty_tasks(g);
+        clean_empty_tasks();
 
-            if (!g->empty() && g->begin()->prio < m_current_task_time) {
-                g->push_back({m_current_task_time, std::move(m_current_task)});
-                std::push_heap(g->begin(), g->end());
+        if (!m_active_tasks.empty() && m_active_tasks.begin()->prio < m_current_task_time) {
+            m_active_tasks.push_back({m_current_task_time, std::move(m_current_task)});
+            std::push_heap(m_active_tasks.begin(), m_active_tasks.end());
 
-                put_current_task(g);
-            }
+            put_current_task();
         }
     }
 
     m_current_cancel_token = cancel_token{};
 
     return !st.stop_requested() ||  //
-           m_active_tasks.lock()->size() || m_suspended_tasks.lock()->size() || fetch_task();
+           m_active_tasks.size() || m_suspended_tasks.size() || fetch_task();
 }
 
 void worker::shutdown() {}
@@ -217,13 +205,13 @@ bool worker::fetch_task() {
     if (auto meta = m_coroutine_rx.try_recv()) {
         auto handle = meta->handle;
         m_backsem->release();
-        m_coroutine_metas.lock()->emplace(handle, std::move(*meta));
-        if (auto g = m_active_tasks.lock()) {
-            g->push_back({0, std::vector{handle}});
-            std::push_heap(g->begin(), g->end());
-        }
-        m_top_of_join_handle.lock()->emplace(handle, handle);
-        auto _ = _corohandle_worker_map->lock()->emplace(handle, this);
+        m_coroutine_metas.insert(handle, std::move(*meta));
+        m_top_of_join_handle.insert(handle, std::coroutine_handle{handle});
+        _corohandle_worker_map->insert(handle, this);
+
+        m_active_tasks.push_back({0, std::vector{handle}});
+        std::push_heap(m_active_tasks.begin(), m_active_tasks.end());
+
         return true;
     }
     return false;
@@ -254,10 +242,8 @@ void worker::yield_current() {
     }
 
     auto stack_time = m_current_task_time + util::get_tsc() - m_start_tsc;
-    if (auto g = m_active_tasks.lock()) {
-        g->push_back({stack_time, std::move(m_current_task)});
-        std::push_heap(g->begin(), g->end());
-    }
+    m_active_tasks.push_back({stack_time, std::move(m_current_task)});
+    std::push_heap(m_active_tasks.begin(), m_active_tasks.end());
 }
 
 };  // namespace asco::core

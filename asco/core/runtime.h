@@ -6,9 +6,9 @@
 #include <coroutine>
 #include <cstddef>
 #include <type_traits>
-#include <unordered_map>
 #include <vector>
 
+#include <asco/concurrency/hash_map.h>
 #include <asco/concurrency/ring_queue.h>
 #include <asco/core/worker.h>
 #include <asco/future.h>
@@ -168,8 +168,7 @@ private:
     std::vector<std::unique_ptr<worker>> m_workers;
     std::vector<runtime **> m_workers_local_runtime_ptr;
 
-    inline static sync::spinlock<std::unordered_map<std::coroutine_handle<>, worker *>>
-        m_corohandle_worker_map;
+    inline static concurrency::hash_map<std::coroutine_handle<>, worker *> m_corohandle_worker_map;
 
     inline thread_local static runtime *_current_runtime{nullptr};
 };

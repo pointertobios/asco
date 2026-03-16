@@ -39,7 +39,7 @@ bool is_blocking_env() noexcept {
     }
 
     auto &w = core::worker::current();
-    return w.m_coroutine_metas.lock()->at(w.m_current_task.front()).blocking;
+    return w.m_coroutine_metas.get(w.m_current_task.front()).value().blocking;
 }
 
 };  // namespace asco::this_task

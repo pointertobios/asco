@@ -9,10 +9,9 @@
 #include <deque>
 #include <memory>
 #include <semaphore>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
+#include <asco/concurrency/hash_map.h>
 #include <asco/core/cancellation.h>
 #include <asco/core/daemon.h>
 #include <asco/sync/spinlock.h>
@@ -106,12 +105,12 @@ private:
     std::uint64_t m_current_task_time;
     std::uint64_t m_start_tsc;
 
-    sync::spinlock<std::deque<detail::task>> m_active_tasks;
-    sync::spinlock<std::unordered_map<std::coroutine_handle<>, std::coroutine_handle<>>> m_top_of_join_handle;
-    sync::spinlock<std::unordered_map<std::coroutine_handle<>, detail::task>> m_suspended_tasks;
-    sync::spinlock<std::unordered_map<std::coroutine_handle<>, detail::coroutine_meta>> m_coroutine_metas;
+    std::deque<detail::task> m_active_tasks;
+    concurrency::hash_map<std::coroutine_handle<>, std::coroutine_handle<>> m_top_of_join_handle;
+    concurrency::hash_map<std::coroutine_handle<>, detail::task> m_suspended_tasks;
+    concurrency::hash_map<std::coroutine_handle<>, detail::coroutine_meta> m_coroutine_metas;
 
-    sync::spinlock<std::unordered_set<std::coroutine_handle<>>> m_preawake_handles;
+    concurrency::hash_set<std::coroutine_handle<>> m_preawake_handles;
 
     const std::size_t m_id;
 
@@ -124,8 +123,7 @@ private:
     void *m_runtime_storage_ptr;
     void *m_runtime_ptr;
 
-    inline static sync::spinlock<std::unordered_map<std::coroutine_handle<>, worker *>>
-        *_corohandle_worker_map;
+    inline static concurrency::hash_map<std::coroutine_handle<>, worker *> *_corohandle_worker_map;
 
     inline thread_local static worker *_current_worker{nullptr};
 };
@@ -138,7 +136,7 @@ template<typename TaskLocalStorage>
 TaskLocalStorage &task_local() noexcept {
     auto &w = core::worker::current();
     if (w.m_current_task.size()) {
-        auto &tls = w.m_coroutine_metas.lock()->at(w.m_current_task.front()).tls;
+        auto &tls = w.m_coroutine_metas.get(w.m_current_task.front()).value().tls;
         return tls.get<TaskLocalStorage>();
     } else {
         panic("asco::this_task::task_local: 当前没有正在运行的任务");
