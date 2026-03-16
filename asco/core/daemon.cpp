@@ -4,6 +4,7 @@
 #include <asco/core/daemon.h>
 
 #include <barrier>
+#include <chrono>
 #include <semaphore>
 #include <stop_token>
 #include <thread>
@@ -68,7 +69,7 @@ void daemon::sleep_until_awake_for(const std::chrono::nanoseconds &duration) {
     (void)m_sem.try_acquire_for(duration);
 }
 
-void daemon::sleep_until_awake_before(const std::chrono::high_resolution_clock::time_point &time_point) {
+void daemon::sleep_until_awake_before(const std::chrono::steady_clock::time_point &time_point) {
     (void)m_sem.try_acquire_until(time_point);
 }
 
