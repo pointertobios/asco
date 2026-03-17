@@ -13,7 +13,11 @@ namespace asco::core {
 class daemon {
 public:
     daemon(std::string name);
-    virtual ~daemon();
+    virtual ~daemon()
+#ifdef ASCO_TESTING
+        noexcept(false)
+#endif
+            ;
 
     void awake();
 

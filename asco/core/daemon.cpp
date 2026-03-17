@@ -43,7 +43,11 @@ daemon::init_waiter daemon::start() {
     return {*this};
 }
 
-daemon::~daemon() {
+daemon::~daemon()
+#ifdef ASCO_TESTING
+    noexcept(false)
+#endif
+{
     if (m_dthread.joinable()) {
         m_dthread.request_stop();
         awake();
