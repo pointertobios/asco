@@ -141,6 +141,16 @@ enum class bucket_state_enum : std::uint8_t {
 struct bucket_state {
     std::size_t refcount : 61;
     bucket_state_enum state : 3;
+
+#ifdef _WIN32  // MSVC 的位域有填充，需要显式清零
+    bucket_state() { std::memset(this, 0, sizeof(*this)); }
+
+    bucket_state(std::size_t rc, bucket_state_enum s) {
+        std::memset(this, 0, sizeof(*this));
+        refcount = rc;
+        state = s;
+    }
+#endif
 };
 
 };  // namespace detail
@@ -346,7 +356,11 @@ public:
     hash_map()
             : m_buckets(initial_capacity) {}
 
-    ~hash_map() {
+    ~hash_map()
+#ifdef ASCO_TESTING
+        noexcept(false)
+#endif
+    {
         if (protect_state s{0, protect_state_enum::available};  //
             !m_protect_state.compare_exchange_strong(
                 s, {0, protect_state_enum::unavailable}, std::memory_order::acquire,
@@ -585,7 +599,7 @@ private:
         auto step = hash2(key);
 
         for (std::size_t i = 0; i < size; i++) {
-            auto index = (begindex + i * step) % size;
+            auto index = (begindex + i * (step % size)) % size;
             bucket &b = m_buckets[index];
 
         begin_insert:
@@ -626,6 +640,8 @@ private:
                             std::memory_order::relaxed)) {
                         goto begin_insert;
                     }
+                } else if (e.state == bucket_state_enum::empty) {
+                    goto begin_insert;
                 } else {
                     continue;
                 }
@@ -656,7 +672,7 @@ private:
         auto step = hash2(key);
 
         for (std::size_t i = 0; i < size; i++) {
-            auto index = (begindex + i * step) % size;
+            auto index = (begindex + i * (step % size)) % size;
             bucket &b = m_buckets[index];
 
             if (bucket_state e{0, bucket_state_enum::filled};  //
@@ -734,7 +750,7 @@ private:
         auto step = hash2(key);
 
         for (std::size_t i = 0; i < size; i++) {
-            auto index = (begindex + i * step) % size;
+            auto index = (begindex + i * (step % size)) % size;
             bucket &b = m_buckets[index];
 
             bucket_state e;
@@ -790,7 +806,7 @@ private:
             auto step = hash2(key);
 
             for (std::size_t i = 0; i < size; i++) {
-                auto index = (begindex + i * step) % size;
+                auto index = (begindex + i * (step % size)) % size;
                 bucket &newb = new_buckets[index];
                 if (newb.state.load(std::memory_order::acquire).state != bucket_state_enum::empty) {
                     continue;
@@ -829,8 +845,7 @@ private:
     }
 
     rehashing_guard try_set_rehashing() noexcept {
-        auto e = m_protect_state.load(std::memory_order_relaxed);
-        e.state = protect_state_enum::available;
+        protect_state e{0, protect_state_enum::available};
         if (m_protect_state.compare_exchange_strong(
                 e, {e.refcount, protect_state_enum::rehashing}, std::memory_order::acq_rel,
                 std::memory_order::relaxed)) {
@@ -853,6 +868,16 @@ private:
     struct protect_state {
         std::size_t refcount : 62;
         protect_state_enum state : 2;
+
+#ifdef _WIN32  // MSVC 的位域有填充，需要显式清零
+        protect_state() { std::memset(this, 0, sizeof(*this)); }
+
+        protect_state(std::size_t rc, protect_state_enum s) {
+            std::memset(this, 0, sizeof(*this));
+            refcount = rc;
+            state = s;
+        }
+#endif
     };
     std::atomic<protect_state> m_protect_state{{0, protect_state_enum::available}};
 

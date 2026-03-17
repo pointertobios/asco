@@ -105,7 +105,7 @@ private:
     std::uint64_t m_current_task_time;
     std::uint64_t m_start_tsc;
 
-    std::deque<detail::task> m_active_tasks;
+    sync::spinlock<std::deque<detail::task>> m_active_tasks;
     concurrency::hash_map<std::coroutine_handle<>, std::coroutine_handle<>> m_top_of_join_handle;
     concurrency::hash_map<std::coroutine_handle<>, detail::task> m_suspended_tasks;
     concurrency::hash_map<std::coroutine_handle<>, detail::coroutine_meta> m_coroutine_metas;

@@ -127,10 +127,9 @@ public:
         std::size_t lc{0};
         do {
             e = m_state.load(std::memory_order::acquire);
-            e = e | write_willing_mask;
             concurrency::exp_withdraw(lc++);
         } while (!m_state.compare_exchange_weak(
-            e, e | write_mask, std::memory_order::acq_rel, std::memory_order::acquire));
+            e, e | write_willing_mask, std::memory_order::acq_rel, std::memory_order::acquire));
         e = write_willing_mask;
         do {
             lc = 0;
