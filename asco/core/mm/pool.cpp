@@ -62,7 +62,8 @@ void *coroutine_pool::allocate(std::size_t n) noexcept {
     auto block_count = 1ull << self.block_allocate_exp;
     block *new_block;
     try {
-        new_block = reinterpret_cast<block *>(pmr::get_local().allocate_bytes(max_object_size * block_count));
+        new_block = reinterpret_cast<block *>(
+            pmr::get_local().allocate_bytes(max_object_size * block_count, alignof(block)));
     } catch (const std::bad_alloc &) { return nullptr; }
     new (new_block) block(block_count);
 
@@ -98,7 +99,8 @@ void coroutine_pool::deallocate(void *addr, std::size_t n) noexcept {
         return;
     }
 
-    auto this_block = reinterpret_cast<block *>(reinterpret_cast<std::size_t *>(addr)[n / 8 - 1]);
+    auto this_block = reinterpret_cast<block *>(
+        reinterpret_cast<std::size_t *>(addr)[block::needed_units(n) * block_unit / sizeof(std::size_t) - 1]);
     this_block->deallocate(addr, n);
 }
 
@@ -124,7 +126,7 @@ void *coroutine_pool::block::allocate(std::size_t n) noexcept {
         return nullptr;
     }
     auto res = reinterpret_cast<std::size_t *>(units[allocating_index].data);
-    res[n / 8 - 1] = reinterpret_cast<std::size_t>(this);
+    res[units_needed * block_unit / sizeof(std::size_t) - 1] = reinterpret_cast<std::size_t>(this);
     allocating_index += units_needed;
     return res;
 }
