@@ -94,9 +94,14 @@ future<std::optional<T>> operator co_await();
   - `true`：拿到一个结果
   - `false`：当前 `join_set` 中已提交任务的结果都已收齐
 
-### 2.4 `join_all()`：停止产生新任务并收集已产生的结果
+### 2.4 `join_all()`：关闭结果收集并收集剩余结果
 
-`join_all()` 会停止新的 `spawn`，并返回一个 `std::vector<T>`（包含已收集到的结果）。
+`join_all()` 会关闭 `join_set` 内部的结果收集通道，并返回关闭后仍能收集到的剩余结果。
+
+注意：
+
+- 调用 `join_all()` 之后，不应再继续向该 `join_set` 提交新任务。
+- 若之后仍调用 `spawn(...)`，任务本身仍可能被启动，但其结果不会再进入这个 `join_set`。
 
 ---
 

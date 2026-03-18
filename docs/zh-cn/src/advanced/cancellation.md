@@ -38,7 +38,7 @@ ASCO 的“任务取消”主要面向由 runtime 调度的任务（`join_handle
 
 ## 2. 如何取消一个任务：`join_handle::cancel()`
 
-外部取消的标准方式是：对 `join_handle<T>` 调用并等待 `cancel()`：
+外部取消的标准方式是：先对 `join_handle<T>` 调用 `cancel()`，再在需要时通过 `co_await` 该句柄观察取消结果：
 
 ```cpp
 #include <asco/future.h>
@@ -63,8 +63,8 @@ future<void> example_cancel(join_handle<void> &h) {
 
 行为要点：
 
-- `cancel()` 会给该任务的 `cancel_source` 发出 stop 请求。
-- 取消请求被处理后，会执行已注册的取消回调（`cancel_callback`），并终止该任务的后续执行。
+- `cancel()` 会先把该任务的结果状态标记为已完成，并写入 `asco::core::coroutine_cancelled` 异常；随后向对应任务的 `cancel_source` 发出 stop 请求。
+- worker 在后续调度边界处理该取消请求时，会执行已注册的取消回调（`cancel_callback`），并销毁该任务的执行栈。
 - 被取消的 `join_handle` 在 `co_await` 时会抛出 `asco::core::coroutine_cancelled`。
 
 ---
