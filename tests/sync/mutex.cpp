@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <utility>
@@ -21,13 +22,15 @@ future<void> yield_n(std::size_t n) {
 }
 
 template<typename Pred>
-future<bool> wait(Pred &&pred) {
-    while (true) {
+future<bool> wait(Pred &&pred, std::chrono::steady_clock::duration max_wait = std::chrono::seconds{1}) {
+    const auto deadline = std::chrono::steady_clock::now() + max_wait;
+    while (std::chrono::steady_clock::now() < deadline) {
         if (std::invoke(pred)) {
             co_return true;
         }
         co_await this_task::yield();
     }
+    co_return std::invoke(pred);
 }
 
 }  // namespace

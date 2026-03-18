@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <atomic>
-#include <cstddef>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -17,6 +17,18 @@
 using namespace asco;
 
 namespace {
+
+template<std::size_t N>
+future<bool> acquire_for(sync::semaphore<N> &sem, std::chrono::steady_clock::duration max_wait) {
+    const auto deadline = std::chrono::steady_clock::now() + max_wait;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (sem.try_acquire()) {
+            co_return true;
+        }
+        co_await this_task::yield();
+    }
+    co_return sem.try_acquire();
+}
 
 struct cancellable_never_ready {
     sync::binary_semaphore *started{};
@@ -100,11 +112,14 @@ ASCO_TEST(join_handle_cancel_triggers_callback_and_throws) {
         }
     });
 
-    co_await cb_registered.acquire();
+    ASCO_CHECK(
+        co_await acquire_for(cb_registered, std::chrono::seconds{1}), "callback did not register in time");
 
     h.cancel();
 
-    co_await cancel_cb_called.acquire();
+    ASCO_CHECK(
+        co_await acquire_for(cancel_cb_called, std::chrono::seconds{1}),
+        "cancel callback was not called in time");
 
     bool threw_cancelled = false;
     try {
@@ -124,11 +139,13 @@ ASCO_TEST(join_handle_cancel_works_when_task_is_suspended) {
     auto h = spawn(
         [&]() -> future<void> { co_await cancellable_never_ready{&started, &cancel_cb_called, nullptr}; });
 
-    co_await started.acquire();
+    ASCO_CHECK(co_await acquire_for(started, std::chrono::seconds{1}), "task did not start in time");
 
     h.cancel();
 
-    co_await cancel_cb_called.acquire();
+    ASCO_CHECK(
+        co_await acquire_for(cancel_cb_called, std::chrono::seconds{1}),
+        "cancel callback was not called in time");
 
     bool threw_cancelled = false;
     try {

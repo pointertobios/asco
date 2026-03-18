@@ -65,7 +65,7 @@ class worker final : public daemon {
 public:
     worker(
         std::size_t id, detail::coroutine_receiver rx,
-        std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity>> backsem,
+        std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity + 1>> backsem,
         void *runtime_storage_ptr, void *runtime_ptr, detail::idle_workers_sender idle_tx);
 
     static worker &current();
@@ -115,7 +115,7 @@ private:
     const std::size_t m_id;
 
     detail::coroutine_receiver m_coroutine_rx;
-    std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity>> m_backsem;
+    std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity + 1>> m_backsem;
 
     detail::idle_workers_sender m_idle_workers_tx;
 

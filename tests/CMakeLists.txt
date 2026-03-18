@@ -7,6 +7,7 @@ add_executable(tests
     sync/mutex.cpp
     sync/semaphore.cpp
     task_local.cpp
+    time.cpp
 )
 target_link_libraries(tests PRIVATE asco::core asco::test)
 

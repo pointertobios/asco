@@ -17,7 +17,7 @@ namespace asco::core {
 
 worker::worker(
     std::size_t id, detail::coroutine_receiver rx,
-    std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity>> backsem,
+    std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity + 1>> backsem,
     void *runtime_storage_ptr, void *runtime_ptr, detail::idle_workers_sender idle_tx)
         : daemon(std::format("asco-w{}", id))
         , m_id{id}

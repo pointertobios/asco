@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <array>
 #include <bit>
 #include <cstdint>
 
@@ -23,7 +24,7 @@ static constexpr std::uint64_t mix64(std::uint64_t x) noexcept {
     return x;
 }
 
-static consteval std::uint64_t concat64le(const char *source, std::size_t nbytes) noexcept {
+static constexpr std::uint64_t concat64le(const char *source, std::size_t nbytes) noexcept {
     std::uint64_t result{0};
     for (std::size_t i = 0; i < nbytes; ++i) {
         result |= static_cast<std::uint64_t>(static_cast<unsigned char>(source[i])) << (i * 8);
@@ -31,7 +32,7 @@ static consteval std::uint64_t concat64le(const char *source, std::size_t nbytes
     return result;
 }
 
-static consteval hash_val hash_str(std::string_view str) noexcept {
+static constexpr hash_val hash_str(std::string_view str) noexcept {
     std::uint64_t len = str.size();
 
     constexpr std::uint64_t c1 = 0x87c37b91114253d5;

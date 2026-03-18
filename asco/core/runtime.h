@@ -10,6 +10,8 @@
 
 #include <asco/concurrency/hash_map.h>
 #include <asco/concurrency/ring_queue.h>
+#include <asco/core/time/high_resolution_timer.h>
+#include <asco/core/time/timer.h>
 #include <asco/core/worker.h>
 #include <asco/future.h>
 #include <asco/invoke.h>
@@ -24,12 +26,38 @@ bool in_runtime() noexcept;
 
 namespace core {
 
+class runtime;
+
+class runtime_builder {
+    friend class runtime;
+
+public:
+    static runtime_builder multi_threaded(std::size_t nthreads = 0) { return runtime_builder{nthreads}; }
+
+    static runtime_builder single_threaded() { return runtime_builder{1}; }
+
+    runtime_builder &&
+    with_timer(std::unique_ptr<time::timer> timer = std::make_unique<time::high_resolution_timer>()) && {
+        m_timer = std::move(timer);
+        return std::move(*this);
+    }
+
+    runtime build() &&;
+
+private:
+    explicit runtime_builder(std::size_t nthreads)
+            : m_nthreads(nthreads) {}
+
+    std::size_t m_nthreads{0};
+    std::unique_ptr<time::timer> m_timer{nullptr};
+};
+
 class runtime final {
     friend class worker;
     friend bool asco::in_runtime() noexcept;
 
 public:
-    explicit runtime(std::size_t nthreads = 0);
+    explicit runtime(runtime_builder &&builder);
 
     runtime(const runtime &) = delete;
     runtime &operator=(const runtime &) = delete;
@@ -38,6 +66,8 @@ public:
     runtime &operator=(runtime &&) = delete;
 
     static runtime &current();
+
+    time::timer &get_timer();
 
     template<typename TaskLocalStorage>
     auto block_on(async_function<> auto &&fn, TaskLocalStorage &&task_local_storage) {
@@ -163,7 +193,9 @@ private:
     detail::idle_workers_receiver m_idle_workers_rx;
 
     detail::coroutine_sender m_coroutine_tx;
-    std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity>> m_backsem_sync;
+    std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity + 1>> m_backsem_sync;
+
+    std::unique_ptr<time::timer> m_timer;
 
     std::vector<std::unique_ptr<worker>> m_workers;
     std::vector<runtime **> m_workers_local_runtime_ptr;

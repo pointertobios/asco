@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <type_traits>
@@ -33,5 +34,11 @@ concept hash_key =
     std::equality_comparable<K> && std::copyable<K> && std::is_nothrow_destructible_v<K> && requires(K k) {
         { std::hash<K>{}(k) } -> std::convertible_to<std::size_t>;
     };
+
+template<typename Ti>
+concept duration_type = specialization_of<std::remove_cvref_t<Ti>, std::chrono::duration>;
+
+template<typename Tp>
+concept time_point_type = specialization_of<std::remove_cvref_t<Tp>, std::chrono::time_point>;
 
 };  // namespace asco::util::types

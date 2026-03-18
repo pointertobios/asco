@@ -27,7 +27,9 @@ bool add_test(std::string name, test_function fn) {
 int main() {
     using namespace asco;
 
-    core::runtime rt;
+    core::runtime rt = core::runtime_builder::multi_threaded()  //
+                           .with_timer()
+                           .build();
     join_set<std::tuple<std::string, test::test_result>> set{rt};
 
     auto total = test::get_tests().size();

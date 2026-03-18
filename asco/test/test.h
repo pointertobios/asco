@@ -37,6 +37,17 @@ bool add_test(std::string name, test_function fn);
             }                                                                                          \
         } while (false)
 
+#    define ASCO_CHECK_WITH_FAILCALLBACK(callback, expr, fmt, ...)                                     \
+        do {                                                                                           \
+            if (!(expr)) {                                                                             \
+                callback();                                                                            \
+                auto sl = std::source_location::current();                                             \
+                auto hint = std::format(fmt, ##__VA_ARGS__);                                           \
+                co_return std::unexpected{                                                             \
+                    std::format("{}\n  位于 {}:{}:{}", hint, sl.file_name(), sl.line(), sl.column())}; \
+            }                                                                                          \
+        } while (false)
+
 #    define ASCO_SUCCESS() co_return std::monostate{};
 
 #endif

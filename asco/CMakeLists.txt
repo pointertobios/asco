@@ -6,10 +6,13 @@ set(ASCO_SOURCES
     core/daemon.cpp
     core/mm/pool.cpp
     core/os/process.cpp
+    core/time/high_resolution_timer.cpp
     core/runtime.cpp
     core/wait_for_valid.cpp
     core/worker.cpp
     this_task.cpp
+    time/interval.cpp
+    time/sleep.cpp
     yield.cpp
 )
 
@@ -22,6 +25,8 @@ set(PRECOMPILE_HEADERS
     core/daemon.h
     core/mm/pool.h
     core/os/process.h
+    core/time/high_resolution_timer.h
+    core/time/timer.h
     core/runtime.h
     core/wait_for_valid.h
     core/worker.h
@@ -38,6 +43,8 @@ set(PRECOMPILE_HEADERS
     test/bench.h
     test/test.h
     this_task.h
+    time/interval.h
+    time/sleep.h
     util/consts.h
     util/erased.h
     util/murmur.h

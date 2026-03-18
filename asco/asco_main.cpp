@@ -9,7 +9,9 @@
 extern asco::future<int> async_main();
 
 int main() {
-    asco::core::runtime rt;
+    asco::core::runtime rt = asco::core::runtime_builder::multi_threaded()  //
+                                 .with_timer()
+                                 .build();
     return rt.block_on(async_main);
 }
 

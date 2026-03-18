@@ -56,7 +56,9 @@ int main() {
     // Keep the runtime small to reduce scheduling noise.
     std::size_t nthreads =
         std::min<std::size_t>(2, std::max<std::size_t>(1, std::thread::hardware_concurrency()));
-    core::runtime rt{nthreads};
+    core::runtime rt = core::runtime_builder::multi_threaded(nthreads)  //
+                           .with_timer()
+                           .build();
 
     constexpr std::size_t warmup = 1'000;
     constexpr std::size_t measure = 100'000;

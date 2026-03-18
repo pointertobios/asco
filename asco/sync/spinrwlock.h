@@ -125,6 +125,7 @@ public:
     write_guard write() {
         std::size_t e;
         std::size_t lc{0};
+    start_write:
         do {
             e = m_state.load(std::memory_order::acquire);
             concurrency::exp_withdraw(lc++);
@@ -133,7 +134,11 @@ public:
         e = write_willing_mask;
         do {
             lc = 0;
-            while (e != m_state.load(std::memory_order::acquire)) {
+            std::size_t s;
+            while (e != (s = m_state.load(std::memory_order::acquire))) {
+                if (s == 0) {
+                    goto start_write;
+                }
                 concurrency::exp_withdraw(lc++);
             }
         } while (!m_state.compare_exchange_strong(

@@ -84,8 +84,8 @@ FetchContent_MakeAvailable(asco)
     - [x] 动态优先级
     - [x] 异步任务本地存储
     - [ ] 任务偷窃
-    - [ ] 计时器
-      - [ ] 高分辨率计时器
+    - [x] 计时器
+      - [x] 高分辨率计时器
       - [ ] 时间轮
     - [ ] IO 兼容层
       - [ ] io_uring (Linux)
@@ -93,6 +93,10 @@ FetchContent_MakeAvailable(asco)
       - [ ] IOCP (Windows)
 - [x] 测试框架
 - [ ] 并发
+  - [ ] 任务组合原语
+    - [x] join_set
+    - [ ] select
+    - [ ] join
   - [x] 同步原语
     - [x] 自旋锁
     - [x] 信号量
@@ -109,8 +113,13 @@ FetchContent_MakeAvailable(asco)
       - [ ] 任务取消支持
     - [ ] 门闩
       - [ ] 任务取消支持
-  - [ ] 定时器与超时
-    - [ ] 任务取消支持
+  - [ ] 时间子系统
+    - [x] 定时器
+      - [x] 任务取消支持
+    - [x] 睡眠
+      - [x] 任务取消支持
+    - [ ] 超时
+      - [ ] 任务取消支持
   - [x] 无锁数据结构与算法
     - [x] 环形队列
     - [x] 哈希表
