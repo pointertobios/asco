@@ -63,10 +63,10 @@ public:
             oldc = m_count.load(std::memory_order::acquire);
             if (oldc == 0) {
                 ++i;
-                if (i <= 100) {
-                } else if (i <= 1000) {
-                    concurrency::exp_withdraw(i);
-                } else if (i <= 2000) {
+                if (i <= 10) {
+                } else if (i <= 16) {
+                    concurrency::exp_withdraw(i - 10);
+                } else if (i <= 100) {
                     co_await this_task::yield();
                 } else {
                     if (auto g = m_wait_queue.lock()) {
