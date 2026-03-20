@@ -103,7 +103,9 @@ public:
         while (!g->empty() && x--) {
             auto h = g->front();
             g->pop_front();
-            core::worker::of_handle(h).awake_handle(h);
+            if (auto w = core::worker::optional_of_handle(h)) {
+                w->awake_handle(h);
+            }
         }
 
         return diff;
