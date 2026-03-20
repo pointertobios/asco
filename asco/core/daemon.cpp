@@ -3,7 +3,6 @@
 
 #include <asco/core/daemon.h>
 
-#include <barrier>
 #include <chrono>
 #include <semaphore>
 #include <stop_token>
@@ -19,9 +18,8 @@ daemon::daemon(std::string name)
 void daemon::awake() { m_sem.release(); }
 
 daemon::init_waiter daemon::start() {
-    std::barrier<> b{2};
-    m_dthread = std::jthread{[this, &b](std::stop_token st) {
-        b.arrive_and_wait();
+    m_dthread = std::jthread{[this](std::stop_token st) {
+        m_b.arrive_and_wait();
 
         os::thread_handle::from(m_dthread).set_name(m_name);
 
@@ -38,7 +36,7 @@ daemon::init_waiter daemon::start() {
         shutdown();
     }};
 
-    b.arrive_and_wait();
+    m_b.arrive_and_wait();
 
     return {*this};
 }

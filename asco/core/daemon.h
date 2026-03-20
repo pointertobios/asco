@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <barrier>
 #include <chrono>
 #include <semaphore>
 #include <string>
@@ -49,6 +50,8 @@ private:
     std::counting_semaphore<> m_init_sem{0};
 
     std::counting_semaphore<> m_sem{0};
+
+    std::barrier<> m_b{2};
 };
 
 };  // namespace asco::core

@@ -66,9 +66,6 @@ endif()
 
 endif()
 
-# add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
-# add_link_options(-fsanitize=address -fno-omit-frame-pointer)
-
 if (UNIX AND NOT APPLE AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU"))
     find_program(LD_LLD  NAMES ld.lld)
     find_program(LD_MOLD NAMES ld.mold)
