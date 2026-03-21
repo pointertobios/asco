@@ -6,7 +6,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <expected>
 #include <functional>
 #include <optional>
@@ -17,11 +16,12 @@
 
 #include <asco/concurrency/concurrency.h>
 #include <asco/panic.h>
+#include <asco/sync/spinrwlock.h>
 #include <asco/util/murmur.h>
 #include <asco/util/raw_storage.h>
 #include <asco/util/types.h>
 
-// 并发哈希表
+// 并发哈希表（不保证值的并发安全）
 
 namespace asco::concurrency {
 
@@ -131,11 +131,9 @@ enum class bucket_state_enum : std::uint8_t {
     empty = 0,
     constructing,
     filled,
-    predestructing,  // 预析构状态，被其他线程的 remove 函数视为 destructing ，被其他函数视为 filled
+    predestructing,
     destructing,
     tombstone,
-
-    exception,
 };
 
 struct bucket_state {
@@ -211,7 +209,6 @@ enum class remove_failed {
     retry,
     rehashing,
     guard_protecting,
-    thrown,
 };
 
 enum class get_failed {
@@ -223,7 +220,8 @@ enum class get_failed {
 using contains_failed = get_failed;
 
 template<util::types::hash_key K, util::types::move_secure V>
-    requires(std::is_nothrow_destructible_v<V> || std::is_void_v<V>)
+    requires(
+        (std::is_nothrow_move_constructible_v<V> && std::is_nothrow_destructible_v<V>) || std::is_void_v<V>)
 class hash_map final {
     static constexpr std::size_t initial_capacity = 64;
     static constexpr double load_factor = 0.6;
@@ -236,46 +234,6 @@ class hash_map final {
 
         util::raw_storage<K> key;
         [[no_unique_address]] util::raw_storage<util::types::monostate_if_void<V>> value;
-    };
-
-    struct structrual_guard {
-        hash_map *self;
-
-        operator bool() const { return self != nullptr; }
-
-        ~structrual_guard() {
-            if (!self) {
-                return;
-            }
-
-            protect_state e;
-            protect_state s;
-            do {
-                e = self->m_protect_state.load(std::memory_order::acquire);
-                s.refcount = e.refcount != 0 ? e.refcount - 1 : 0;
-                s.state = s.refcount == 0 ? protect_state_enum::available : e.state;
-            } while (!self->m_protect_state.compare_exchange_weak(
-                e, s, std::memory_order::release, std::memory_order::relaxed));
-        }
-    };
-
-    struct rehashing_guard {
-        hash_map *self;
-
-        operator bool() const { return self != nullptr; }
-
-        ~rehashing_guard() {
-            if (!self) {
-                return;
-            }
-
-            protect_state e;
-            do {
-                e = self->m_protect_state.load(std::memory_order::acquire);
-            } while (!self->m_protect_state.compare_exchange_weak(
-                e, {e.refcount, protect_state_enum::available}, std::memory_order::release,
-                std::memory_order::relaxed));
-        }
     };
 
 public:
@@ -361,16 +319,17 @@ public:
         noexcept(false)
 #endif
     {
-        if (protect_state s{0, protect_state_enum::available};  //
-            !m_protect_state.compare_exchange_strong(
-                s, {0, protect_state_enum::unavailable}, std::memory_order::acquire,
-                std::memory_order::relaxed)) {
+        auto g = m_lock.try_write();
+        if (!g) {
             panic("asco::concurrency::hash_map: 析构 hash_map 时正在被结构保护或 rehash");
         }
 
         for (bucket &b : m_buckets) {
-            bucket_state e = b.state.load(std::memory_order_acquire);
+            bucket_state e = b.state.load(std::memory_order::acquire);
             if (e.state == bucket_state_enum::filled) {
+                while ((e = b.state.load(std::memory_order::acquire)).refcount) {
+                    concurrency::cpu_relax();
+                }
                 b.key.get()->~K();
                 if constexpr (!std::is_void_v<V>) {
                     b.value.get()->~V();
@@ -390,8 +349,8 @@ public:
     // 保证在失败时 `value` 参数没有被移动（不抛异常时）
     std::expected<std::monostate, insert_failed>
     try_insert(const K &key, util::types::monostate_if_void<V> &&value) {
-        auto sg = protect_structure();
-        if (!sg) {
+        auto g = m_lock.try_read();
+        if (!g) {
             return std::unexpected(insert_failed::rehashing);
         }
 
@@ -434,7 +393,7 @@ public:
     }
 
     std::expected<util::types::monostate_if_void<V>, remove_failed> try_remove(const K &key) {
-        auto sg = protect_structure();
+        auto sg = m_lock.try_read();
         if (!sg) {
             return std::unexpected(remove_failed::rehashing);
         }
@@ -461,8 +420,6 @@ public:
             case remove_failed::retry:
                 concurrency::cpu_relax();
                 continue;
-            case remove_failed::thrown:
-                panic("asco::concurrency::hash_map: 尝试从抛过异常的槽中移除元素");
             }
         }
     }
@@ -486,8 +443,6 @@ public:
             case remove_failed::retry:
                 concurrency::cpu_relax();
                 continue;
-            case remove_failed::thrown:
-                panic("asco::concurrency::hash_map: 尝试从抛过异常的槽中移除元素");
             }
         }
     }
@@ -496,7 +451,7 @@ public:
     std::expected<guard, get_failed> try_get(const K &key)
         requires(!std::is_void_v<V>)
     {
-        auto sg = protect_structure();
+        auto sg = m_lock.try_read();
         if (!sg) {
             return std::unexpected(get_failed::rehashing);
         }
@@ -507,7 +462,7 @@ public:
     std::expected<std::monostate, get_failed> try_get(const K &key)
         requires(std::is_void_v<V>)
     {
-        auto sg = protect_structure();
+        auto sg = m_lock.try_read();
         if (!sg) {
             return std::unexpected(get_failed::rehashing);
         }
@@ -542,7 +497,7 @@ public:
     }
 
     std::expected<bool, contains_failed> try_contains(const K &key) {
-        auto sg = protect_structure();
+        auto sg = m_lock.try_read();
         if (!sg) {
             return std::unexpected{contains_failed::rehashing};
         }
@@ -576,7 +531,7 @@ public:
 
     // 不保证一定完成 rehash ，没有完成 rehash 时返回 false
     bool try_rehash() {
-        auto rg = try_set_rehashing();
+        auto rg = m_lock.try_write();
         if (!rg) {
             return false;
         }
@@ -598,19 +553,66 @@ private:
         auto begindex = hash % size;
         auto step = hash2(key);
 
+        std::optional<std::size_t> insert_index{std::nullopt};
+
         for (std::size_t i = 0; i < size; i++) {
             auto index = (begindex + i * (step % size)) % size;
             bucket &b = m_buckets[index];
 
         begin_insert:
+            if (insert_index) {
+                bucket_state e = b.state.load(std::memory_order::acquire);
+                if (e.state == bucket_state_enum::tombstone) {
+                    continue;
+                } else if (e.state == bucket_state_enum::empty) {
+                    break;
+                } else if (
+                    e.state == bucket_state_enum::constructing || e.state == bucket_state_enum::predestructing
+                    || e.state == bucket_state_enum::destructing) {
+                    m_buckets[*insert_index].state.store(
+                        {0, bucket_state_enum::tombstone}, std::memory_order::release);
+                    return std::unexpected{insert_failed::retry};
+                } else if (e.state == bucket_state_enum::filled) {
+                    if (b.state.compare_exchange_strong(
+                            e, {e.refcount + 1, e.state}, std::memory_order::acq_rel,
+                            std::memory_order::relaxed)) {
+                        if (*b.key.get() == key) {
+                            do {
+                                e = b.state.load(std::memory_order::acquire);
+                            } while (!b.state.compare_exchange_weak(
+                                e, {e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                                std::memory_order::relaxed));
+                            m_buckets[*insert_index].state.store(
+                                {0, bucket_state_enum::tombstone}, std::memory_order::release);
+                            return std::unexpected{insert_failed::key_repeated};
+                        } else {
+                            do {
+                                e = b.state.load(std::memory_order::acquire);
+                            } while (!b.state.compare_exchange_weak(
+                                e, {e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                                std::memory_order::relaxed));
+                            continue;
+                        }
+                    } else if (e.state == bucket_state_enum::predestructing) {
+                        m_buckets[*insert_index].state.store(
+                            {0, bucket_state_enum::tombstone}, std::memory_order::release);
+                        return std::unexpected{insert_failed::retry};
+                    } else {
+                        goto begin_insert;
+                    }
+                }
+
+                std::unreachable();
+            }
+
             if (bucket_state e{0, bucket_state_enum::empty};  //
                 !b.state.compare_exchange_strong(
                     e, {0, bucket_state_enum::constructing}, std::memory_order::acq_rel,
                     std::memory_order::relaxed)) {
-                if (e.state == bucket_state_enum::constructing) {
+                if (e.state == bucket_state_enum::constructing
+                    || e.state == bucket_state_enum::predestructing) {
                     return std::unexpected{insert_failed::retry};
-                } else if (
-                    e.state == bucket_state_enum::filled || e.state == bucket_state_enum::predestructing) {
+                } else if (e.state == bucket_state_enum::filled) {
                     if (b.state.compare_exchange_strong(
                             e, {e.refcount + 1, e.state}, std::memory_order::acq_rel,
                             std::memory_order::relaxed)) {
@@ -629,17 +631,26 @@ private:
                                 std::memory_order::relaxed));
                             continue;
                         }
+                    } else if (e.state == bucket_state_enum::predestructing) {
+                        return std::unexpected{insert_failed::retry};
                     } else {
                         goto begin_insert;
                     }
                 } else if (e.state == bucket_state_enum::destructing) {
                     return std::unexpected{insert_failed::retry};
                 } else if (e.state == bucket_state_enum::tombstone) {
-                    if (!b.state.compare_exchange_strong(
-                            e, {0, bucket_state_enum::constructing}, std::memory_order::acq_rel,
-                            std::memory_order::relaxed)) {
-                        goto begin_insert;
+                    do {
+                        e = b.state.load(std::memory_order::acquire);
+                        if (e.state != bucket_state_enum::tombstone) {
+                            goto begin_insert;
+                        }
+                    } while (!b.state.compare_exchange_weak(
+                        e, {0, bucket_state_enum::constructing}, std::memory_order::acq_rel,
+                        std::memory_order::relaxed));
+                    if (!insert_index) {
+                        insert_index = index;
                     }
+                    continue;
                 } else if (e.state == bucket_state_enum::empty) {
                     goto begin_insert;
                 } else {
@@ -647,22 +658,24 @@ private:
                 }
             }
 
-            try {
-                new (b.key.get()) K(key);
-                if constexpr (!std::is_void_v<V>) {
-                    new (b.value.get()) util::types::monostate_if_void<V>(std::move(value));
-                }
-            } catch (...) {
-                b.state.store({0, bucket_state_enum::exception}, std::memory_order::release);
-                std::rethrow_exception(std::current_exception());
-            }
-            b.state.store({0, bucket_state_enum::filled}, std::memory_order::release);
-            m_load.fetch_add(1, std::memory_order::relaxed);
+            insert_index = index;
 
-            return {};
+            break;
         }
 
-        std::unreachable();
+        if (insert_index) {
+            bucket &b = m_buckets[*insert_index];
+            new (b.key.get()) K(key);
+            if constexpr (!std::is_void_v<V>) {
+                new (b.value.get()) util::types::monostate_if_void<V>(std::move(value));
+            }
+            m_load.fetch_add(1, std::memory_order::relaxed);
+            b.state.store({0, bucket_state_enum::filled}, std::memory_order::release);
+
+            return {};
+        } else {
+            std::unreachable();
+        }
     }
 
     std::expected<util::types::monostate_if_void<V>, remove_failed> do_remove(const K &key) {
@@ -677,18 +690,23 @@ private:
 
             if (bucket_state e{0, bucket_state_enum::filled};  //
                 !b.state.compare_exchange_strong(
-                    e, {0, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
+                    e, {1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
                     std::memory_order::relaxed)) {
-                if (e.refcount != 0) {
-                    return std::unexpected{remove_failed::guard_protecting};
+                if (e.state == bucket_state_enum::filled && e.refcount != 0) {
+                    do {
+                        e = b.state.load(std::memory_order::acquire);
+                        if (e.state == bucket_state_enum::predestructing) {
+                            return std::unexpected{remove_failed::retry};
+                        }
+                    } while (!b.state.compare_exchange_weak(
+                        e, {e.refcount + 1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
+                        std::memory_order::relaxed));
                 } else if (e.state == bucket_state_enum::empty) {
                     return std::unexpected{remove_failed::none};
                 } else if (
                     e.state == bucket_state_enum::constructing
                     || e.state == bucket_state_enum::predestructing) {
                     return std::unexpected{remove_failed::retry};
-                } else if (e.state == bucket_state_enum::exception) {
-                    return std::unexpected{remove_failed::thrown};
                 } else {
                     continue;
                 }
@@ -699,31 +717,42 @@ private:
                 do {
                     e = b.state.load(std::memory_order::acquire);
                 } while (!b.state.compare_exchange_weak(
-                    e, {e.refcount, bucket_state_enum::filled}, std::memory_order::acq_rel,
+                    e, {e.refcount - 1, bucket_state_enum::filled}, std::memory_order::acq_rel,
                     std::memory_order::relaxed));
                 continue;
             }
 
-            if (bucket_state e{0, bucket_state_enum::predestructing};  //
-                !b.state.compare_exchange_strong(
-                    e, {0, bucket_state_enum::destructing}, std::memory_order::acq_rel,
-                    std::memory_order::relaxed)) {
-                // 不会有任何其它线程会把 predestructing 状态的槽更改为其它状态，只有可能是 refcount != 0。
+            if (b.state.load(std::memory_order::acquire).state == bucket_state_enum::filled) {
+                bucket_state e;
                 do {
                     e = b.state.load(std::memory_order::acquire);
                 } while (!b.state.compare_exchange_weak(
-                    e, {e.refcount, bucket_state_enum::filled}, std::memory_order::acq_rel,
-                    std::memory_order::relaxed));
-                return std::unexpected{remove_failed::guard_protecting};
+                    e, {e.refcount - 1, e.state}, std::memory_order::acq_rel, std::memory_order::relaxed));
+                return std::unexpected{remove_failed::retry};
             }
+
+            bucket_state e;
+            do {
+                e = b.state.load(std::memory_order::acquire);
+                if (e.refcount > 1) {
+                    do {
+                        e = b.state.load(std::memory_order::acquire);
+                    } while (!b.state.compare_exchange_weak(
+                        e, {e.refcount - 1, bucket_state_enum::filled}, std::memory_order::acq_rel,
+                        std::memory_order::relaxed));
+                    return std::unexpected{remove_failed::guard_protecting};
+                }
+            } while (!b.state.compare_exchange_weak(
+                e, {e.refcount - 1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
+                std::memory_order::relaxed));
 
             if constexpr (std::is_void_v<V>) {
                 b.key.get()->~K();
                 if constexpr (!std::is_void_v<V>) {
                     b.value.get()->~V();
                 }
-                b.state.store({0, bucket_state_enum::tombstone}, std::memory_order::release);
                 m_load.fetch_sub(1, std::memory_order::relaxed);
+                b.state.store({0, bucket_state_enum::tombstone}, std::memory_order::release);
 
                 return std::monostate{};
             } else {
@@ -733,8 +762,8 @@ private:
                 if constexpr (!std::is_void_v<V>) {
                     b.value.get()->~V();
                 }
-                b.state.store({0, bucket_state_enum::tombstone}, std::memory_order::release);
                 m_load.fetch_sub(1, std::memory_order::relaxed);
+                b.state.store({0, bucket_state_enum::tombstone}, std::memory_order::release);
 
                 return res;
             }
@@ -758,12 +787,11 @@ private:
                 e = b.state.load(std::memory_order::acquire);
                 if (e.state == bucket_state_enum::empty) {
                     return std::unexpected(get_failed::none);
-                } else if (e.state == bucket_state_enum::constructing) {
-                    return std::unexpected(get_failed::retry);
-                } else if (e.state == bucket_state_enum::exception) {
-                    goto next;
                 } else if (
-                    e.state != bucket_state_enum::filled && e.state != bucket_state_enum::predestructing) {
+                    e.state == bucket_state_enum::constructing
+                    || e.state == bucket_state_enum::predestructing) {
+                    return std::unexpected(get_failed::retry);
+                } else if (e.state != bucket_state_enum::filled) {
                     goto next;
                 }
             } while (!b.state.compare_exchange_weak(
@@ -818,6 +846,7 @@ private:
                     new (newb.value.get()) V(std::move(*b.value.get()));
                     b.value.get()->~V();
                 }
+                b.state.store({0, bucket_state_enum::tombstone}, std::memory_order::release);
                 newb.state.store({0, bucket_state_enum::filled}, std::memory_order::release);
                 break;
             }
@@ -826,60 +855,11 @@ private:
         m_buckets = std::move(new_buckets);
     }
 
-    structrual_guard protect_structure() noexcept {
-        auto e = m_protect_state.load(std::memory_order_relaxed);
-        e.state = protect_state_enum::available;
-        if (m_protect_state.compare_exchange_strong(
-                e, {e.refcount + 1, protect_state_enum::structrual_protecting}, std::memory_order::acquire,
-                std::memory_order::relaxed)) {
-            return {this};
-        } else if (e.state == protect_state_enum::structrual_protecting) {
-            do {
-                e = m_protect_state.load(std::memory_order::acquire);
-            } while (!m_protect_state.compare_exchange_weak(
-                e, {e.refcount + 1, e.state}, std::memory_order::acq_rel, std::memory_order::relaxed));
-            return {this};
-        } else {
-            return {nullptr};
-        }
-    }
-
-    rehashing_guard try_set_rehashing() noexcept {
-        protect_state e{0, protect_state_enum::available};
-        if (m_protect_state.compare_exchange_strong(
-                e, {e.refcount, protect_state_enum::rehashing}, std::memory_order::acq_rel,
-                std::memory_order::relaxed)) {
-            return {this};
-        } else {
-            return {nullptr};
-        }
-    }
-
     std::hash<K> m_hasher{};
     std::vector<bucket> m_buckets;
     std::atomic_size_t m_load{0};
 
-    enum class protect_state_enum {
-        available,
-        structrual_protecting,
-        rehashing,
-        unavailable,
-    };
-    struct protect_state {
-        std::size_t refcount : 62;
-        protect_state_enum state : 2;
-
-#ifdef _WIN32  // MSVC 的位域有填充，需要显式清零
-        protect_state() { std::memset(this, 0, sizeof(*this)); }
-
-        protect_state(std::size_t rc, protect_state_enum s) {
-            std::memset(this, 0, sizeof(*this));
-            refcount = rc;
-            state = s;
-        }
-#endif
-    };
-    std::atomic<protect_state> m_protect_state{{0, protect_state_enum::available}};
+    sync::spinrwlock<> m_lock;
 
     std::size_t hash1(const K &key) { return m_hasher(key); }
     std::size_t hash2(const K &key) {

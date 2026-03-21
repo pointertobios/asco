@@ -219,38 +219,6 @@ ASCO_TEST(hash_map_rehash_needed_then_rehash) {
     ASCO_SUCCESS();
 }
 
-ASCO_TEST(hash_map_insert_throw_marks_exception_slot) {
-    using asco::concurrency::get_failed;
-    using asco::concurrency::hash_map;
-    using asco::concurrency::remove_failed;
-
-    hash_map<key_int, throw_on_move> m;
-
-    bool threw = false;
-    try {
-        key_int k{123};
-        auto _ = m.try_insert(k, throw_on_move{});
-    } catch (const std::runtime_error &) { threw = true; }
-
-    ASCO_CHECK(threw, "expected insert to throw");
-
-    {
-        key_int k{123};
-        auto got = m.try_get(k);
-        ASCO_CHECK(!got.has_value(), "expected key to be missing after exception");
-        ASCO_CHECK(got.error() == get_failed::none, "expected get_failed::none");
-    }
-
-    {
-        key_int k{123};
-        auto removed = m.try_remove(k);
-        ASCO_CHECK(!removed.has_value(), "expected remove to fail after exception");
-        ASCO_CHECK(removed.error() == remove_failed::thrown, "expected remove_failed::thrown");
-    }
-
-    ASCO_SUCCESS();
-}
-
 ASCO_TEST(hash_map_concurrent_stress) {
     using asco::join_set;
     using asco::concurrency::get_failed;
@@ -356,10 +324,6 @@ ASCO_TEST(hash_map_concurrent_stress) {
                         case remove_failed::rehashing:
                         case remove_failed::retry:
                             co_await asco::this_task::yield();
-                            break;
-                        case remove_failed::thrown:
-                            stop.store(true, std::memory_order::release);
-                            ASCO_CHECK(false, "remove_failed::thrown");
                             break;
                         default:
                             stop.store(true, std::memory_order::release);

@@ -30,10 +30,11 @@ template<typename T, template<typename...> typename Template>
 concept specialization_of = is_specialization_of<T, Template>::value;
 
 template<typename K>
-concept hash_key =
-    std::equality_comparable<K> && std::copyable<K> && std::is_nothrow_destructible_v<K> && requires(K k) {
-        { std::hash<K>{}(k) } -> std::convertible_to<std::size_t>;
-    };
+concept hash_key = std::is_nothrow_copy_assignable_v<K> && std::is_nothrow_copy_constructible_v<K>
+                   && std::is_nothrow_destructible_v<K> && std::equality_comparable<K> && std::copyable<K>
+                   && std::is_nothrow_destructible_v<K> && requires(K k) {
+                          { std::hash<K>{}(k) } -> std::convertible_to<std::size_t>;
+                      };
 
 template<typename Ti>
 concept duration_type = specialization_of<std::remove_cvref_t<Ti>, std::chrono::duration>;
