@@ -96,7 +96,9 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    core::worker::of_handle(handle).awake_handle(handle);
+                    if (auto w = core::worker::of_handle(handle)) {
+                        w->awake_handle(handle);
+                    }
                 }
             }
         }
@@ -111,7 +113,9 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    core::worker::of_handle(handle).awake_handle(handle);
+                    if (auto w = core::worker::of_handle(handle)) {
+                        w->awake_handle(handle);
+                    }
                 }
             }
         }
@@ -134,7 +138,9 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    core::worker::of_handle(handle).awake_handle(handle);
+                    if (auto w = core::worker::of_handle(handle)) {
+                        w->awake_handle(handle);
+                    }
                 }
             }
         }
@@ -144,7 +150,9 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    core::worker::of_handle(handle).awake_handle(handle);
+                    if (auto w = core::worker::of_handle(handle)) {
+                        w->awake_handle(handle);
+                    }
                 }
             }
 
@@ -212,11 +220,13 @@ public:
             this->m_state->sync_awaiter.release();
             auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
             if (handle) {
-                core::worker::of_handle(handle).awake_handle(handle);
+                if (auto w = core::worker::of_handle(handle)) {
+                    w->awake_handle(handle);
+                }
             }
 
             handle = this->m_state->this_handle;
-            if (auto w = core::worker::optional_of_handle(handle)) {
+            if (auto w = core::worker::of_handle(handle)) {
                 if (auto th = w->top_of_join_handle(handle)) {
                     w->awake_handle(th);
                 }

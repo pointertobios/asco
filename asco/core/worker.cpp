@@ -34,15 +34,7 @@ worker &worker::current() {
     return *_current_worker;
 }
 
-worker &worker::of_handle(std::coroutine_handle<> handle) {
-    if (auto g = _corohandle_worker_map->get(handle)) {
-        return *g.value();
-    } else {
-        panic("worker::of_handle: 无效的 coroutine_handle {{{}}}", handle.address());
-    }
-}
-
-worker *worker::optional_of_handle(std::coroutine_handle<> handle) {
+worker *worker::of_handle(std::coroutine_handle<> handle) {
     if (auto g = _corohandle_worker_map->get(handle)) {
         return g.value();
     } else {

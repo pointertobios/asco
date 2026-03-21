@@ -103,7 +103,7 @@ public:
         while (!g->empty() && x--) {
             auto h = g->front();
             g->pop_front();
-            if (auto w = core::worker::optional_of_handle(h)) {
+            if (auto w = core::worker::of_handle(h)) {
                 w->awake_handle(h);
             }
         }

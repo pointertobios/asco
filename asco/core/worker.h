@@ -70,8 +70,7 @@ public:
 
     static worker &current();
 
-    static worker &of_handle(std::coroutine_handle<> handle);
-    static worker *optional_of_handle(std::coroutine_handle<> handle);
+    static worker *of_handle(std::coroutine_handle<> handle);
 
     static bool handle_valid(std::coroutine_handle<> handle);
 

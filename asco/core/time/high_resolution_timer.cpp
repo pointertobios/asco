@@ -103,7 +103,7 @@ bool high_resolution_timer::run_once(std::stop_token &st) {
                 }
 
                 auto handle = it->second.handle;
-                if (auto w = core::worker::optional_of_handle(handle)) {
+                if (auto w = core::worker::of_handle(handle)) {
                     w->awake_handle(handle);
                     it = entries_guard->erase(it);
                 } else {
