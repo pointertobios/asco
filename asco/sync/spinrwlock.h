@@ -4,7 +4,7 @@
 #pragma once
 
 #include <atomic>
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
 #    include <thread>
 #endif
 
@@ -143,7 +143,7 @@ public:
             }
         } while (!m_state.compare_exchange_strong(
             e, e | write_mask, std::memory_order::acq_rel, std::memory_order::acquire));
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
         m_writer_id = std::this_thread::get_id();
 #endif
         return write_guard{this};
@@ -151,7 +151,7 @@ public:
 
 private:
     std::atomic_size_t m_state{0};
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
     std::thread::id m_writer_id;
 #endif
 };

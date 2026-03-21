@@ -3,7 +3,7 @@
 
 #pragma once
 
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
 #    include <thread>
 #endif
 
@@ -32,7 +32,7 @@ public:
                 return;
             }
 
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
             m_lock->m_locker_id = std::thread::id{};
 #endif
             m_lock->m_locked.release();
@@ -80,7 +80,7 @@ public:
 
     future<guard> lock() {
         co_await m_locked.acquire();
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
         m_locker_id = std::this_thread::get_id();
 #endif
         co_return guard{this};
@@ -95,7 +95,7 @@ public:
 
     guard try_lock() noexcept {
         if (m_locked.try_acquire()) {
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
             m_locker_id = std::this_thread::get_id();
 #endif
             return guard{this};
@@ -106,7 +106,7 @@ public:
 
 private:
     binary_semaphore m_locked{1};
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
     std::thread::id m_locker_id;
 #endif
 };

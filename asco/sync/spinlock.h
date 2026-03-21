@@ -5,7 +5,7 @@
 
 #include <atomic>
 #include <type_traits>
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
 #    include <thread>
 #endif
 
@@ -31,7 +31,7 @@ public:
                 return;
             }
 
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
             m_lock->m_locker_id = std::thread::id{};
 #endif
             m_lock->m_locked.store(false, std::memory_order::release);
@@ -85,7 +85,7 @@ public:
             b = false, lc++) {
             concurrency::exp_withdraw(lc);
         }
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
         m_locker_id = std::this_thread::get_id();
 #endif
         return {this};
@@ -95,7 +95,7 @@ public:
         bool b = false;
         if (m_locked.compare_exchange_strong(
                 b, true, std::memory_order::acq_rel, std::memory_order::relaxed)) {
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
             m_locker_id = std::this_thread::get_id();
 #endif
             return {this};
@@ -106,7 +106,7 @@ public:
 
 private:
     std::atomic_bool m_locked{false};
-#ifdef LOCKS_DEBUG
+#ifdef ASCO_DEBUG_ENABLED
     std::thread::id m_locker_id;
 #endif
 };

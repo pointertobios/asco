@@ -57,13 +57,13 @@ set(PRECOMPILE_HEADERS
 )
 
 set(MDEFS ASCO __ASCO__
-    $<$<CONFIG:Debug>:LOCKS_DEBUG>
-    $<$<CONFIG:RelWithDebInfo>:LOCKS_DEBUG>
+    $<$<CONFIG:Debug>:ASCO_DEBUG_ENABLED>
+    $<$<CONFIG:RelWithDebInfo>:ASCO_DEBUG_ENABLED>
 )
 set(DEPLIBS)
 
 if (USING_LIBCXX)
-    set(MDEFS USING_LIBCXX)
+    set(MDEFS ${MDEFS} USING_LIBCXX)
 endif()
 
 if (LINUX)
