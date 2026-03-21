@@ -122,6 +122,19 @@ public:
         return read_guard{this};
     }
 
+    read_guard try_read() {
+        std::size_t e;
+        do {
+            e = m_state.load(std::memory_order::acquire);
+            if (e & (write_mask | write_willing_mask)) {
+                return read_guard{};
+            }
+            e = e & ~(write_mask | write_willing_mask);
+        } while (
+            !m_state.compare_exchange_weak(e, e + 1, std::memory_order::acq_rel, std::memory_order::acquire));
+        return read_guard{this};
+    }
+
     write_guard write() {
         std::size_t e;
         std::size_t lc{0};
@@ -143,6 +156,21 @@ public:
             }
         } while (!m_state.compare_exchange_strong(
             e, e | write_mask, std::memory_order::acq_rel, std::memory_order::acquire));
+#ifdef ASCO_DEBUG_ENABLED
+        m_writer_id = std::this_thread::get_id();
+#endif
+        return write_guard{this};
+    }
+
+    write_guard try_write() {
+        std::size_t e = m_state.load(std::memory_order::acquire);
+        if (e) {
+            return write_guard{};
+        }
+        if (!m_state.compare_exchange_strong(
+                e, write_mask, std::memory_order::acq_rel, std::memory_order::acquire)) {
+            return write_guard{};
+        }
 #ifdef ASCO_DEBUG_ENABLED
         m_writer_id = std::this_thread::get_id();
 #endif
@@ -292,7 +320,23 @@ public:
 
     read_guard read() const { return read_guard{this, m_lock.read()}; }
 
+    read_guard try_read() const {
+        if (auto guard = m_lock.try_read()) {
+            return read_guard{this, std::move(guard)};
+        } else {
+            return read_guard{};
+        }
+    }
+
     write_guard write() { return write_guard{this, m_lock.write()}; }
+
+    write_guard try_write() {
+        if (auto guard = m_lock.try_write()) {
+            return write_guard{this, std::move(guard)};
+        } else {
+            return write_guard{};
+        }
+    }
 
 private:
     T m_value;
