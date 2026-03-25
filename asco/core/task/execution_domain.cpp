@@ -28,13 +28,13 @@ execution::~execution() {
 
 execution::execution(execution &&rhs) noexcept
         : handle_stack{std::move(rhs.handle_stack)}
-        , cancel_src{rhs.cancel_src} {
+        , cancel_src{rhs.cancel_src}
+        , cancel_src_owned{rhs.cancel_src_owned} {
     rhs.cancel_src = nullptr;
-    if (rhs.cancel_src_owned) {
+    rhs.cancel_src_owned = false;
+    if (cancel_src_owned) {
         rhs.cancel_src_storage.get()->~cancel_source();
-        new (cancel_src_storage.get()) cancel_source{};
-        cancel_src = cancel_src_storage.get();
-        cancel_src_owned = true;
+        cancel_src = new (cancel_src_storage.get()) cancel_source{};
     }
 }
 
