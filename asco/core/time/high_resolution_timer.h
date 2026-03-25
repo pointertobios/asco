@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include <coroutine>
 #include <map>
 #include <optional>
 #include <unordered_set>
 
+#include <asco/core/task/execution_domain.h>
 #include <asco/core/time/timer.h>
 #include <asco/sync/spinlock.h>
 #include <asco/sync/spinrwlock.h>
@@ -25,7 +25,7 @@ public:
     high_resolution_timer &operator=(high_resolution_timer &&) = delete;
 
     std::optional<timer_id>
-    register_timer(std::chrono::steady_clock::time_point time_point, std::coroutine_handle<> handle) override;
+    register_timer(std::chrono::steady_clock::time_point time_point, task::execution_id exec) override;
 
     void cancel_timer(timer_id tmid) override;
 

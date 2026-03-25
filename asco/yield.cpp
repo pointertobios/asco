@@ -9,9 +9,6 @@
 
 namespace asco::this_task {
 
-std::suspend_always yield() {
-    core::worker::current().yield_current();
-    return {};
-}
+std::suspend_always yield() { return {}; }
 
 };  // namespace asco::this_task

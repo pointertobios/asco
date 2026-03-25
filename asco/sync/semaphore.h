@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "asco/core/task/execution_domain.h"
 #include <algorithm>
 #include <atomic>
 #include <coroutine>
@@ -75,9 +76,9 @@ public:
                             goto fetch;
                         }
                         auto &w = core::worker::current();
-                        auto h = w.this_coroutine();
-                        g->push_back(h);
-                        w.suspend_current_handle(h);
+                        auto id = w.get_executor().current_execution();
+                        g->push_back(id);
+                        w.get_scheduler().suspend_current(id);
                     }
                     co_await this_task::yield();
                     i = std::numeric_limits<std::size_t>::max();
@@ -101,10 +102,11 @@ public:
 
         auto x = diff;
         while (!g->empty() && x--) {
-            auto h = g->front();
+            auto id = g->front();
             g->pop_front();
-            if (auto w = core::worker::of_handle(h)) {
-                w->awake_handle(h);
+            if (auto w = core::worker::of_handle(id)) {
+                w->get_scheduler().awake_execution(id);
+                w->awake();
             }
         }
 
@@ -115,7 +117,7 @@ public:
 
 private:
     std::atomic<counter_type> m_count;
-    spinlock<std::deque<std::coroutine_handle<>>> m_wait_queue;
+    spinlock<std::deque<core::task::execution_id>> m_wait_queue;
 };
 
 using binary_semaphore = semaphore<1>;

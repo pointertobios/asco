@@ -10,15 +10,15 @@ future<void> sleep_until(std::chrono::steady_clock::time_point time_point) {
     auto &w = core::worker::current();
     auto &timer = rt.get_timer();
 
-    auto hdl = w.this_coroutine();
-    auto tmid = timer.register_timer(time_point, hdl);
+    auto exec = w.get_executor().current_execution();
+    auto tmid = timer.register_timer(time_point, exec);
 
     if (!tmid) {
         co_return;
     }
 
     cancel_callback cb{this_task::get_cancel_token(), [&timer, tmid = *tmid]() { timer.cancel_timer(tmid); }};
-    w.suspend_current_handle(hdl);
+    w.get_scheduler().suspend_current(exec);
     co_await this_task::yield();
 }
 

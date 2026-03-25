@@ -6,6 +6,9 @@ set(ASCO_SOURCES
     core/daemon.cpp
     core/mm/pool.cpp
     core/os/process.cpp
+    core/task/dynprio_scheduler.cpp
+    core/task/execution_domain.cpp
+    core/task/executor.cpp
     core/time/high_resolution_timer.cpp
     core/runtime.cpp
     core/wait_for_valid.cpp
@@ -25,6 +28,10 @@ set(PRECOMPILE_HEADERS
     core/daemon.h
     core/mm/pool.h
     core/os/process.h
+    core/task/dynprio_scheduler.h
+    core/task/execution_domain.h
+    core/task/executor.h
+    core/task/scheduler.h
     core/time/high_resolution_timer.h
     core/time/timer.h
     core/runtime.h
