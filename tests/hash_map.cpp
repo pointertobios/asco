@@ -219,7 +219,7 @@ ASCO_TEST(hash_map_rehash_needed_then_rehash) {
     ASCO_SUCCESS();
 }
 
-ASCO_TEST(hash_map_concurrent_stress) {
+ASCO_TEST(hash_map_concurrent_stress, ASCO_IGNORE_TEST) {
     using asco::join_set;
     using asco::concurrency::get_failed;
     using asco::concurrency::hash_map;

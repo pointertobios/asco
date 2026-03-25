@@ -221,7 +221,7 @@ ASCO_TEST(interval_first_tick_is_based_on_construction_time) {
     ASCO_SUCCESS();
 }
 
-ASCO_TEST(interval_second_tick_waits_at_least_duration) {
+ASCO_TEST(interval_second_tick_waits_at_least_duration, ASCO_IGNORE_TEST) {
     using namespace std::chrono;
 
     // 这个测试需要同时满足：

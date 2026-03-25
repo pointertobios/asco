@@ -17,14 +17,22 @@ namespace asco::test {
 using test_result = std::expected<std::monostate, std::string>;
 using test_function = std::function<future<test_result>()>;
 
-bool add_test(std::string name, test_function fn);
+template<std::same_as<bool>... Args>
+consteval bool ignore_state(Args &&...args) {
+    return (args || ...);
+}
+
+bool add_test(std::string name, test_function fn, bool ignore);
 
 };  // namespace asco::test
 
-#    define ASCO_TEST(name)                                                       \
-        asco::future<asco::test::test_result> test_##name();                      \
-        [[maybe_unused]]                                                          \
-        bool test_##name##_registered = asco::test::add_test(#name, test_##name); \
+#    define ASCO_IGNORE_TEST true
+
+#    define ASCO_TEST(name, ...)                                                             \
+        asco::future<asco::test::test_result> test_##name();                                 \
+        [[maybe_unused]]                                                                     \
+        bool test_##name##_registered =                                                      \
+            asco::test::add_test(#name, test_##name, asco::test::ignore_state(__VA_ARGS__)); \
         asco::future<asco::test::test_result> test_##name()
 
 #    define ASCO_CHECK(expr, fmt, ...)                                                                 \
