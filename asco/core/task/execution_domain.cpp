@@ -20,6 +20,12 @@ execution::execution(execution_id id, cancel_source *src)
     }
 }
 
+execution::~execution() {
+    if (cancel_src_owned) {
+        cancel_src_storage.get()->~cancel_source();
+    }
+}
+
 execution::execution(execution &&rhs) noexcept
         : handle_stack{std::move(rhs.handle_stack)}
         , cancel_src{rhs.cancel_src} {

@@ -21,6 +21,7 @@ struct execution {
     cancel_source *cancel_src;
 
     execution(execution_id id, cancel_source *src);
+    ~execution();
 
     execution(const execution &) = delete;
     execution &operator=(const execution &) = delete;

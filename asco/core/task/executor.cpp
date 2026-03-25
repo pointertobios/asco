@@ -3,6 +3,8 @@
 
 #include <asco/core/task/executor.h>
 
+#include <asco/core/worker.h>
+
 namespace asco::core::task {
 
 bool executor::execute(scheduled_execution exec, scheduler_context &ctx) {
@@ -11,6 +13,8 @@ bool executor::execute(scheduled_execution exec, scheduler_context &ctx) {
     m_execution = exec.m_exec;
 
     if (m_execution->handle_stack.empty()) {
+        m_domain = nullptr;
+        m_execution = nullptr;
         return false;
     }
 
@@ -95,6 +99,7 @@ bool executor::cancel_cleanup() noexcept {
     while (m_execution->handle_stack.size()) {
         auto h = pop_handle();
         h.destroy();
+        worker::current().unregister_handle(h);
     }
     return true;
 }
