@@ -1,14 +1,13 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include "os/process.h"
-#include <algorithm>
 #include <asco/core/worker.h>
 
 #include <coroutine>
 #include <format>
 
 #include <asco/core/cancellation.h>
+#include <asco/core/os/process.h>
 #include <asco/core/runtime.h>
 #include <asco/panic.h>
 #include <asco/util/tsc.h>
@@ -46,71 +45,14 @@ bool worker::handle_valid(std::coroutine_handle<> handle) { return _corohandle_w
 
 std::size_t worker::id() const { return m_id; }
 
-std::coroutine_handle<> worker::this_coroutine() const {
-    if (m_current_task.size()) {
-        return m_current_task.back();
-    } else {
-        panic("worker::this_coroutine: 当前 worker 没有正在运行的协程");
-    }
-}
-
-void worker::awake_handle(std::coroutine_handle<> handle) noexcept {
-    if (auto task = m_suspended_tasks.remove(handle)) {
-        if (auto g = m_active_tasks.lock()) {
-            g->push_back(std::move(*task));
-            std::push_heap(g->begin(), g->end());
-        }
-        awake();
-    } else {
-        m_preawake_handles.insert(handle);
-    }
-}
-
-void worker::suspend_current_handle(std::coroutine_handle<> handle) noexcept {
-    if (m_current_task.size() == 0 || m_current_task.back() != handle) {
-        panic(
-            "worker::suspend_current_handle: 挂起当前协程错误；挂起：{{{}}}，当前：{{{}}}", handle.address(),
-            m_current_task.size() ? m_current_task.back().address() : nullptr);
-    }
-    if (m_preawake_handles.remove(handle)) {
-        return;
-    }
-    m_suspended_tasks.insert(handle, detail::task{m_current_task_time, std::move(m_current_task)});
-}
-
-void worker::push_handle(std::coroutine_handle<> handle) noexcept {
+void worker::register_handle(std::coroutine_handle<> handle) {
+    asco_assert(handle);
     _corohandle_worker_map->insert(handle, this);
-    m_current_task.push_back(handle);
-    m_top_of_join_handle.get(m_current_task.front()).value() = handle;
 }
 
-std::coroutine_handle<> worker::pop_handle() noexcept {
-    auto res = m_current_task.back();
-    if (m_current_task.size() == 1) {
-        m_coroutine_metas.remove(m_current_task.back());
-    }
-    m_current_task.pop_back();
-    if (m_current_task.size()) {
-        m_top_of_join_handle.get(m_current_task.front()).value() = m_current_task.back();
-    } else {
-        m_top_of_join_handle.remove(res);
-    }
-    _corohandle_worker_map->remove(res);
-    return res;
-}
-
-std::coroutine_handle<> worker::top_of_join_handle(std::coroutine_handle<> handle) noexcept {
-    if (auto g = m_top_of_join_handle.get(handle)) {
-        return g.value();
-    } else {
-        return {};
-    }
-}
-
-void worker::close_cancellation(std::coroutine_handle<> handle) noexcept {
-    if (m_current_task.size() && m_current_task.front() == handle) {
-        m_current_cancel_token.close_cancellation();
-    }
+void worker::unregister_handle(std::coroutine_handle<> handle) {
+    asco_assert(handle);
+    _corohandle_worker_map->remove(handle);
 }
 
 bool worker::init() {
@@ -128,70 +70,23 @@ bool worker::init() {
 }
 
 bool worker::run_once(std::stop_token &st) {
-    if (!fetch_task() && m_active_tasks.lock()->empty()) {
+    if (!fetch_task() && !m_scheduler.has_active_execution()) {
         m_idle_workers_tx.try_send(m_id);
         sleep_until_awake();
         return true;
     }
 
-    auto put_current_task = [&](decltype(m_active_tasks)::guard &&g) {
-        auto p = g->begin();
-        m_current_task = std::move(p->stack);
-        m_current_task_time = p->prio;
-        std::pop_heap(g->begin(), g->end());
-        g->pop_back();
-
-        m_current_cancel_token =
-            m_coroutine_metas.get(m_current_task.front()).value().cancel_source->get_token();
-    };
-
-    auto clean_empty_tasks = [&](decltype(m_active_tasks)::guard &&g) {
-        while (!g->empty() && g->begin()->stack.empty()) {
-            std::pop_heap(g->begin(), g->end());
-            g->pop_back();
-        }
-    };
-
-    clean_empty_tasks(m_active_tasks.lock());
-    if (auto g = m_active_tasks.lock(); !g->empty()) {
-        put_current_task(std::move(g));
-    }
-
-    while (m_current_task.size()) {
-        if (cancel_cleanup()) {
-            break;
-        }
-
-        m_start_tsc = util::get_tsc();
-
-        m_current_task.back().resume();
-
-        if (m_current_task.size() == 0) {
-            // 要么是异步任务已经完成，要么是任务主动挂起或 yield，都不需要进行后续处理
-            break;
-        }
-
-        if (cancel_cleanup()) {
-            break;
-        }
-
-        auto dur = util::get_tsc() - m_start_tsc;
-        m_current_task_time += dur;
-
-        clean_empty_tasks(m_active_tasks.lock());
-
-        if (auto g = m_active_tasks.lock(); !g->empty() && g->begin()->prio < m_current_task_time) {
-            g->push_back({m_current_task_time, std::move(m_current_task)});
-            std::push_heap(g->begin(), g->end());
-
-            put_current_task(std::move(g));
+    if (m_scheduler.has_active_execution()) {
+        auto [exec, ctx] = m_scheduler.schedule();
+        auto sexec = m_execution_domain.schedule_execution(exec);
+        if (!m_executor.execute(sexec, ctx)) {
+            m_scheduler.detach_suspended_execution(exec);
+            m_execution_domain.detach_execution(exec);
         }
     }
-
-    m_current_cancel_token = cancel_token{};
 
     return !st.stop_requested() ||  //
-           m_active_tasks.lock()->size() || m_suspended_tasks.size() || fetch_task();
+           !m_execution_domain.is_empty() || fetch_task();
 }
 
 void worker::shutdown() {}
@@ -201,48 +96,12 @@ bool worker::fetch_task() {
         auto handle = meta->handle;
         m_backsem->release();
         m_coroutine_metas.insert(handle, std::move(*meta));
-        m_top_of_join_handle.insert(handle, std::coroutine_handle{handle});
+        m_execution_domain.attach_execution(handle, meta->cancel_source);
+        m_scheduler.attach_execution(handle);
         _corohandle_worker_map->insert(handle, this);
-
-        if (auto g = m_active_tasks.lock()) {
-            g->push_back({0, std::vector{handle}});
-            std::push_heap(g->begin(), g->end());
-        }
-
         return true;
     }
     return false;
-}
-
-bool worker::cancel_cleanup() noexcept {
-    if (!m_current_task.size() ||  //
-        !m_current_cancel_token || !m_current_cancel_token.cancel_requested()) {
-        return false;
-    }
-
-    if (m_current_cancel_token.cancellation_closed()) {
-        panic("asco::worker: 外部取消了已被关闭取消的任务 {{{}}}", m_current_task.front().address());
-    }
-
-    auto s = m_current_cancel_token.source();
-    s->invoke_callbacks();
-    while (m_current_task.size()) {
-        auto h = pop_handle();
-        h.destroy();
-    }
-    return true;
-}
-
-void worker::yield_current() {
-    if (m_current_task.size() == 0) {
-        return;
-    }
-
-    auto stack_time = m_current_task_time + util::get_tsc() - m_start_tsc;
-    if (auto g = m_active_tasks.lock()) {
-        g->push_back({stack_time, std::move(m_current_task)});
-        std::push_heap(g->begin(), g->end());
-    }
 }
 
 };  // namespace asco::core

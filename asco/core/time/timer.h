@@ -10,6 +10,7 @@
 #include <optional>
 
 #include <asco/core/daemon.h>
+#include <asco/core/task/execution_domain.h>
 #include <asco/util/murmur.h>
 #include <asco/util/type_id.h>
 
@@ -38,7 +39,7 @@ public:
 
     // 注册一个定时器，time_point 早于当前时间时返回无效的 timer_id
     virtual std::optional<timer_id>
-    register_timer(std::chrono::steady_clock::time_point time_point, std::coroutine_handle<> handle) = 0;
+    register_timer(std::chrono::steady_clock::time_point time_point, task::execution_id exec) = 0;
 
     // 取消定时器，tmid 无效或定时器已过期时无任何效果
     virtual void cancel_timer(timer_id tmid) = 0;

@@ -22,14 +22,14 @@ high_resolution_timer::high_resolution_timer()
 }
 
 std::optional<high_resolution_timer::timer_id> high_resolution_timer::register_timer(
-    std::chrono::steady_clock::time_point time_point, std::coroutine_handle<> handle) {
+    std::chrono::steady_clock::time_point time_point, task::execution_id exec) {
     if (time_point < std::chrono::steady_clock::now()) {
         return std::nullopt;
     }
 
     timer_id tmid{
         static_cast<std::uint64_t>(time_point.time_since_epoch().count()),
-        std::hash<std::coroutine_handle<>>{}(handle)};
+        std::hash<std::coroutine_handle<>>{}(exec)};
     auto seconds_from_epoch = detail::sec_from_epoch(time_point);
     if (auto g = m_timer_tree.write()) {
         if (!g->contains(seconds_from_epoch)) {
@@ -37,7 +37,7 @@ std::optional<high_resolution_timer::timer_id> high_resolution_timer::register_t
             // entry_area{seconds_from_epoch, {}}
             g->emplace(seconds_from_epoch, seconds_from_epoch);
         }
-        g->at(seconds_from_epoch).entries.lock()->emplace(tmid, timer_entry{time_point, handle});
+        g->at(seconds_from_epoch).entries.lock()->emplace(tmid, timer_entry{time_point, exec});
     }
 
     awake();
@@ -102,9 +102,10 @@ bool high_resolution_timer::run_once(std::stop_token &st) {
                     break;
                 }
 
-                auto handle = it->second.handle;
-                if (auto w = core::worker::of_handle(handle)) {
-                    w->awake_handle(handle);
+                auto id = it->second.handle;
+                if (auto w = core::worker::of_handle(id)) {
+                    w->get_scheduler().awake_execution(id);
+                    w->awake();
                     it = entries_guard->erase(it);
                 } else {
                     it++;

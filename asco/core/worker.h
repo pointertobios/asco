@@ -3,10 +3,10 @@
 
 #pragma once
 
+#include "asco/core/task/scheduler.h"
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <memory>
 #include <semaphore>
 #include <vector>
@@ -14,6 +14,9 @@
 #include <asco/concurrency/hash_map.h>
 #include <asco/core/cancellation.h>
 #include <asco/core/daemon.h>
+#include <asco/core/task/dynprio_scheduler.h>
+#include <asco/core/task/execution_domain.h>
+#include <asco/core/task/executor.h>
 #include <asco/sync/spinlock.h>
 #include <asco/this_task.h>
 #include <asco/util/safe_erased.h>
@@ -55,7 +58,6 @@ class runtime;
 
 class worker final : public daemon {
     friend class runtime;
-    friend std::suspend_always asco::this_task::yield();
     friend void asco::this_task::close_cancellation() noexcept;
     friend cancel_token &asco::this_task::get_cancel_token() noexcept;
     template<typename TaskLocalStorage>
@@ -76,17 +78,12 @@ public:
 
     std::size_t id() const;
 
-    std::coroutine_handle<> this_coroutine() const;
+    void register_handle(std::coroutine_handle<> handle);
+    void unregister_handle(std::coroutine_handle<> handle);
 
-    void awake_handle(std::coroutine_handle<> handle) noexcept;
-    void suspend_current_handle(std::coroutine_handle<> handle) noexcept;
-
-    void push_handle(std::coroutine_handle<> handle) noexcept;
-    std::coroutine_handle<> pop_handle() noexcept;
-
-    std::coroutine_handle<> top_of_join_handle(std::coroutine_handle<> handle) noexcept;
-
-    void close_cancellation(std::coroutine_handle<> handle) noexcept;
+    task::scheduler &get_scheduler() noexcept { return m_scheduler; }
+    task::executor &get_executor() noexcept { return m_executor; }
+    task::execution_domain &get_execution_domain() noexcept { return m_execution_domain; }
 
 private:
     bool init() override;
@@ -95,21 +92,11 @@ private:
 
     bool fetch_task();
 
-    bool cancel_cleanup() noexcept;
+    task::dynprio_scheduler m_scheduler;
+    task::executor m_executor;
+    task::execution_domain m_execution_domain;
 
-    void yield_current();
-
-    std::vector<std::coroutine_handle<>> m_current_task;
-    cancel_token m_current_cancel_token;
-    std::uint64_t m_current_task_time;
-    std::uint64_t m_start_tsc;
-
-    sync::spinlock<std::deque<detail::task>> m_active_tasks;
-    concurrency::hash_map<std::coroutine_handle<>, std::coroutine_handle<>> m_top_of_join_handle;
-    concurrency::hash_map<std::coroutine_handle<>, detail::task> m_suspended_tasks;
     concurrency::hash_map<std::coroutine_handle<>, detail::coroutine_meta> m_coroutine_metas;
-
-    concurrency::hash_set<std::coroutine_handle<>> m_preawake_handles;
 
     const std::size_t m_id;
 
@@ -134,8 +121,8 @@ namespace asco::this_task {
 template<typename TaskLocalStorage>
 TaskLocalStorage &task_local() noexcept {
     auto &w = core::worker::current();
-    if (w.m_current_task.size()) {
-        auto &tls = w.m_coroutine_metas.get(w.m_current_task.front()).value().tls;
+    if (auto exec = w.m_executor.current_execution()) {
+        auto &tls = w.m_coroutine_metas.get(exec).value().tls;
         return tls.get<TaskLocalStorage>();
     } else {
         panic("asco::this_task::task_local: 当前没有正在运行的任务");

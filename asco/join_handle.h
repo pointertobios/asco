@@ -21,6 +21,25 @@
 
 namespace asco {
 
+namespace detail {
+
+inline void awake_coroutine(std::coroutine_handle<> handle) {
+    if (auto w = core::worker::of_handle(handle)) {
+        auto id = w->get_execution_domain().execution_of_coroutine(handle);
+        w->get_scheduler().awake_execution(id);
+        w->awake();
+    }
+}
+
+inline void awake_execution(core::task::execution_id id) {
+    if (auto w = core::worker::of_handle(id)) {
+        w->get_scheduler().awake_execution(id);
+        w->awake();
+    }
+}
+
+};  // namespace detail
+
 template<util::types::move_secure Output, typename TaskLocalStorage = void>
 class [[nodiscard]] join_handle final {
     friend class core::runtime;
@@ -96,9 +115,7 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    if (auto w = core::worker::of_handle(handle)) {
-                        w->awake_handle(handle);
-                    }
+                    detail::awake_coroutine(handle);
                 }
             }
         }
@@ -113,9 +130,7 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    if (auto w = core::worker::of_handle(handle)) {
-                        w->awake_handle(handle);
-                    }
+                    detail::awake_coroutine(handle);
                 }
             }
         }
@@ -138,9 +153,7 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    if (auto w = core::worker::of_handle(handle)) {
-                        w->awake_handle(handle);
-                    }
+                    detail::awake_coroutine(handle);
                 }
             }
         }
@@ -150,9 +163,7 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    if (auto w = core::worker::of_handle(handle)) {
-                        w->awake_handle(handle);
-                    }
+                    detail::awake_coroutine(handle);
                 }
             }
 
@@ -162,8 +173,11 @@ public:
                 bool await_ready() noexcept { return false; }
 
                 void await_suspend(std::coroutine_handle<>) noexcept {
-                    auto h = core::worker::current().pop_handle();
+                    auto &w = core::worker::current();
+                    auto h = w.get_executor().pop_handle();
                     asco_assert(this_handle == h);
+                    w.get_scheduler().suspend_current(h);
+                    w.unregister_handle(h);
                     this_handle.destroy();
                     return;
                 }
@@ -189,7 +203,8 @@ public:
         } while (!this->m_state->cstate.compare_exchange_weak(
             e, complete_state::awaitable_waiting, std::memory_order::acq_rel, std::memory_order::relaxed));
 
-        core::worker::current().suspend_current_handle(handle);
+        auto &w = core::worker::current();
+        w.get_scheduler().suspend_current(w.get_executor().current_execution());
     }
 
     output_type await_resume() {
@@ -220,17 +235,11 @@ public:
             this->m_state->sync_awaiter.release();
             auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
             if (handle) {
-                if (auto w = core::worker::of_handle(handle)) {
-                    w->awake_handle(handle);
-                }
+                detail::awake_coroutine(handle);
             }
 
-            handle = this->m_state->this_handle;
-            if (auto w = core::worker::of_handle(handle)) {
-                if (auto th = w->top_of_join_handle(handle)) {
-                    w->awake_handle(th);
-                }
-            }
+            auto id = this->m_state->this_handle;
+            detail::awake_execution(id);
         }
     }
 

@@ -82,8 +82,10 @@ public:
                 bool await_ready() noexcept { return false; }
 
                 void await_suspend(std::coroutine_handle<>) noexcept {
-                    auto wchdl = core::worker::current().pop_handle();
+                    auto &w = core::worker::current();
+                    auto wchdl = w.get_executor().pop_handle();
                     asco_assert(this_handle == wchdl);
+                    w.unregister_handle(wchdl);
                     this_handle.destroy();
                     return;
                 }
@@ -102,7 +104,9 @@ public:
 
     void await_suspend(std::coroutine_handle<> handle) noexcept {
         m_caller_handle = handle;
-        core::worker::current().push_handle(m_this_handle);
+        auto &w = core::worker::current();
+        w.get_executor().push_handle(m_this_handle);
+        w.register_handle(m_this_handle);
     }
 
     output_type await_resume() {

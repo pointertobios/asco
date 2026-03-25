@@ -38,13 +38,15 @@ struct cancellable_never_ready {
 
     bool await_ready() const noexcept { return false; }
 
-    void await_suspend(std::coroutine_handle<> h) noexcept {
+    void await_suspend(std::coroutine_handle<>) noexcept {
         auto &token = this_task::get_cancel_token();
         cb = std::make_unique<cancel_callback>(token, [this]() {
             if (callback_called)
                 callback_called->release();
         });
-        core::worker::current().suspend_current_handle(h);
+        auto &w = core::worker::current();
+        auto id = w.get_executor().current_execution();
+        w.get_scheduler().suspend_current(id);
 
         if (started)
             started->release();
