@@ -1,27 +1,29 @@
 # 测试框架
 
-ASCO 自带一个**轻量级测试框架**，用于为协程/异步代码编写测试用例。
+ASCO 提供面向协程与异步代码的轻量级测试框架。测试目标链接 `asco::test` 后即可使用；如需运行时、任务调度、同步原语或时间组件，通常还应同时链接 `asco::core`。
 
-它并不只用于本项目自身：只要你的程序/库是基于 ASCO 构建的（能链接到 `asco::test`，通常还需要 `asco::core`），就可以直接复用这套测试框架来编写与运行测试。
+当前实现特性：
 
-它的核心特点是：
+- 测试用例为协程，返回 `future<asco::test::test_result>`。
+- 单个测试可执行文件可注册多个用例。
+- 测试主程序创建带 timer 的多线程 runtime，并通过 `join_set` 并发执行全部已注册用例。
+- 输出顺序取决于用例完成顺序。
+- 框架统计通过、失败、忽略数量；存在失败时进程返回非 0。
+- `asco::test` 提供测试 `main()`，并自动定义 `ASCO_TESTING`。
 
-- 测试用例本身是 `future<test_result>`，可以在测试里直接 `co_await`。
-- 同一个测试可执行文件中可注册多个用例，运行时会执行全部用例并汇总结果。
-- 与 CMake/CTest 集成：每个测试目标是一个可执行文件，通过 `add_test()` 接入。
+## 核心接口
 
-使用方式：
+公开接口位于 `asco/test/test.h`：
 
-- 用例用 `ASCO_TEST(name)` 声明。
-- 断言用 `ASCO_CHECK(...)`。
-- 用例成功结束用 `ASCO_SUCCESS()`。
-- 测试可执行文件需要链接 `asco::test`。
+- `ASCO_TEST(name, ...)`：声明并注册测试用例。
+- `ASCO_CHECK(expr, fmt, ...)`：断言失败时立即结束当前测试。
+- `ASCO_CHECK_WITH_FAILCALLBACK(callback, expr, fmt, ...)`：断言失败前执行清理或取消逻辑。
+- `ASCO_SUCCESS()`：返回成功。
+- `ASCO_IGNORE_TEST`：将测试结果标记为忽略。
 
 ## 编写测试用例
 
-### 1) 基本结构
-
-每个用例通过 `ASCO_TEST(name)` 声明，其函数体是一个协程（返回 `future<test_result>`）：
+### 基本结构
 
 ```cpp
 #include <asco/test/test.h>
@@ -34,29 +36,51 @@ ASCO_TEST(my_first_test) {
 }
 ```
 
-- `name` 会作为测试名显示在输出中（例如 `my_first_test`）。
-- 每个测试**必须**以 `ASCO_SUCCESS()` 结束（或在失败处提前 `co_return std::unexpected{...}`）。
+- `name` 作为测试名输出。
+- `ASCO_TEST` 在静态初始化阶段完成注册。
+- 测试函数通常以 `ASCO_SUCCESS()` 结束。
 
-### 2) 断言：`ASCO_CHECK`
+### ASCO_CHECK
 
-`ASCO_CHECK(expr, fmt, ...)` 用于断言：
+`ASCO_CHECK(expr, fmt, ...)` 在 `expr` 为假时立即返回失败结果。错误信息包含：
 
-- 当 `expr` 为假时，测试立即失败并 `co_return std::unexpected{...}`
-- 失败信息包含：
-  - 你提供的格式化消息（`std::format(fmt, ...)`）
-    - 当前源码位置（文件名/行/列）
-
-建议：
-
-- 让 `fmt` 清晰描述期望条件与实际情况
-- 对于会等待的异步条件，配合 `co_await this_task::yield()` 自旋等待（见下文示例）
-
-### 3) 验证 panic 行为
-
-- 在测试框架下，`asco::panic(...)` 会抛出 `asco::panicked`，从而允许你在测试中捕获它，用于验证“应该 panic 的错误行为”。
-- `asco::panicked` 不能通过 `std::exception &` 捕获，请按 `asco::panicked &` 捕获。
+- `std::format(fmt, ...)` 生成的消息。
+- 当前源码位置，包括文件名、行号、列号。
 
 示例：
+
+```cpp
+ASCO_CHECK(size == expected, "size mismatch: got={}, expected={}", size, expected);
+```
+
+### ASCO_CHECK_WITH_FAILCALLBACK
+
+`ASCO_CHECK_WITH_FAILCALLBACK(callback, expr, fmt, ...)` 与 `ASCO_CHECK` 等价，但在断言失败前先执行 `callback()`。适用于超时、后台任务或需要回收资源的场景。
+
+```cpp
+auto h = spawn([&]() -> future<void> {
+    co_await time::sleep_for(5s);
+});
+
+ASCO_CHECK_WITH_FAILCALLBACK(
+    [&]() { h.cancel(); },
+    co_await wait_until([&]() { return h.await_ready(); }, 4096),
+    "sleep task did not finish in time");
+```
+
+### ASCO_IGNORE_TEST
+
+```cpp
+ASCO_TEST(flake_case, ASCO_IGNORE_TEST) {
+    ASCO_SUCCESS();
+}
+```
+
+一项测试标记了 `ASCO_IGNORE_TEST` 后统计结果中记为“忽略”，不参与通过/失败统计。
+
+## panic 与异常处理
+
+在测试环境下，`asco::panic(...)` 会抛出 `asco::panicked`，可用于验证错误路径：
 
 ```cpp
 #include <asco/panic.h>
@@ -66,7 +90,7 @@ ASCO_TEST(expect_panic) {
     try {
         asco::panic("boom");
     } catch (asco::panicked &e) {
-        (void)e; // 如需信息可用 e.to_string()
+        (void)e;
         caught = true;
     }
 
@@ -75,15 +99,23 @@ ASCO_TEST(expect_panic) {
 }
 ```
 
-### 4) 异步/并发测试写法
+测试主程序的异常处理策略：
 
-测试是协程，因此可以自然地写异步逻辑，例如：
+- 捕获 `asco::panicked` 并记为失败，输出 `panic: ...`。
+- 捕获其他异常并记为失败，输出“发生异常”。
 
-- `co_await sem.acquire()` / `co_await join_handle`
-- `spawn([&] -> future<void> { ... })` 启动并发任务
-- `co_await this_task::yield()` 让出执行权
+应按 `asco::panicked &` 捕获，不应依赖 `std::exception &`。
 
-一个常用的小工具模式是“等待条件成立”：
+## 异步测试模式
+
+测试用例本身是协程，可直接：
+
+- `co_await` 任意 ASCO future 或 awaitable。
+- 通过 `spawn(...)` 启动并发任务。
+- 使用 `co_await this_task::yield()` 主动让出执行权。
+- 等待 `join_handle` 完成。
+
+当前异步工具并不完善，建议为异步条件提供有界等待，避免测试永久挂起：
 
 ```cpp
 #include <functional>
@@ -91,65 +123,105 @@ ASCO_TEST(expect_panic) {
 
 template<class Pred>
 asco::future<bool> wait_until(Pred &&pred, std::size_t max_spins = 4096) {
-    for (std::size_t i = 0; i < max_spins; i++) {
-        if (std::invoke(pred)) co_return true;
+    for (std::size_t i = 0; i < max_spins; ++i) {
+        if (std::invoke(pred)) {
+            co_return true;
+        }
         co_await asco::this_task::yield();
     }
-    co_return false;
+    co_return std::invoke(pred);
 }
 ```
 
-再用 `ASCO_CHECK(co_await wait_until(...), "...")` 来避免无限等待。
+```cpp
+ASCO_CHECK(co_await wait_until([&] { return ready.load(); }), "condition did not become true");
+```
 
-## 新增一个测试目标（接入 CTest）
+实践建议：
 
-新增一个测试目标的最小步骤：
+- 优先使用 `yield` 配合条件轮询，避免固定睡眠。
+- 后台任务应设置边界，并在失败路径执行取消或清理。
+- 用例并发执行时，不应共享未同步的全局可变状态。
 
-1) 新建一个测试源文件（例如 `tests/channel.cpp`），写入若干 `ASCO_TEST(...)` 用例。
-2) 在 `tests/CMakeLists.txt` 中添加可执行文件，并用 CTest 注册：
+## CMake 与 CTest 接入
+
+### 最小接入方式
 
 ```cmake
 add_executable(test_channel channel.cpp)
 target_link_libraries(test_channel PRIVATE asco::core asco::test)
 
-add_test(channel test_channel)
+add_test(NAME test_channel COMMAND test_channel)
 ```
 
-说明：
+- 无需自定义 `main()`。
+- 无需手工定义 `ASCO_TESTING`。
 
-- 链接 `asco::test` 后，不需要再为测试可执行文件提供 `main()`。
-- 如果测试用到了 runtime/同步原语等功能，需要同时链接 `asco::core`。
+### 当前仓库的组织方式
+
+当前仓库将多个测试源文件聚合为单一测试目标：
+
+```cmake
+add_executable(tests
+    cancellation.cpp
+    hash_map.cpp
+    sync/mutex.cpp
+    sync/semaphore.cpp
+    task_local.cpp
+    time.cpp
+)
+target_link_libraries(tests PRIVATE asco::core asco::test)
+
+add_test(tests tests)
+```
+
+- CTest 层面当前仅注册一个测试项 `tests`。
+- 具体用例由该可执行文件内部统一注册并运行。
 
 ## 运行测试
 
-### 方式 A：使用 CTest
-
-在已生成构建目录（例如 `build/`）的情况下：
-
-- 运行全部测试：
+通过 CTest：
 
 ```bash
 ctest --test-dir build --output-on-failure
 ```
 
-- 只跑某一个测试（按 CTest 名称过滤，例如 `semaphore`）：
+按名称过滤当前仓库的测试目标：
 
 ```bash
-ctest --test-dir build -R semaphore --output-on-failure
+ctest --test-dir build -R '^tests$' --output-on-failure
 ```
 
-### 方式 B：直接运行测试可执行文件
-
-你也可以直接运行构建产物，例如：
+直接运行测试可执行文件：
 
 ```bash
-./build/tests/test_semaphore
+./build/tests/tests
 ```
 
-当某个用例失败时，程序会以非 0 退出码结束，便于 CI/脚本判定。
+典型输出：
 
-## 命名与建议
+```text
+[通过] semaphore_basic_try_acquire_release
+[失败] sleep_for_waits_at_least_duration: ...
+[忽略] hash_map_concurrent_stress
+测试结果：10 通过，1 失败，2 忽略
+```
 
-- 测试用例名：建议使用 `模块_场景_期望` 的风格（例如 `semaphore_acquire_blocks_and_release_wakes`）。
-- 一个测试文件可以包含多个 `ASCO_TEST`；按功能聚合（例如 `semaphore.cpp` 放信号量相关）。
-- 尽量避免依赖睡眠/真实时间；优先用 `yield` + 条件等待来保证测试稳定性。
+## 基准测试辅助工具
+
+`asco/test/bench.h` 提供 `asco::test::bench_context`，当前用于 `benchmarks/channel.cpp`。
+
+```cpp
+asco::test::bench_context bench{"channel_e2e_latency", warmup, measure};
+
+auto head = bench.get_span();
+if (bench.commit(head)) {
+    // 达到 warmup + measure 次提交
+}
+```
+
+- `warmup` 次提交仅用于预热。
+- 随后的 `measure` 次提交参与统计。
+- 析构时输出 `avg`、`max`、`p50`、`p90`、`p99`、`p999`。
+
+该工具不参与 `ASCO_TEST(...)` 的通过/失败判定，也不接入 CTest。
