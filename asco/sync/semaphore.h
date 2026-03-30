@@ -3,17 +3,16 @@
 
 #pragma once
 
-#include "asco/core/task/execution_domain.h"
 #include <algorithm>
 #include <atomic>
-#include <coroutine>
-#include <deque>
 #include <limits>
 
 #include <asco/concurrency/concurrency.h>
 #include <asco/core/runtime.h>
+#include <asco/core/task/execution_domain.h>
 #include <asco/core/worker.h>
 #include <asco/panic.h>
+#include <asco/sync/condition_variable.h>
 #include <asco/sync/spinlock.h>
 #include <asco/this_task.h>
 #include <asco/util/raw_storage.h>
@@ -70,17 +69,12 @@ public:
                 } else if (i <= 100) {
                     co_await this_task::yield();
                 } else {
-                    if (auto g = m_wait_queue.lock()) {
-                        if ((oldc = m_count.load(std::memory_order::acquire))) {
-                            i = std::numeric_limits<std::size_t>::max();
-                            goto fetch;
-                        }
-                        auto &w = core::worker::current();
-                        auto id = w.get_executor().current_execution();
-                        g->push_back(id);
-                        w.get_scheduler().suspend_current(id);
+                    if (co_await m_cv.wait_once([this, &oldc] {
+                            return (oldc = m_count.load(std::memory_order::acquire)) != 0;
+                        })) {
+                        i = std::numeric_limits<std::size_t>::max();
+                        goto fetch;
                     }
-                    co_await this_task::yield();
                     i = std::numeric_limits<std::size_t>::max();
                 }
                 goto fetch;
@@ -89,35 +83,40 @@ public:
             oldc, oldc - 1, std::memory_order::acq_rel, std::memory_order::relaxed));
     }
 
-    std::size_t release(std::size_t n = 1) {
-        auto g = m_wait_queue.lock();
-
-        counter_type oldc;
-        counter_type diff;
-        do {
-            oldc = m_count.load(std::memory_order::acquire);
-            diff = std::min(n, N - oldc);
-        } while (!m_count.compare_exchange_weak(
-            oldc, oldc + diff, std::memory_order::acq_rel, std::memory_order::relaxed));
-
-        auto x = diff;
-        while (!g->empty() && x--) {
-            auto id = g->front();
-            g->pop_front();
-            if (auto w = core::worker::of_handle(id)) {
-                w->get_scheduler().awake_execution(id);
-                w->awake();
+    std::size_t release(std::size_t n) {
+        while (true) {
+            counter_type oldc = m_count.load(std::memory_order::acquire);
+            auto diff = static_cast<counter_type>(std::min<std::size_t>(n, N - oldc));
+            auto res = m_cv.notify(
+                [this, &oldc, diff] {
+                    return m_count.compare_exchange_weak(
+                        oldc, oldc + diff, std::memory_order::acq_rel, std::memory_order::relaxed);
+                },
+                static_cast<std::size_t>(diff));
+            if (res) {
+                return diff;
+            }
+            switch (res.error()) {
+            case notify_failed::no_waiters: {
+                if (!m_count.compare_exchange_weak(
+                        oldc, oldc + diff, std::memory_order::acq_rel, std::memory_order::relaxed)) {
+                    continue;
+                }
+                return diff;
+            } break;
+            case notify_failed::predicate_false: {
+            } break;
             }
         }
-
-        return diff;
     }
+
+    std::size_t release() { return release(1); }
 
     counter_type get_count() const { return m_count.load(std::memory_order::acquire); }
 
 private:
     std::atomic<counter_type> m_count;
-    spinlock<std::deque<core::task::execution_id>> m_wait_queue;
+    condition_variable m_cv;
 };
 
 using binary_semaphore = semaphore<1>;
