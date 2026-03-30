@@ -4,6 +4,7 @@
 add_executable(tests
     cancellation.cpp
     hash_map.cpp
+    sync/condition_variable.cpp
     sync/mutex.cpp
     sync/semaphore.cpp
     task_local.cpp

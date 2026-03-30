@@ -9,6 +9,7 @@
 ## 目录
 
 - [通道 `channel`](./channel.md)
+- [条件变量 `condition_variable`](./condition_variable.md)
 - [互斥锁 `mutex`](./mutex.md)
 - [自旋锁 `spinlock`](./spinlock.md)
 - [信号量 `semaphore`](./semaphore.md)
@@ -40,6 +41,16 @@
 - 生产者/消费者式的资源计数（有资源才能继续）。
 
 `acquire()` 是可等待操作：当许可不足时会等待直到有许可被释放。
+
+### 何时使用 `condition_variable`
+
+`condition_variable` 适合表达“等某个条件成立，然后由别的任务通知我继续”：
+
+- 条件本身保存在外部共享状态里；
+- 等待方通过 predicate 判断是否可以继续；
+- 状态改变后，由生产者调用 `notify_one()` / `notify(n)` 唤醒等待方；必要时也可以使用带 predicate 的通知重载做额外门控。
+
+它本身不拥有被保护的数据，也不提供互斥；若 predicate 访问共享状态，调用方需要自行保证可见性与并发安全。
 
 ---
 
