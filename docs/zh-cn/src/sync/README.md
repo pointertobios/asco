@@ -11,6 +11,7 @@
 - [通道 `channel`](./channel.md)
 - [条件变量 `condition_variable`](./condition_variable.md)
 - [互斥锁 `mutex`](./mutex.md)
+- [读写锁 `rwlock`](./rwlock.md)
 - [自旋锁 `spinlock`](./spinlock.md)
 - [信号量 `semaphore`](./semaphore.md)
 
@@ -41,6 +42,16 @@
 - 生产者/消费者式的资源计数（有资源才能继续）。
 
 `acquire()` 是可等待操作：当许可不足时会等待直到有许可被释放。
+
+### 何时使用 `rwlock`
+
+`rwlock` 适合保护“读多写少”的共享状态：
+
+- 多个 reader 同时读取是安全且有价值的；
+- 写入虽然较少，但写入时需要与所有 reader 互斥；
+- 你希望一旦 writer 开始等待，后续 reader 不再继续插队。
+
+如果读写比例并不偏向读取，或者临界区极短，通常 `mutex` 会更直接。
 
 ### 何时使用 `condition_variable`
 

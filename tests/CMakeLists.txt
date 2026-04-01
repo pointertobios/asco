@@ -6,6 +6,7 @@ add_executable(tests
     hash_map.cpp
     sync/condition_variable.cpp
     sync/mutex.cpp
+    sync/rwlock.cpp
     sync/semaphore.cpp
     task_local.cpp
     time.cpp

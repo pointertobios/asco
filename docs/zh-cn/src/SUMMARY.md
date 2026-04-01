@@ -6,6 +6,7 @@
   - [通道](./sync/channel.md)
   - [条件变量](./sync/condition_variable.md)
   - [互斥锁](./sync/mutex.md)
+  - [读写锁](./sync/rwlock.md)
   - [自旋锁](./sync/spinlock.md)
   - [信号量](./sync/semaphore.md)
 - [时间](./time/README.md)

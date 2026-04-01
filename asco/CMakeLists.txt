@@ -45,6 +45,7 @@ set(PRECOMPILE_HEADERS
     sync/channel.h
     sync/condition_variable.h
     sync/mutex.h
+    sync/rwlock.h
     sync/semaphore.h
     sync/spinlock.h
     sync/spinrwlock.h
