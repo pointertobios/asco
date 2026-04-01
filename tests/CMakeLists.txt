@@ -4,6 +4,7 @@
 add_executable(tests
     cancellation.cpp
     hash_map.cpp
+    sync/channel.cpp
     sync/condition_variable.cpp
     sync/mutex.cpp
     sync/rwlock.cpp

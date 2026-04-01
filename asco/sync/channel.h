@@ -165,13 +165,21 @@ public:
         asco_assert_lint(m_sem_cntrl, "asco::sync::receiver: 接收端没有绑定到队列");
 
         if (!m_sem_cntrl->count_sem.get_count() && m_sem_cntrl->closed.load(std::memory_order::acquire)) {
-            co_return std::nullopt;
+            if constexpr (std::is_void_v<T>) {
+                co_return false;
+            } else {
+                co_return std::nullopt;
+            }
         }
         if (!m_sem_cntrl->count_sem.try_acquire()) {
             co_await m_sem_cntrl->count_sem.acquire();
         }
         if (!m_sem_cntrl->count_sem.get_count() && m_sem_cntrl->closed.load(std::memory_order::acquire)) {
-            co_return std::nullopt;
+            if constexpr (std::is_void_v<T>) {
+                co_return false;
+            } else {
+                co_return std::nullopt;
+            }
         }
         auto res = m_receiver.try_recv();
         m_sem_cntrl->backpress_sem.release();
