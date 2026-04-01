@@ -8,6 +8,7 @@
 #    include <expected>
 #    include <format>           // IWYU pragma: keep
 #    include <source_location>  // IWYU pragma: keep
+#    include <string_view>
 #    include <variant>
 
 #    include <asco/future.h>
@@ -22,17 +23,17 @@ consteval bool ignore_state(Args &&...args) {
     return (args || ...);
 }
 
-bool add_test(std::string name, test_function fn, bool ignore);
+bool add_test(std::string_view filename, std::string name, test_function fn, bool ignore);
 
 };  // namespace asco::test
 
 #    define ASCO_IGNORE_TEST true
 
-#    define ASCO_TEST(name, ...)                                                             \
-        asco::future<asco::test::test_result> test_##name();                                 \
-        [[maybe_unused]]                                                                     \
-        bool test_##name##_registered =                                                      \
-            asco::test::add_test(#name, test_##name, asco::test::ignore_state(__VA_ARGS__)); \
+#    define ASCO_TEST(name, ...)                                                                       \
+        asco::future<asco::test::test_result> test_##name();                                           \
+        [[maybe_unused]]                                                                               \
+        bool test_##name##_registered =                                                                \
+            asco::test::add_test(__FILE__, #name, test_##name, asco::test::ignore_state(__VA_ARGS__)); \
         asco::future<asco::test::test_result> test_##name()
 
 #    define ASCO_CHECK(expr, fmt, ...)                                                                 \

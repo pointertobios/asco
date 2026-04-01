@@ -28,6 +28,7 @@ set(PRECOMPILE_HEADERS
     core/daemon.h
     core/mm/pool.h
     core/os/process.h
+    core/os/terminal.h
     core/task/dynprio_scheduler.h
     core/task/execution_domain.h
     core/task/executor.h
@@ -78,6 +79,7 @@ endif()
 if (LINUX)
     set(ASCO_SOURCES ${ASCO_SOURCES}
         core/os/linux/process.cpp
+        core/os/linux/terminal.cpp
     )
 
     if (ASCO_IO_URING)
@@ -88,9 +90,7 @@ if (LINUX)
         )
     endif()
 
-    if (ASCO_IO_URING)
-        set(DEPLIBS ${DEPLIBS} uring)
-    endif()
+    set(DEPLIBS ${DEPLIBS} ncurses)
 elseif (WIN32)
     set(ASCO_SOURCES ${ASCO_SOURCES}
         core/os/windows/process.cpp
