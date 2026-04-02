@@ -11,7 +11,6 @@ set(ASCO_SOURCES
     core/task/executor.cpp
     core/time/high_resolution_timer.cpp
     core/runtime.cpp
-    core/wait_for_valid.cpp
     core/worker.cpp
     this_task.cpp
     time/interval.cpp
@@ -36,7 +35,6 @@ set(PRECOMPILE_HEADERS
     core/time/high_resolution_timer.h
     core/time/timer.h
     core/runtime.h
-    core/wait_for_valid.h
     core/worker.h
     future.h
     invoke.h

@@ -10,7 +10,6 @@
 #include <semaphore>
 
 #include <asco/core/cancellation.h>
-#include <asco/core/wait_for_valid.h>
 #include <asco/core/worker.h>
 #include <asco/future.h>
 #include <asco/util/erased.h>
