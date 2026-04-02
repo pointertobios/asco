@@ -137,10 +137,12 @@ int main() {
 
         std::println("测试结果：{} 通过，{} 失败，{} 忽略", passed, total - passed - ignored, ignored);
 
-        for (auto &[ns, records] : stats_by_namespace) {
-            for (auto &[state, message] : records) {
-                if (state == test_state::failed) {
-                    std::println("[\033[1;31m失败\033[0m] {}", message);
+        if (terminal) {
+            for (auto &[ns, records] : stats_by_namespace) {
+                for (auto &[state, message] : records) {
+                    if (state == test_state::failed) {
+                        std::println("[\033[1;31m失败\033[0m] {}", message);
+                    }
                 }
             }
         }
