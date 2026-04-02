@@ -113,14 +113,6 @@ int main() {
             } else {
                 auto cover_lines = stats_by_namespace.size();
                 std::print("\033[{}A", cover_lines);
-                auto term_width = terminal->width();
-                for (std::size_t i = 0; i < cover_lines; i++) {
-                    for (std::size_t j = 0; j < term_width; j++) {
-                        std::print(" ");
-                    }
-                    std::println();
-                }
-                std::print("\033[{}A", cover_lines);
                 stats_by_namespace[namespace_name].push_back(test_record{state, message});
                 for (auto &[ns, records] : stats_by_namespace) {
                     std::print("{} ", ns);
@@ -137,6 +129,7 @@ int main() {
                         } break;
                         }
                     }
+                    std::print("\033[0K");
                     std::println();
                 }
             }

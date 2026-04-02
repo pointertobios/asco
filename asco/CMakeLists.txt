@@ -94,6 +94,7 @@ if (LINUX)
 elseif (WIN32)
     set(ASCO_SOURCES ${ASCO_SOURCES}
         core/os/windows/process.cpp
+        core/os/windows/terminal.cpp
     )
 
     if (ASCO_IOCP)
