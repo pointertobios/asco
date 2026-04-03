@@ -1,0 +1,93 @@
+name: Core Change Proposal
+description: 提交 asco/core 或其他核心行为改动前的说明 issue
+title: "[core] "
+labels:
+  - core
+body:
+  - type: markdown
+    attributes:
+      value: |
+        本模板用于 `asco/core` 或其他影响调度、取消、生命周期、并发语义、资源释放路径等基础行为的改动。
+
+        该 issue 的目的不是占位，而是帮助维护者判断你是否真正理解自己准备提交的改动。
+
+        请按需填写。某一段如果对这次改动没有意义，可以省略，不需要为了填满模板而写空话。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 这次改动要解决什么问题
+      description: 说明问题背景、当前行为、为何需要这次改动。
+      placeholder: |
+        当前行为是什么：
+        具体问题是什么：
+        为什么必须修改：
+
+  - type: textarea
+    id: contract
+    attributes:
+      label: 这次改动维护的语义、不变量或契约是什么
+      description: 不要只写“要优化实现”，而要说明调用方可观察到的语义约束。
+      placeholder: |
+        需要保持哪些语义：
+        哪些行为绝不能被破坏：
+        哪些约束会被新增或收紧：
+
+  - type: textarea
+    id: design
+    attributes:
+      label: 方案说明
+      description: 简述你准备如何实现，重点说明关键路径，而不是贴完整代码。
+      placeholder: |
+        关键执行路径：
+        状态如何变化：
+        失败路径如何收束：
+        资源准备在何处释放：
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: 风险分析
+      description: 说明并发、取消、调度、生命周期或资源管理方面的风险。
+      placeholder: |
+        并发风险：
+        取消/调度风险：
+        生命周期风险：
+        资源释放风险：
+
+  - type: textarea
+    id: why-this-plan
+    attributes:
+      label: 为什么选择这个方案
+      description: 说明为什么你认为当前方案值得采用。
+      placeholder: |
+        选择这个方案的原因：
+        放弃其他思路的主要理由：
+
+  - type: textarea
+    id: cost
+    attributes:
+      label: 已知代价、限制与维护负担
+      description: 说明性能、复杂度、可维护性或后续兼容性代价。
+      placeholder: |
+        已知代价：
+        限制：
+        后续维护负担：
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: 你准备如何验证这次改动
+      description: 说明计划添加哪些测试，或准备如何证明边界条件与失败路径成立。
+      placeholder: |
+        计划补哪些测试：
+        重点验证哪些边界条件：
+        如何确认失败路径与资源释放正确：
+
+  - type: checkboxes
+    id: author-commitment
+    attributes:
+      label: 作者确认
+      options:
+        - label: 我知道这个 issue 不是形式材料；PR 中我可能被要求解释关键路径、边界条件和失败路径。
+        - label: 我理解如果我无法独立解释或修正关键逻辑，这个核心改动可能不会被接受。

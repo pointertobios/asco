@@ -19,3 +19,5 @@
   - [任务本地存储（Task-local storage）](./advanced/task_local_storage.md)
   - [`asco::core::daemon`](./advanced/daemon.md)
   - [测试框架](./advanced/testing.md)
+  - [贡献代码](./advanced/contribute/README.md)
+    - [反对纯 Vibe Coding](./advanced/contribute/anti-vibe.md)
