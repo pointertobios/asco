@@ -24,10 +24,12 @@ RUN set -eux;                                   \
     llvm                                        \
     lld                                         \
     lldb                                        \
+    libc++                                      \
     pkgconf                                     \
     ccache                                      \
     git                                         \
     liburing                                    \
+    ccache                                      \
     ca-certificates;                            \
     update-ca-trust
 
