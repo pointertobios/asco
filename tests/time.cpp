@@ -3,8 +3,8 @@
 
 #include <atomic>
 #include <chrono>
-#include <cstddef>
-#include <functional>
+
+#include "async_test_utils.h"
 
 #include <asco/core/cancellation.h>
 #include <asco/test/test.h>
@@ -13,40 +13,6 @@
 #include <asco/time/sleep.h>
 
 using namespace asco;
-
-namespace {
-
-future<void> yield_n(std::size_t n) {
-    for (std::size_t i = 0; i < n; i++) {
-        co_await this_task::yield();
-    }
-}
-
-template<typename Pred>
-future<bool> yield_wait(Pred &&pred, std::size_t max_yields) {
-    for (std::size_t i = 0; i < max_yields; i++) {
-        if (std::invoke(pred)) {
-            co_return true;
-        }
-        co_await this_task::yield();
-    }
-    co_return std::invoke(pred);
-}
-
-template<typename Pred>
-future<bool> yield_wait_for(Pred &&pred, std::chrono::steady_clock::duration max_wait) {
-    using namespace std::chrono;
-    const auto deadline = steady_clock::now() + max_wait;
-    while (steady_clock::now() < deadline) {
-        if (std::invoke(pred)) {
-            co_return true;
-        }
-        co_await this_task::yield();
-    }
-    co_return std::invoke(pred);
-}
-
-}  // namespace
 
 ASCO_TEST(sleep_until_past_returns_immediately) {
     using namespace std::chrono;
@@ -82,7 +48,7 @@ ASCO_TEST(sleep_for_waits_at_least_duration) {
     });
 
     ASCO_CHECK_WITH_FAILCALLBACK(
-        [&]() { h.cancel(); }, co_await yield_wait_for([&]() { return h.await_ready(); }, 2s),
+        [&]() { h.cancel(); }, co_await test::wait_until([&]() { return h.await_ready(); }, 2s),
         "sleep_for did not complete within bounded yields (timer may be broken)");
 
     // 此时 await_ready() 为 true，co_await 不会挂起。
@@ -105,27 +71,29 @@ ASCO_TEST(sleep_for_waits_at_least_duration) {
 ASCO_TEST(sleep_for_can_be_cancelled) {
     using namespace std::chrono;
 
-    std::atomic_bool entered{false};
+    std::atomic_bool sleep_started{false};
     std::atomic_bool finished{false};
 
     auto h = spawn([&]() -> future<void> {
-        entered.store(true, std::memory_order::release);
+        sleep_started.store(true, std::memory_order::release);
         co_await time::sleep_for(5s);
         finished.store(true, std::memory_order::release);
     });
 
     ASCO_CHECK_WITH_FAILCALLBACK(
         [&]() { h.cancel(); },
-        co_await yield_wait([&]() { return entered.load(std::memory_order::acquire); }, 1024),
-        "sleep task did not start in time");
+        co_await test::wait_until([&]() { return sleep_started.load(std::memory_order::acquire); }, 2s),
+        "sleep task did not reach sleep_for() in time");
 
-    // 给协程机会进入 sleep 并完成 timer 注册/挂起。
-    co_await yield_n(64);
+    ASCO_CHECK_WITH_FAILCALLBACK(
+        [&]() { h.cancel(); },
+        co_await test::stays_false_for([&]() { return finished.load(std::memory_order::acquire); }),
+        "sleep task finished before cancellation could be issued");
 
     h.cancel();
 
     ASCO_CHECK_WITH_FAILCALLBACK(
-        [&]() { h.cancel(); }, co_await yield_wait([&]() { return h.await_ready(); }, 4096),
+        [&]() { h.cancel(); }, co_await test::wait_until([&]() { return h.await_ready(); }, 2s),
         "cancelled join_handle did not become ready in time");
 
     bool threw_cancelled = false;
@@ -166,7 +134,7 @@ ASCO_TEST(sleep_ordering_short_finishes_before_long) {
             short_h.cancel();
             long_h.cancel();
         },
-        co_await yield_wait_for([&]() { return short_done.load(std::memory_order::acquire); }, 1s),
+        co_await test::wait_until([&]() { return short_done.load(std::memory_order::acquire); }, 1s),
         "short sleep did not finish in time");
 
     ASCO_CHECK_WITH_FAILCALLBACK(
@@ -174,7 +142,7 @@ ASCO_TEST(sleep_ordering_short_finishes_before_long) {
             short_h.cancel();
             long_h.cancel();
         },
-        co_await yield_wait_for([&]() { return long_done.load(std::memory_order::acquire); }, 3s),
+        co_await test::wait_until([&]() { return long_done.load(std::memory_order::acquire); }, 3s),
         "long sleep did not finish in time");
 
     const auto short_end = steady_clock::duration{short_end_ticks.load(std::memory_order::acquire)};
@@ -209,7 +177,7 @@ ASCO_TEST(interval_first_tick_is_based_on_construction_time) {
     });
 
     ASCO_CHECK_WITH_FAILCALLBACK(
-        [&]() { h.cancel(); }, co_await yield_wait_for([&]() { return h.await_ready(); }, 2s),
+        [&]() { h.cancel(); }, co_await test::wait_until([&]() { return h.await_ready(); }, 2s),
         "first tick did not complete in time (timer may be broken)");
 
     co_await h;
@@ -221,7 +189,7 @@ ASCO_TEST(interval_first_tick_is_based_on_construction_time) {
     ASCO_SUCCESS();
 }
 
-ASCO_TEST(interval_second_tick_waits_at_least_duration, ASCO_IGNORE_TEST) {
+ASCO_TEST(interval_second_tick_is_scheduled_from_construction_time) {
     using namespace std::chrono;
 
     // 这个测试需要同时满足：
@@ -231,7 +199,9 @@ ASCO_TEST(interval_second_tick_waits_at_least_duration, ASCO_IGNORE_TEST) {
 
     // 语义（按当前实现）：
     // 第 N 次 tick 的目标时间点为 (begin_time + N * duration)。
-    // 因此在第一次 tick 结束后立刻调用第二次 tick，应当再次等待接近一个周期。
+    // 因此两次连续 tick 的总耗时，应当至少接近 2 个周期；
+    // 但第二次 tick 相对“第一次 tick 返回时刻”的等待时间并不固定，
+    // 因为第一次 tick 如果恢复较晚，会直接吃掉第二个周期的一部分甚至全部。
     constexpr auto duration = 80ms;
     constexpr auto eps = 10ms;
 
@@ -239,9 +209,8 @@ ASCO_TEST(interval_second_tick_waits_at_least_duration, ASCO_IGNORE_TEST) {
 
     auto h = spawn([&]() -> future<void> {
         time::interval it{duration};
-        co_await it.tick();
-
         const auto start = steady_clock::now();
+        co_await it.tick();
         co_await it.tick();
         const auto end = steady_clock::now();
 
@@ -249,15 +218,16 @@ ASCO_TEST(interval_second_tick_waits_at_least_duration, ASCO_IGNORE_TEST) {
     });
 
     ASCO_CHECK_WITH_FAILCALLBACK(
-        [&]() { h.cancel(); }, co_await yield_wait_for([&]() { return h.await_ready(); }, 3s),
+        [&]() { h.cancel(); }, co_await test::wait_until([&]() { return h.await_ready(); }, 3s),
         "second tick did not complete in time (timer may be broken)");
 
     co_await h;
 
     const auto got_us = elapsed_us.load(std::memory_order::acquire);
-    const auto want_us = duration_cast<microseconds>(duration - eps).count();
+    const auto want_us = duration_cast<microseconds>(2 * duration - eps).count();
     ASCO_CHECK(
-        got_us >= want_us, "second tick returned too early: elapsed={}us, want>={}us", got_us, want_us);
+        got_us >= want_us, "second tick schedule returned too early: elapsed={}us, want>={}us", got_us,
+        want_us);
 
     ASCO_SUCCESS();
 }
@@ -286,7 +256,7 @@ ASCO_TEST(interval_overrun_tick_does_not_wait) {
     });
 
     ASCO_CHECK_WITH_FAILCALLBACK(
-        [&]() { h.cancel(); }, co_await yield_wait_for([&]() { return h.await_ready(); }, 3s),
+        [&]() { h.cancel(); }, co_await test::wait_until([&]() { return h.await_ready(); }, 3s),
         "overrun tick did not complete in time (timer may be broken)");
 
     co_await h;
@@ -300,39 +270,34 @@ ASCO_TEST(interval_overrun_tick_does_not_wait) {
 ASCO_TEST(interval_tick_can_be_cancelled) {
     using namespace std::chrono;
 
-    std::atomic_bool entered{false};
-    std::atomic_bool sleeping{false};
+    constexpr auto duration = 500ms;
+
+    std::atomic_bool second_tick_started{false};
     std::atomic_bool finished{false};
 
     auto h = spawn([&]() -> future<void> {
-        // 让第二次 tick 必然进入 sleep 状态，然后取消。
-        // 按当前实现：第 N 次 tick 等待到 begin_time + N * duration。
-        // 因此第一次 tick 结束后立刻调用第二次 tick，必然会等待一个周期。
-        time::interval it{100ms};
-        entered.store(true, std::memory_order::release);
+        // 把第二个周期拉长，降低低线程环境下观察到 second_tick_started 后又错过整个取消窗口的概率。
+        time::interval it{duration};
         co_await it.tick();
-        sleeping.store(true, std::memory_order::release);
+        second_tick_started.store(true, std::memory_order::release);
         co_await it.tick();
         finished.store(true, std::memory_order::release);
     });
 
     ASCO_CHECK_WITH_FAILCALLBACK(
         [&]() { h.cancel(); },
-        co_await yield_wait_for([&]() { return entered.load(std::memory_order::acquire); }, 2s),
-        "interval task did not start in time");
+        co_await test::wait_until([&]() { return second_tick_started.load(std::memory_order::acquire); }, 3s),
+        "interval task did not reach the second tick in time");
 
     ASCO_CHECK_WITH_FAILCALLBACK(
         [&]() { h.cancel(); },
-        co_await yield_wait_for([&]() { return sleeping.load(std::memory_order::acquire); }, 2s),
-        "interval task did not reach second tick in time");
-
-    // 给协程机会进入 sleep 并完成 timer 注册/挂起。
-    co_await yield_n(64);
+        co_await test::stays_false_for([&]() { return finished.load(std::memory_order::acquire); }, 100ms),
+        "second tick completed before cancellation could be issued");
 
     h.cancel();
 
     ASCO_CHECK_WITH_FAILCALLBACK(
-        [&]() { h.cancel(); }, co_await yield_wait_for([&]() { return h.await_ready(); }, 2s),
+        [&]() { h.cancel(); }, co_await test::wait_until([&]() { return h.await_ready(); }, 2s),
         "cancelled interval task did not become ready in time");
 
     bool threw_cancelled = false;

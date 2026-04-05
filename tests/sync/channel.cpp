@@ -2,46 +2,25 @@
 // SPDX-License-Identifier: MIT
 
 #include <atomic>
-#include <chrono>
 #include <cstddef>
-#include <functional>
 #include <optional>
+
+#include "../async_test_utils.h"
 
 #include <asco/sync/channel.h>
 #include <asco/test/test.h>
-#include <asco/yield.h>
 
 using namespace asco;
-
-namespace {
-
-future<void> yield_n(std::size_t n) {
-    for (std::size_t i = 0; i < n; i++) {
-        co_await this_task::yield();
-    }
-}
-
-template<typename Pred>
-future<bool> wait(Pred &&pred, std::chrono::steady_clock::duration max_wait = std::chrono::seconds{2}) {
-    const auto deadline = std::chrono::steady_clock::now() + max_wait;
-    while (std::chrono::steady_clock::now() < deadline) {
-        if (std::invoke(pred)) {
-            co_return true;
-        }
-        co_await this_task::yield();
-    }
-    co_return std::invoke(pred);
-}
-
-}  // namespace
 
 ASCO_TEST(channel_recv_blocks_until_value_is_sent) {
     auto [tx, rx] = sync::channel<int>();
 
+    std::atomic_bool recv_attempted{false};
     std::atomic_bool resumed{false};
     std::optional<int> received;
 
     auto waiter = spawn([&]() -> future<void> {
+        recv_attempted.store(true, std::memory_order::release);
         auto value = co_await rx.recv();
         if (value) {
             received = *value;
@@ -49,14 +28,18 @@ ASCO_TEST(channel_recv_blocks_until_value_is_sent) {
         resumed.store(true, std::memory_order::release);
     });
 
-    co_await yield_n(64);
-    ASCO_CHECK(!resumed.load(std::memory_order::acquire), "recv() should block while the channel is empty");
+    ASCO_CHECK(
+        co_await test::wait_until([&]() { return recv_attempted.load(std::memory_order::acquire); }),
+        "recv() waiter did not start in time");
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return resumed.load(std::memory_order::acquire); }),
+        "recv() should remain blocked while the channel is empty");
 
     auto sent = co_await tx.send(42);
     ASCO_CHECK(sent.has_value(), "send() should succeed for an open channel");
 
     ASCO_CHECK(
-        co_await wait([&]() { return resumed.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return resumed.load(std::memory_order::acquire); }),
         "recv() should resume after a value is sent");
 
     co_await waiter;
@@ -76,24 +59,29 @@ ASCO_TEST(channel_send_blocks_when_full_and_recv_releases_backpressure) {
         ASCO_CHECK(sent.has_value(), "prefill send #{} should succeed", i);
     }
 
+    std::atomic_bool send_attempted{false};
     std::atomic_bool extra_completed{false};
     std::atomic_bool extra_succeeded{false};
 
     auto blocked_sender = spawn([&]() -> future<void> {
+        send_attempted.store(true, std::memory_order::release);
         auto sent = co_await tx.send(cap);
         extra_succeeded.store(sent.has_value(), std::memory_order::release);
         extra_completed.store(true, std::memory_order::release);
     });
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        !extra_completed.load(std::memory_order::acquire), "send() should suspend when channel capacity is full");
+        co_await test::wait_until([&]() { return send_attempted.load(std::memory_order::acquire); }),
+        "blocked sender did not start in time");
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return extra_completed.load(std::memory_order::acquire); }),
+        "send() should suspend when channel capacity is full");
 
     auto first = co_await rx.recv();
     ASCO_CHECK(first.has_value() && *first == 0, "recv() should consume the oldest queued element first");
 
     ASCO_CHECK(
-        co_await wait([&]() { return extra_completed.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return extra_completed.load(std::memory_order::acquire); }),
         "consuming one value should release exactly one blocked sender");
 
     co_await blocked_sender;
@@ -120,14 +108,19 @@ ASCO_TEST(channel_sender_stop_drains_buffer_then_closes) {
     tx.stop();
 
     auto first = co_await rx.recv();
-    ASCO_CHECK(first.has_value() && *first == 7, "after sender.stop(), first buffered value should still be receivable");
+    ASCO_CHECK(
+        first.has_value() && *first == 7,
+        "after sender.stop(), first buffered value should still be receivable");
 
     auto second = co_await rx.recv();
     ASCO_CHECK(
-        second.has_value() && *second == 8, "after sender.stop(), second buffered value should still be receivable");
+        second.has_value() && *second == 8,
+        "after sender.stop(), second buffered value should still be receivable");
 
     auto third = co_await rx.recv();
-    ASCO_CHECK(third.has_value() && *third == 9, "after sender.stop(), last buffered value should still be receivable");
+    ASCO_CHECK(
+        third.has_value() && *third == 9,
+        "after sender.stop(), last buffered value should still be receivable");
 
     auto closed = co_await rx.recv();
     ASCO_CHECK(!closed, "recv() should report channel closed after draining buffered values");
@@ -153,7 +146,8 @@ ASCO_TEST(channel_receiver_stop_drains_buffer_and_rejects_future_sends) {
 
     auto first = co_await rx.recv();
     ASCO_CHECK(
-        first.has_value() && *first == 11, "after receiver.stop(), previously buffered values should still be receivable");
+        first.has_value() && *first == 11,
+        "after receiver.stop(), previously buffered values should still be receivable");
 
     auto second = co_await rx.recv();
     ASCO_CHECK(
@@ -176,10 +170,12 @@ ASCO_TEST(channel_receiver_stop_wakes_blocked_sender_with_error) {
         ASCO_CHECK(sent.has_value(), "prefill send #{} should succeed", i);
     }
 
+    std::atomic_bool send_attempted{false};
     std::atomic_bool blocked_completed{false};
     std::optional<std::size_t> rejected;
 
     auto blocked_sender = spawn([&]() -> future<void> {
+        send_attempted.store(true, std::memory_order::release);
         auto sent = co_await tx.send(cap);
         if (!sent) {
             rejected = sent.error();
@@ -187,19 +183,24 @@ ASCO_TEST(channel_receiver_stop_wakes_blocked_sender_with_error) {
         blocked_completed.store(true, std::memory_order::release);
     });
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        !blocked_completed.load(std::memory_order::acquire), "the extra sender should block while the channel is full");
+        co_await test::wait_until([&]() { return send_attempted.load(std::memory_order::acquire); }),
+        "blocked sender did not start in time");
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return blocked_completed.load(std::memory_order::acquire); }),
+        "the extra sender should block while the channel is full");
 
     rx.stop();
 
     ASCO_CHECK(
-        co_await wait([&]() { return blocked_completed.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return blocked_completed.load(std::memory_order::acquire); }),
         "receiver.stop() should wake a sender blocked on backpressure");
 
     co_await blocked_sender;
 
-    ASCO_CHECK(rejected.has_value() && *rejected == cap, "blocked sender should receive its rejected value after stop");
+    ASCO_CHECK(
+        rejected.has_value() && *rejected == cap,
+        "blocked sender should receive its rejected value after stop");
 
     auto first = co_await rx.recv();
     ASCO_CHECK(

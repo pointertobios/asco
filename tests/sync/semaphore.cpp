@@ -2,39 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 #include <atomic>
-#include <chrono>
 #include <cstddef>
-#include <functional>
 #include <vector>
+
+#include "../async_test_utils.h"
 
 #include <asco/panic.h>
 #include <asco/sync/semaphore.h>
 #include <asco/test/test.h>
-#include <asco/yield.h>
 
 using namespace asco;
-
-namespace {
-
-future<void> yield_n(std::size_t n) {
-    for (std::size_t i = 0; i < n; i++) {
-        co_await this_task::yield();
-    }
-}
-
-template<typename Pred>
-future<bool> wait(Pred &&pred, std::chrono::steady_clock::duration max_wait = std::chrono::seconds{2}) {
-    const auto deadline = std::chrono::steady_clock::now() + max_wait;
-    while (std::chrono::steady_clock::now() < deadline) {
-        if (std::invoke(pred)) {
-            co_return true;
-        }
-        co_await this_task::yield();
-    }
-    co_return std::invoke(pred);
-}
-
-}  // namespace
 
 ASCO_TEST(semaphore_basic_try_acquire_release) {
     sync::semaphore<3> sem{2};
@@ -85,18 +62,24 @@ ASCO_TEST(semaphore_count_and_release_return_value) {
 ASCO_TEST(semaphore_acquire_blocks_and_release_wakes) {
     sync::binary_semaphore sem{0};
 
+    std::atomic_bool attempted{false};
     std::atomic_bool passed{false};
     auto waiter = spawn([&]() -> future<void> {
+        attempted.store(true, std::memory_order::release);
         co_await sem.acquire();
         passed.store(true, std::memory_order::release);
     });
 
-    co_await yield_n(64);
-    ASCO_CHECK(!passed.load(std::memory_order::acquire), "acquire() should block when count == 0");
+    ASCO_CHECK(
+        co_await test::wait_until([&]() { return attempted.load(std::memory_order::acquire); }),
+        "waiter did not attempt acquire() in time");
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return passed.load(std::memory_order::acquire); }),
+        "acquire() should block when count == 0");
 
     sem.release(1);
     ASCO_CHECK(
-        co_await wait([&]() { return passed.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return passed.load(std::memory_order::acquire); }),
         "release(1) should wake one waiter");
 
     co_await waiter;
@@ -107,30 +90,37 @@ ASCO_TEST(semaphore_acquire_blocks_and_release_wakes) {
 ASCO_TEST(semaphore_release_wakes_at_most_n_waiters) {
     sync::semaphore<2> sem{0};
 
+    std::atomic_size_t attempted{0};
     std::atomic_size_t passed{0};
 
     auto w1 = spawn([&]() -> future<void> {
+        attempted.fetch_add(1, std::memory_order::acq_rel);
         co_await sem.acquire();
         passed.fetch_add(1, std::memory_order::acq_rel);
     });
     auto w2 = spawn([&]() -> future<void> {
+        attempted.fetch_add(1, std::memory_order::acq_rel);
         co_await sem.acquire();
         passed.fetch_add(1, std::memory_order::acq_rel);
     });
 
-    co_await yield_n(64);
-    ASCO_CHECK(passed.load(std::memory_order::acquire) == 0, "both waiters should be blocked initially");
+    ASCO_CHECK(
+        co_await test::wait_until([&]() { return attempted.load(std::memory_order::acquire) == 2; }),
+        "both waiters should attempt acquire() before release()");
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return passed.load(std::memory_order::acquire) > 0; }),
+        "both waiters should be blocked initially");
 
     sem.release(1);
     ASCO_CHECK(
-        co_await wait([&]() { return passed.load(std::memory_order::acquire) >= 1; }),
+        co_await test::wait_until([&]() { return passed.load(std::memory_order::acquire) >= 1; }),
         "release(1) should wake one waiter");
     ASCO_CHECK(
         passed.load(std::memory_order::acquire) == 1, "release(1) should not wake more than one waiter");
 
     sem.release(1);
     ASCO_CHECK(
-        co_await wait([&]() { return passed.load(std::memory_order::acquire) == 2; }),
+        co_await test::wait_until([&]() { return passed.load(std::memory_order::acquire) == 2; }),
         "second release(1) should wake the other waiter");
 
     co_await w1;
@@ -178,7 +168,7 @@ ASCO_TEST(semaphore_concurrency_correctness) {
     released += 5;
     sem.release(5);
     ASCO_CHECK(
-        co_await wait([&]() { return entered.load(std::memory_order::acquire) == released; }),
+        co_await test::wait_until([&]() { return entered.load(std::memory_order::acquire) == released; }),
         "after release(5), exactly 5 tasks should pass acquire()");
     ASCO_CHECK(
         entered.load(std::memory_order::acquire) <= released, "entered should never exceed released permits");
@@ -186,7 +176,7 @@ ASCO_TEST(semaphore_concurrency_correctness) {
     released += 4;
     sem.release(4);
     ASCO_CHECK(
-        co_await wait([&]() { return entered.load(std::memory_order::acquire) == released; }),
+        co_await test::wait_until([&]() { return entered.load(std::memory_order::acquire) == released; }),
         "after release(4), exactly 4 more tasks should pass acquire()");
     ASCO_CHECK(
         entered.load(std::memory_order::acquire) <= released, "entered should never exceed released permits");
@@ -194,7 +184,7 @@ ASCO_TEST(semaphore_concurrency_correctness) {
     released += 7;
     sem.release(7);
     ASCO_CHECK(
-        co_await wait([&]() { return entered.load(std::memory_order::acquire) == released; }),
+        co_await test::wait_until([&]() { return entered.load(std::memory_order::acquire) == released; }),
         "after release(7), exactly 7 more tasks should pass acquire()");
     ASCO_CHECK(
         entered.load(std::memory_order::acquire) <= released, "entered should never exceed released permits");
@@ -206,7 +196,7 @@ ASCO_TEST(semaphore_concurrency_correctness) {
 
     gate.release(tasks);
     ASCO_CHECK(
-        co_await wait([&]() { return finished.load(std::memory_order::acquire) == tasks; }),
+        co_await test::wait_until([&]() { return finished.load(std::memory_order::acquire) == tasks; }),
         "all tasks should complete after gate opens");
 
     for (auto &h : handles) {

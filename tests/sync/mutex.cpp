@@ -2,38 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 #include <atomic>
-#include <chrono>
 #include <cstddef>
-#include <functional>
 #include <utility>
+
+#include "../async_test_utils.h"
 
 #include <asco/sync/mutex.h>
 #include <asco/test/test.h>
-#include <asco/yield.h>
 
 using namespace asco;
-
-namespace {
-
-future<void> yield_n(std::size_t n) {
-    for (std::size_t i = 0; i < n; i++) {
-        co_await this_task::yield();
-    }
-}
-
-template<typename Pred>
-future<bool> wait(Pred &&pred, std::chrono::steady_clock::duration max_wait = std::chrono::seconds{1}) {
-    const auto deadline = std::chrono::steady_clock::now() + max_wait;
-    while (std::chrono::steady_clock::now() < deadline) {
-        if (std::invoke(pred)) {
-            co_return true;
-        }
-        co_await this_task::yield();
-    }
-    co_return std::invoke(pred);
-}
-
-}  // namespace
 
 ASCO_TEST(mutex_void_try_lock_and_raii_release) {
     sync::mutex<> m;
@@ -55,24 +32,30 @@ ASCO_TEST(mutex_void_try_lock_and_raii_release) {
 ASCO_TEST(mutex_void_lock_blocks_and_release_wakes) {
     sync::mutex<> m;
 
+    std::atomic_bool attempted{false};
     std::atomic_bool entered{false};
 
     {
         auto holder = co_await m.lock();
 
         auto waiter = spawn([&]() -> future<void> {
+            attempted.store(true, std::memory_order::release);
             auto g = co_await m.lock();
             (void)g;
             entered.store(true, std::memory_order::release);
         });
 
-        co_await yield_n(64);
-        ASCO_CHECK(!entered.load(std::memory_order::acquire), "lock() should block while mutex is held");
+        ASCO_CHECK(
+            co_await test::wait_until([&]() { return attempted.load(std::memory_order::acquire); }),
+            "waiter did not attempt lock() in time");
+        ASCO_CHECK(
+            co_await test::stays_false_for([&]() { return entered.load(std::memory_order::acquire); }),
+            "lock() should block while mutex is held");
 
         holder = {};
 
         ASCO_CHECK(
-            co_await wait([&]() { return entered.load(std::memory_order::acquire); }),
+            co_await test::wait_until([&]() { return entered.load(std::memory_order::acquire); }),
             "waiter should enter after mutex is released");
 
         co_await waiter;

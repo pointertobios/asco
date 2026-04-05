@@ -2,38 +2,15 @@
 // SPDX-License-Identifier: MIT
 
 #include <atomic>
-#include <chrono>
 #include <cstddef>
-#include <functional>
 #include <utility>
+
+#include "../async_test_utils.h"
 
 #include <asco/sync/rwlock.h>
 #include <asco/test/test.h>
-#include <asco/yield.h>
 
 using namespace asco;
-
-namespace {
-
-future<void> yield_n(std::size_t n) {
-    for (std::size_t i = 0; i < n; i++) {
-        co_await this_task::yield();
-    }
-}
-
-template<typename Pred>
-future<bool> wait(Pred &&pred, std::chrono::steady_clock::duration max_wait = std::chrono::seconds{2}) {
-    const auto deadline = std::chrono::steady_clock::now() + max_wait;
-    while (std::chrono::steady_clock::now() < deadline) {
-        if (std::invoke(pred)) {
-            co_return true;
-        }
-        co_await this_task::yield();
-    }
-    co_return std::invoke(pred);
-}
-
-}  // namespace
 
 ASCO_TEST(rwlock_void_try_read_try_write_and_raii_release) {
     sync::rwlock<> lock;
@@ -77,7 +54,7 @@ ASCO_TEST(rwlock_void_read_allows_multiple_readers) {
     });
 
     ASCO_CHECK(
-        co_await wait([&]() { return second_entered.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return second_entered.load(std::memory_order::acquire); }),
         "read() should allow another reader to enter while a reader is already holding the rwlock");
 
     co_await second;
@@ -91,29 +68,33 @@ ASCO_TEST(rwlock_void_write_waits_for_all_readers) {
     auto reader1 = co_await lock.read();
     auto reader2 = co_await lock.read();
 
+    std::atomic_bool writer_attempted{false};
     std::atomic_bool writer_entered{false};
 
     auto writer = spawn([&]() -> future<void> {
+        writer_attempted.store(true, std::memory_order::release);
         auto g = co_await lock.write();
         (void)g;
         writer_entered.store(true, std::memory_order::release);
     });
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        !writer_entered.load(std::memory_order::acquire), "write() should wait while readers are present");
+        co_await test::wait_until([&]() { return writer_attempted.load(std::memory_order::acquire); }),
+        "writer did not attempt write() in time");
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return writer_entered.load(std::memory_order::acquire); }),
+        "write() should wait while readers are present");
 
     reader1 = {};
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        !writer_entered.load(std::memory_order::acquire),
+        co_await test::stays_false_for([&]() { return writer_entered.load(std::memory_order::acquire); }),
         "write() should still wait until the last active reader releases");
 
     reader2 = {};
 
     ASCO_CHECK(
-        co_await wait([&]() { return writer_entered.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return writer_entered.load(std::memory_order::acquire); }),
         "writer should enter after every reader has released the rwlock");
 
     co_await writer;
@@ -177,43 +158,47 @@ ASCO_TEST(rwlock_void_upgrade_waits_for_other_readers_and_blocks_new_readers) {
 
     ASCO_CHECK(!upgrader, "moving a read guard into upgrade() should empty the original guard");
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        !upgrade_entered.load(std::memory_order::acquire),
+        co_await test::stays_false_for([&]() { return upgrade_entered.load(std::memory_order::acquire); }),
         "upgrade() should wait while another reader still holds the rwlock");
     ASCO_CHECK(
-        co_await wait([&]() {
+        co_await test::wait_until([&]() {
             auto g = lock.try_read();
             return !g;
         }),
         "try_read() should fail while a reader is waiting to upgrade");
 
+    std::atomic_bool late_reader_attempted{false};
     auto late_reader = spawn([&]() -> future<void> {
+        late_reader_attempted.store(true, std::memory_order::release);
         auto g = co_await lock.read();
         (void)g;
         late_reader_entered.store(true, std::memory_order::release);
     });
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        !late_reader_entered.load(std::memory_order::acquire),
+        co_await test::wait_until([&]() { return late_reader_attempted.load(std::memory_order::acquire); }),
+        "late reader did not attempt read() in time");
+    ASCO_CHECK(
+        co_await test::stays_false_for(
+            [&]() { return late_reader_entered.load(std::memory_order::acquire); }),
         "new readers should not bypass a pending upgrade");
 
     other_reader = {};
 
     ASCO_CHECK(
-        co_await wait([&]() { return upgrade_entered.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return upgrade_entered.load(std::memory_order::acquire); }),
         "upgrade() should complete after the other readers release");
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        !late_reader_entered.load(std::memory_order::acquire),
+        co_await test::stays_false_for(
+            [&]() { return late_reader_entered.load(std::memory_order::acquire); }),
         "an upgraded writer should continue excluding readers until it releases");
 
     release_upgraded_writer.store(true, std::memory_order::release);
 
     ASCO_CHECK(
-        co_await wait([&]() { return late_reader_entered.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return late_reader_entered.load(std::memory_order::acquire); }),
         "readers queued behind an upgrade should proceed after the upgraded writer releases");
 
     co_await upgrade_task;
@@ -246,7 +231,7 @@ ASCO_TEST(rwlock_void_second_upgrade_fails_while_first_upgrade_is_pending) {
 
     ASCO_CHECK(!first_reader, "moving a read guard into the first upgrade should empty the source guard");
     ASCO_CHECK(
-        co_await wait([&]() {
+        co_await test::wait_until([&]() {
             auto g = lock.try_read();
             return !g;
         }),
@@ -262,14 +247,14 @@ ASCO_TEST(rwlock_void_second_upgrade_fails_while_first_upgrade_is_pending) {
 
     ASCO_CHECK(!second_reader, "moving a read guard into the second upgrade should empty the source guard");
     ASCO_CHECK(
-        co_await wait([&]() { return second_upgrade_finished.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return second_upgrade_finished.load(std::memory_order::acquire); }),
         "a concurrent second upgrade should finish promptly instead of waiting indefinitely");
     ASCO_CHECK(
         !second_upgrade_succeeded.load(std::memory_order::acquire),
         "the second concurrent upgrade should fail and return an empty write guard");
 
     ASCO_CHECK(
-        co_await wait([&]() { return first_upgrade_entered.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return first_upgrade_entered.load(std::memory_order::acquire); }),
         "the first upgrade should complete after the failed second upgrade releases its reader share");
 
     release_first_writer.store(true, std::memory_order::release);
@@ -297,30 +282,35 @@ ASCO_TEST(rwlock_void_waiting_writer_blocks_new_readers) {
     });
 
     ASCO_CHECK(
-        co_await wait([&]() {
+        co_await test::wait_until([&]() {
             auto g = lock.try_read();
             return !g;
         }),
         "try_read() should fail once a writer is queued behind an existing reader");
 
+    std::atomic_bool late_reader_attempted{false};
     auto late_reader = spawn([&]() -> future<void> {
+        late_reader_attempted.store(true, std::memory_order::release);
         auto g = co_await lock.read();
         (void)g;
         reader_order.store(
             acquire_order.fetch_add(1, std::memory_order::acq_rel) + 1, std::memory_order::release);
     });
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        reader_order.load(std::memory_order::acquire) == 0, "new readers should not bypass a queued writer");
+        co_await test::wait_until([&]() { return late_reader_attempted.load(std::memory_order::acquire); }),
+        "late reader did not attempt read() in time");
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return reader_order.load(std::memory_order::acquire) != 0; }),
+        "new readers should not bypass a queued writer");
 
     first_reader = {};
 
     ASCO_CHECK(
-        co_await wait([&]() { return writer_order.load(std::memory_order::acquire) != 0; }),
+        co_await test::wait_until([&]() { return writer_order.load(std::memory_order::acquire) != 0; }),
         "queued writer should eventually acquire the rwlock after existing readers leave");
     ASCO_CHECK(
-        co_await wait([&]() { return reader_order.load(std::memory_order::acquire) != 0; }),
+        co_await test::wait_until([&]() { return reader_order.load(std::memory_order::acquire) != 0; }),
         "reader queued after a writer should acquire the rwlock after the writer releases");
     ASCO_CHECK(
         writer_order.load(std::memory_order::acquire) < reader_order.load(std::memory_order::acquire),

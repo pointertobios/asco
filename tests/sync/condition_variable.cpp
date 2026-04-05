@@ -4,33 +4,25 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
-#include <functional>
 #include <vector>
+
+#include "../async_test_utils.h"
 
 #include <asco/sync/condition_variable.h>
 #include <asco/test/test.h>
-#include <asco/yield.h>
 
 using namespace asco;
 
 namespace {
 
-future<void> yield_n(std::size_t n) {
-    for (std::size_t i = 0; i < n; i++) {
-        co_await this_task::yield();
-    }
-}
-
-template<typename Pred>
-future<bool> wait(Pred &&pred, std::chrono::steady_clock::duration max_wait = std::chrono::seconds{2}) {
-    const auto deadline = std::chrono::steady_clock::now() + max_wait;
-    while (std::chrono::steady_clock::now() < deadline) {
-        if (std::invoke(pred)) {
-            co_return true;
-        }
-        co_await this_task::yield();
-    }
-    co_return std::invoke(pred);
+future<bool> wait_until_waiter_queued(
+    sync::condition_variable &cv, std::chrono::steady_clock::duration max_wait = std::chrono::seconds{2}) {
+    co_return co_await test::wait_until(
+        [&]() {
+            auto probe = cv.notify_one([]() { return false; });
+            return !probe.has_value() && probe.error() == sync::notify_failed::predicate_false;
+        },
+        max_wait);
 }
 
 }  // namespace
@@ -95,19 +87,20 @@ ASCO_TEST(condition_variable_wait_blocks_until_notify_after_predicate_changes) {
     });
 
     ASCO_CHECK(
-        co_await wait([&]() { return calls.load(std::memory_order::acquire) >= 1; }),
+        co_await test::wait_until([&]() { return calls.load(std::memory_order::acquire) >= 1; }),
         "waiter should evaluate predicate before blocking");
-
-    co_await yield_n(64);
     ASCO_CHECK(
-        !passed.load(std::memory_order::acquire),
+        co_await wait_until_waiter_queued(cv), "waiter should enqueue itself before notification is tested");
+
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return passed.load(std::memory_order::acquire); }),
         "wait() should remain blocked while predicate is false and no notification is sent");
 
     ready.store(true, std::memory_order::release);
     ASCO_CHECK(cv.notify_one(), "notify_one() should report one waiting task");
 
     ASCO_CHECK(
-        co_await wait([&]() { return passed.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return passed.load(std::memory_order::acquire); }),
         "wait() should resume after predicate becomes true and a waiter is notified");
 
     co_await waiter;
@@ -155,18 +148,21 @@ ASCO_TEST(condition_variable_wait_once_suspends_once_and_returns_true_after_noti
     });
 
     ASCO_CHECK(
-        co_await wait([&]() { return calls.load(std::memory_order::acquire) == 1; }),
+        co_await test::wait_until([&]() { return calls.load(std::memory_order::acquire) == 1; }),
         "wait_once() should evaluate predicate before blocking");
-
-    co_await yield_n(64);
     ASCO_CHECK(
-        !resumed.load(std::memory_order::acquire), "wait_once() should block while predicate is false");
+        co_await wait_until_waiter_queued(cv),
+        "wait_once() waiter should enqueue itself before notification");
+
+    ASCO_CHECK(
+        co_await test::stays_false_for([&]() { return resumed.load(std::memory_order::acquire); }),
+        "wait_once() should block while predicate is false");
 
     ready.store(true, std::memory_order::release);
     ASCO_CHECK(cv.notify_one(), "notify_one() should wake one wait_once() waiter");
 
     ASCO_CHECK(
-        co_await wait([&]() { return resumed.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return resumed.load(std::memory_order::acquire); }),
         "wait_once() should resume after one notification");
 
     co_await waiter;
@@ -197,8 +193,11 @@ ASCO_TEST(condition_variable_predicated_notify_one_respects_predicate) {
     });
 
     ASCO_CHECK(
-        co_await wait([&]() { return predicate_calls.load(std::memory_order::acquire) == 1; }),
+        co_await test::wait_until([&]() { return predicate_calls.load(std::memory_order::acquire) == 1; }),
         "waiter should evaluate predicate and enqueue before predicated notify_one()");
+    ASCO_CHECK(
+        co_await wait_until_waiter_queued(cv),
+        "waiter should be queued before predicated notify_one() is tested");
 
     auto rejected = cv.notify_one([]() { return false; });
     ASCO_CHECK(!rejected.has_value(), "notify_one(predicate) should fail when predicate returns false");
@@ -206,15 +205,15 @@ ASCO_TEST(condition_variable_predicated_notify_one_respects_predicate) {
         rejected.error() == sync::notify_failed::predicate_false,
         "notify_one(predicate) should report predicate_false when predicate rejects notification");
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        !resumed.load(std::memory_order::acquire), "notify_one(predicate=false) should not wake the waiter");
+        co_await test::stays_false_for([&]() { return resumed.load(std::memory_order::acquire); }),
+        "notify_one(predicate=false) should not wake the waiter");
 
     auto accepted = cv.notify_one([]() { return true; });
     ASCO_CHECK(accepted.has_value(), "notify_one(predicate=true) should wake the waiter");
 
     ASCO_CHECK(
-        co_await wait([&]() { return resumed.load(std::memory_order::acquire); }),
+        co_await test::wait_until([&]() { return resumed.load(std::memory_order::acquire); }),
         "notify_one(predicate=true) should eventually resume the waiter");
 
     co_await waiter;
@@ -249,8 +248,12 @@ ASCO_TEST(condition_variable_predicated_notify_wakes_at_most_n_waiters) {
     }
 
     ASCO_CHECK(
-        co_await wait([&]() { return predicate_calls.load(std::memory_order::acquire) == waiter_count; }),
+        co_await test::wait_until(
+            [&]() { return predicate_calls.load(std::memory_order::acquire) == waiter_count; }),
         "all waiters should evaluate predicate and enqueue before predicated notify()");
+    ASCO_CHECK(
+        co_await wait_until_waiter_queued(cv),
+        "at least one waiter should be queued before predicated notify() is tested");
 
     auto rejected = cv.notify([]() { return false; }, 2);
     ASCO_CHECK(!rejected.has_value(), "notify(predicate, n) should fail when predicate returns false");
@@ -258,28 +261,27 @@ ASCO_TEST(condition_variable_predicated_notify_wakes_at_most_n_waiters) {
         rejected.error() == sync::notify_failed::predicate_false,
         "notify(predicate, n) should report predicate_false when predicate rejects notification");
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        resumed_count.load(std::memory_order::acquire) == 0,
+        co_await test::stays_false_for([&]() { return resumed_count.load(std::memory_order::acquire) > 0; }),
         "notify(predicate=false, n) should not wake any waiter");
 
     auto two = cv.notify([]() { return true; }, 2);
     ASCO_CHECK(two.has_value(), "notify(predicate=true, 2) should succeed");
     ASCO_CHECK(two.value() == 2, "notify(predicate=true, 2) should report waking two waiters");
     ASCO_CHECK(
-        co_await wait([&]() { return resumed_count.load(std::memory_order::acquire) >= 2; }),
+        co_await test::wait_until([&]() { return resumed_count.load(std::memory_order::acquire) >= 2; }),
         "notify(predicate=true, 2) should wake two waiters");
 
-    co_await yield_n(64);
     ASCO_CHECK(
-        resumed_count.load(std::memory_order::acquire) == 2,
+        co_await test::stays_false_for([&]() { return resumed_count.load(std::memory_order::acquire) > 2; }),
         "notify(predicate=true, 2) should not wake more than two waiters");
 
     auto remaining = cv.notify([]() { return true; });
     ASCO_CHECK(remaining.has_value(), "notify(predicate=true) should wake remaining waiters");
     ASCO_CHECK(remaining.value() == 1, "notify(predicate=true) should report the remaining waiter count");
     ASCO_CHECK(
-        co_await wait([&]() { return resumed_count.load(std::memory_order::acquire) == waiter_count; }),
+        co_await test::wait_until(
+            [&]() { return resumed_count.load(std::memory_order::acquire) == waiter_count; }),
         "the final waiter should resume after notify(predicate=true)");
 
     for (auto &waiter : waiters) {
