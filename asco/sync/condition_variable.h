@@ -7,13 +7,14 @@
 #include <deque>
 #include <expected>
 #include <limits>
+#include <type_traits>
 #include <utility>
 
 #include <asco/core/worker.h>
 #include <asco/future.h>
+#include <asco/join_handle.h>
 #include <asco/sync/spinlock.h>
 #include <asco/yield.h>
-#include <type_traits>
 
 namespace asco::sync {
 
