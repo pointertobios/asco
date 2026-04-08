@@ -14,7 +14,6 @@
 #include <asco/panic.h>
 #include <asco/util/tsc.h>
 
-
 namespace asco::core {
 
 worker::worker(
@@ -22,7 +21,7 @@ worker::worker(
     std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity + 1>> backsem,
     void *runtime_storage_ptr, void *runtime_ptr, detail::idle_workers_sender idle_tx)
         : daemon(std::format("asco-w{}", id))
-        , m_execution_domain{&m_scheduler}
+        , m_execution_domain{m_scheduler}
         , m_id{id}
         , m_coroutine_rx{std::move(rx)}
         , m_backsem{std::move(backsem)}
@@ -81,6 +80,12 @@ bool worker::run_once(std::stop_token &st) {
     }
 
     if (m_scheduler.has_active_execution()) {
+        auto exit_stack = [&] {
+            m_domain_stack.clear();
+            m_context_stack.clear();
+            m_sexec_stack.clear();
+        };
+
         task::execution_domain *current_domain = &m_execution_domain;
         m_domain_stack.push_back(current_domain);
 
@@ -91,6 +96,10 @@ bool worker::run_once(std::stop_token &st) {
             current_domain = m_sexec_stack.back().get_subdomain();
             if (current_domain) {
                 m_domain_stack.push_back(current_domain);
+                if (!current_domain->get_scheduler().has_active_execution()) {
+                    exit_stack();
+                    return true;
+                }
             }
         } while (current_domain);
 
@@ -101,9 +110,7 @@ bool worker::run_once(std::stop_token &st) {
             domain.detach_execution(exec);
         }
 
-        m_domain_stack.clear();
-        m_context_stack.clear();
-        m_sexec_stack.clear();
+        exit_stack();
     }
 
     return !st.stop_requested() ||  //

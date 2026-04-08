@@ -51,7 +51,7 @@ class execution_domain final {
     friend class executor;
 
 public:
-    explicit execution_domain(scheduler *sched)
+    explicit execution_domain(scheduler &sched)
             : m_scheduler{sched} {}
 
     execution_domain(const execution_domain &) = delete;
@@ -71,13 +71,13 @@ public:
 
     bool is_empty() const { return !m_executions.size(); }
 
-    scheduler &get_scheduler() const { return *m_scheduler; }
+    scheduler &get_scheduler() const { return m_scheduler; }
 
 private:
     concurrency::hash_map<execution_id, execution> m_executions;
     concurrency::hash_map<std::coroutine_handle<>, execution_id> m_corohandle_exec_map;
 
-    scheduler *m_scheduler;
+    scheduler &m_scheduler;
 };
 
 };  // namespace asco::core::task
