@@ -219,7 +219,7 @@ ASCO_TEST(hash_map_rehash_needed_then_rehash) {
     ASCO_SUCCESS();
 }
 
-ASCO_TEST(hash_map_concurrent_stress, ASCO_IGNORE_TEST) {
+ASCO_TEST(hash_map_concurrent_stress) {
     using asco::join_set;
     using asco::concurrency::get_failed;
     using asco::concurrency::hash_map;
@@ -367,7 +367,8 @@ ASCO_TEST(hash_map_concurrent_stress, ASCO_IGNORE_TEST) {
         }
     }
 
-    ASCO_CHECK(m.try_insert(123456, 1).has_value(), "post-stress insert failed");
+    auto result = m.try_insert(123456, 1);
+    ASCO_CHECK(result.has_value(), "post-stress insert failed: {}", static_cast<std::size_t>(result.error()));
     auto g = m.try_get(123456);
     ASCO_CHECK(g.has_value(), "post-stress get failed");
     ASCO_CHECK(g.value().value() == 1, "post-stress value mismatch");

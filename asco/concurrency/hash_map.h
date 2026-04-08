@@ -688,6 +688,7 @@ private:
             auto index = (begindex + i * (step % size)) % size;
             bucket &b = m_buckets[index];
 
+        begin_remove:
             if (bucket_state e{0, bucket_state_enum::filled};  //
                 !b.state.compare_exchange_strong(
                     e, {1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
@@ -695,8 +696,10 @@ private:
                 if (e.state == bucket_state_enum::filled && e.refcount != 0) {
                     do {
                         e = b.state.load(std::memory_order::acquire);
-                        if (e.state == bucket_state_enum::predestructing) {
+                        if (e.state != bucket_state_enum::filled) {
                             return std::unexpected{remove_failed::retry};
+                        } else if (e.refcount == 0) {
+                            goto begin_remove;
                         }
                     } while (!b.state.compare_exchange_weak(
                         e, {e.refcount + 1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
