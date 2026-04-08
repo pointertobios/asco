@@ -130,11 +130,8 @@ include(CMakePackageConfigHelpers)
 export(
     TARGETS
         asco_core
-        asco_shared_core
         asco_main
         asco_base
-        asco_shared_main
-        asco_shared_base
     NAMESPACE asco::
     FILE "${CMAKE_CURRENT_BINARY_DIR}/ascoTargets.cmake"
 )

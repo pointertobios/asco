@@ -42,18 +42,9 @@ future<int> async_main() { // asco::main 提供的入口
 1. 将本仓库添加为 Git 子模块
 2. 用 cmake 导入:
 
-- 静态链接:
-
 ```cmake
 add_subdirectory(<path-to-this-repo>)
 target_link_libraries(<your-target> PRIVATE asco::core asco::main)
-```
-
-- 动态链接:
-
-```cmake
-add_subdirectory(<path-to-this-repo>)
-target_link_libraries(<your-target> PRIVATE asco::shared::core asco::shared::main)
 ```
 
 #### 用 cmake FetchContent_Declare() 导入
