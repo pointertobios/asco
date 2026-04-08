@@ -10,9 +10,10 @@
 namespace asco::core::task {
 
 execution::execution(execution_id id, cancel_source *src)
-        : handle_stack({id})
-        , cancel_src(src)
-        , cancel_src_owned(false) {
+        : handle_stack{{id}}
+        , cancel_src{src}
+        , subdomain{nullptr}
+        , cancel_src_owned{false} {
     if (!src) {
         new (cancel_src_storage.get()) cancel_source{};
         cancel_src = cancel_src_storage.get();
@@ -29,9 +30,11 @@ execution::~execution() {
 execution::execution(execution &&rhs) noexcept
         : handle_stack{std::move(rhs.handle_stack)}
         , cancel_src{rhs.cancel_src}
+        , subdomain{rhs.subdomain}
         , cancel_src_owned{rhs.cancel_src_owned} {
     rhs.cancel_src = nullptr;
     rhs.cancel_src_owned = false;
+    rhs.subdomain = nullptr;
     if (cancel_src_owned) {
         rhs.cancel_src_storage.get()->~cancel_source();
         cancel_src = new (cancel_src_storage.get()) cancel_source{};

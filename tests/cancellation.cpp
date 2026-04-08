@@ -46,7 +46,7 @@ struct cancellable_never_ready {
         });
         auto &w = core::worker::current();
         auto id = w.get_executor().current_execution();
-        w.get_scheduler().suspend_current(id);
+        w.get_current_scheduler().suspend_current(id);
 
         if (started)
             started->release();

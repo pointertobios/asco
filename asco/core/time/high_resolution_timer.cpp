@@ -22,7 +22,8 @@ high_resolution_timer::high_resolution_timer()
 }
 
 std::optional<high_resolution_timer::timer_id> high_resolution_timer::register_timer(
-    std::chrono::steady_clock::time_point time_point, task::execution_id exec) {
+    std::chrono::steady_clock::time_point time_point, task::execution_id exec,
+    core::task::execution_domain *domain) {
     if (time_point < std::chrono::steady_clock::now()) {
         return std::nullopt;
     }
@@ -37,7 +38,7 @@ std::optional<high_resolution_timer::timer_id> high_resolution_timer::register_t
             // entry_area{seconds_from_epoch, {}}
             g->emplace(seconds_from_epoch, seconds_from_epoch);
         }
-        g->at(seconds_from_epoch).entries.lock()->emplace(tmid, timer_entry{time_point, exec});
+        g->at(seconds_from_epoch).entries.lock()->emplace(tmid, timer_entry{time_point, exec, domain});
     }
 
     awake();
@@ -103,8 +104,9 @@ bool high_resolution_timer::run_once(std::stop_token &st) {
                 }
 
                 auto id = it->second.handle;
+                auto domain = it->second.domain;
                 if (auto w = core::worker::of_handle(id)) {
-                    w->get_scheduler().awake_execution(id);
+                    domain->get_scheduler().awake_execution(id);
                     w->awake();
                     it = entries_guard->erase(it);
                 } else {

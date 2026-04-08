@@ -3,14 +3,17 @@
 
 #include <asco/core/worker.h>
 
+#include <atomic>
 #include <coroutine>
 #include <format>
 
 #include <asco/core/cancellation.h>
 #include <asco/core/os/process.h>
 #include <asco/core/runtime.h>
+#include <asco/core/task/execution_domain.h>
 #include <asco/panic.h>
 #include <asco/util/tsc.h>
+
 
 namespace asco::core {
 
@@ -19,6 +22,7 @@ worker::worker(
     std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity + 1>> backsem,
     void *runtime_storage_ptr, void *runtime_ptr, detail::idle_workers_sender idle_tx)
         : daemon(std::format("asco-w{}", id))
+        , m_execution_domain{&m_scheduler}
         , m_id{id}
         , m_coroutine_rx{std::move(rx)}
         , m_backsem{std::move(backsem)}
@@ -77,12 +81,29 @@ bool worker::run_once(std::stop_token &st) {
     }
 
     if (m_scheduler.has_active_execution()) {
-        auto [exec, ctx] = m_scheduler.schedule();
-        auto sexec = m_execution_domain.schedule_execution(exec);
-        if (!m_executor.execute(sexec, ctx)) {
-            m_scheduler.detach_suspended_execution(exec);
-            m_execution_domain.detach_execution(exec);
+        task::execution_domain *current_domain = &m_execution_domain;
+        m_domain_stack.push_back(current_domain);
+
+        do {
+            auto [exec, ctx] = m_scheduler.schedule();
+            m_context_stack.push_back(&ctx);
+            m_sexec_stack.push_back(current_domain->schedule_execution(exec));
+            current_domain = m_sexec_stack.back().get_subdomain();
+            if (current_domain) {
+                m_domain_stack.push_back(current_domain);
+            }
+        } while (current_domain);
+
+        if (!m_executor.execute(m_sexec_stack.back(), m_context_stack)) {
+            auto &domain = *m_domain_stack.back();
+            auto exec = m_sexec_stack.back().m_id;
+            domain.get_scheduler().detach_suspended_execution(exec);
+            domain.detach_execution(exec);
         }
+
+        m_domain_stack.clear();
+        m_context_stack.clear();
+        m_sexec_stack.clear();
     }
 
     return !st.stop_requested() ||  //
@@ -94,6 +115,7 @@ void worker::shutdown() {}
 bool worker::fetch_task() {
     if (auto meta = m_coroutine_rx.try_recv()) {
         auto handle = meta->handle;
+        meta->pdomain_location->store(&m_execution_domain, std::memory_order::release);
         m_backsem->release();
         m_coroutine_metas.insert(handle, std::move(*meta));
         m_execution_domain.attach_execution(handle, meta->cancel_source);

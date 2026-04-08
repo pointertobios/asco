@@ -43,8 +43,8 @@ public:
                 }
                 auto &w = core::worker::current();
                 auto id = w.get_executor().current_execution();
-                g->push_back(id);
-                w.get_scheduler().suspend_current(id);
+                g->push_back({id, &w.get_current_scheduler()});
+                w.get_current_scheduler().suspend_current(id);
             }
             co_await this_task::yield();
         }
@@ -60,8 +60,8 @@ public:
             }
             auto &w = core::worker::current();
             auto id = w.get_executor().current_execution();
-            g->push_back(id);
-            w.get_scheduler().suspend_current(id);
+            g->push_back({id, &w.get_current_scheduler()});
+            w.get_current_scheduler().suspend_current(id);
         }
         co_await this_task::yield();
         co_return true;
@@ -73,10 +73,10 @@ public:
             return false;
         }
 
-        auto id = g->front();
+        auto [id, scheduler] = g->front();
         g->pop_front();
         if (auto w = core::worker::of_handle(id)) {
-            w->get_scheduler().awake_execution(id);
+            scheduler->awake_execution(id);
             w->awake();
         }
 
@@ -94,10 +94,10 @@ public:
             return std::unexpected{notify_failed::predicate_false};
         }
 
-        auto id = g->front();
+        auto [id, scheduler] = g->front();
         g->pop_front();
         if (auto w = core::worker::of_handle(id)) {
-            w->get_scheduler().awake_execution(id);
+            scheduler->awake_execution(id);
             w->awake();
         }
 
@@ -108,10 +108,10 @@ public:
         auto g = m_wait_queue.lock();
         std::size_t notified = 0;
         while (!g->empty() && notified < n) {
-            auto id = g->front();
+            auto [id, scheduler] = g->front();
             g->pop_front();
             if (auto w = core::worker::of_handle(id)) {
-                w->get_scheduler().awake_execution(id);
+                scheduler->awake_execution(id);
                 w->awake();
             }
             ++notified;
@@ -134,10 +134,10 @@ public:
 
         std::size_t notified = 0;
         while (!g->empty() && notified < n) {
-            auto id = g->front();
+            auto [id, scheduler] = g->front();
             g->pop_front();
             if (auto w = core::worker::of_handle(id)) {
-                w->get_scheduler().awake_execution(id);
+                scheduler->awake_execution(id);
                 w->awake();
             }
             ++notified;
@@ -152,7 +152,7 @@ public:
     }
 
 private:
-    spinlock<std::deque<core::task::execution_id>> m_wait_queue;
+    spinlock<std::deque<std::tuple<core::task::execution_id, core::task::scheduler *>>> m_wait_queue;
 };
 
 };  // namespace asco::sync

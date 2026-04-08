@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "asco/core/task/scheduler.h"
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
@@ -17,10 +16,12 @@
 #include <asco/core/task/dynprio_scheduler.h>
 #include <asco/core/task/execution_domain.h>
 #include <asco/core/task/executor.h>
+#include <asco/core/task/scheduler.h>
 #include <asco/sync/spinlock.h>
 #include <asco/this_task.h>
 #include <asco/util/safe_erased.h>
 #include <asco/yield.h>
+
 
 namespace asco::core {
 
@@ -28,6 +29,7 @@ namespace detail {
 
 struct coroutine_meta {
     std::coroutine_handle<> handle;
+    std::atomic<task::execution_domain *> *pdomain_location;
     cancel_source *cancel_source;
     util::safe_erased tls;
     bool blocking;
@@ -81,9 +83,10 @@ public:
     void register_handle(std::coroutine_handle<> handle);
     void unregister_handle(std::coroutine_handle<> handle);
 
-    task::scheduler &get_scheduler() noexcept { return m_scheduler; }
+    task::scheduler &get_current_scheduler() noexcept { return m_domain_stack.back()->get_scheduler(); }
+    task::execution_domain &get_current_execution_domain() noexcept { return *m_domain_stack.back(); }
+
     task::executor &get_executor() noexcept { return m_executor; }
-    task::execution_domain &get_execution_domain() noexcept { return m_execution_domain; }
 
 private:
     bool init() override;
@@ -91,6 +94,11 @@ private:
     void shutdown() override;
 
     bool fetch_task();
+
+    // 运行时上下文
+    std::vector<task::execution_domain *> m_domain_stack;
+    std::vector<task::scheduler_context *> m_context_stack;
+    std::vector<task::scheduled_execution> m_sexec_stack;
 
     task::dynprio_scheduler m_scheduler;
     task::executor m_executor;

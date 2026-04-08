@@ -11,14 +11,15 @@ future<void> sleep_until(std::chrono::steady_clock::time_point time_point) {
     auto &timer = rt.get_timer();
 
     auto exec = w.get_executor().current_execution();
-    auto tmid = timer.register_timer(time_point, exec);
+    auto domain = &w.get_current_execution_domain();
+    auto tmid = timer.register_timer(time_point, exec, domain);
 
     if (!tmid) {
         co_return;
     }
 
     cancel_callback cb{this_task::get_cancel_token(), [&timer, tmid = *tmid]() { timer.cancel_timer(tmid); }};
-    w.get_scheduler().suspend_current(exec);
+    w.get_current_scheduler().suspend_current(exec);
     co_await this_task::yield();
 }
 

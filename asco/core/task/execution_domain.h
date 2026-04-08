@@ -12,6 +12,8 @@
 
 namespace asco::core::task {
 
+class scheduler;
+
 class execution_domain;
 
 using execution_id = std::coroutine_handle<>;
@@ -19,6 +21,9 @@ using execution_id = std::coroutine_handle<>;
 struct execution {
     std::vector<std::coroutine_handle<>> handle_stack;
     cancel_source *cancel_src;
+    execution_domain *subdomain;  // 此 subdomain 所有权必须在顶层 coroutine_handle，
+                                  // 应在顶层 coroutine_handle 持有的 subdomain 销毁时将此指针置回 nullptr。
+                                  // 此指针为非 nullptr 时， executor 直接进入 subdomain 调度
 
     execution(execution_id id, cancel_source *src);
     ~execution();
@@ -38,13 +43,16 @@ struct scheduled_execution {
     execution_domain &m_domain;
     const execution_id m_id;
     execution *m_exec;
+
+    execution_domain *get_subdomain() const { return m_exec->subdomain; }
 };
 
 class execution_domain final {
     friend class executor;
 
 public:
-    explicit execution_domain() = default;
+    explicit execution_domain(scheduler *sched)
+            : m_scheduler{sched} {}
 
     execution_domain(const execution_domain &) = delete;
     execution_domain &operator=(const execution_domain &) = delete;
@@ -63,9 +71,13 @@ public:
 
     bool is_empty() const { return !m_executions.size(); }
 
+    scheduler &get_scheduler() const { return *m_scheduler; }
+
 private:
     concurrency::hash_map<execution_id, execution> m_executions;
     concurrency::hash_map<std::coroutine_handle<>, execution_id> m_corohandle_exec_map;
+
+    scheduler *m_scheduler;
 };
 
 };  // namespace asco::core::task

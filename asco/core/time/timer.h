@@ -21,6 +21,7 @@ public:
     struct timer_entry {
         std::chrono::steady_clock::time_point time_point;
         std::coroutine_handle<> handle;
+        core::task::execution_domain *domain;
     };
 
     struct timer_id {
@@ -38,8 +39,9 @@ public:
     };
 
     // 注册一个定时器，time_point 早于当前时间时返回无效的 timer_id
-    virtual std::optional<timer_id>
-    register_timer(std::chrono::steady_clock::time_point time_point, task::execution_id exec) = 0;
+    virtual std::optional<timer_id> register_timer(
+        std::chrono::steady_clock::time_point time_point, task::execution_id exec,
+        core::task::execution_domain *domain) = 0;
 
     // 取消定时器，tmid 无效或定时器已过期时无任何效果
     virtual void cancel_timer(timer_id tmid) = 0;

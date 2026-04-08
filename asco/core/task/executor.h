@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include <asco/core/cancellation.h>
 #include <asco/core/task/execution_domain.h>
 #include <asco/util/erased.h>
@@ -26,7 +28,7 @@ public:
     executor &operator=(executor &&) = delete;
 
     // 返回 false 表示当前执行流已结束
-    bool execute(scheduled_execution exec, scheduler_context &ctx);
+    bool execute(scheduled_execution exec, const std::vector<scheduler_context *> &ctxs);
 
     void push_handle(std::coroutine_handle<> handle);
     std::coroutine_handle<> pop_handle();

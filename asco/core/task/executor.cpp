@@ -3,11 +3,13 @@
 
 #include <asco/core/task/executor.h>
 
+#include <ranges>
+
 #include <asco/core/worker.h>
 
 namespace asco::core::task {
 
-bool executor::execute(scheduled_execution exec, scheduler_context &ctx) {
+bool executor::execute(scheduled_execution exec, const std::vector<scheduler_context *> &ctxs) {
     m_domain = &exec.m_domain;
     m_current_id = exec.m_id;
     m_execution = exec.m_exec;
@@ -18,28 +20,28 @@ bool executor::execute(scheduled_execution exec, scheduler_context &ctx) {
         return false;
     }
 
-    ctx.begin();
+    std::ranges::for_each(ctxs, [](scheduler_context *ctx) { ctx->begin(); });
+    auto exit_stack = [&](bool completed) {
+        std::ranges::for_each(
+            ctxs | std::views::reverse, [completed](scheduler_context *ctx) { ctx->end(completed); });
+        m_domain = nullptr;
+        m_execution = nullptr;
+    };
 
     m_current_cancel_token = m_execution->cancel_src ? m_execution->cancel_src->get_token() : cancel_token{};
 
     if (cancel_cleanup()) {
-        ctx.end(true);
-        m_domain = nullptr;
-        m_execution = nullptr;
+        exit_stack(true);
         return false;
     }
     m_execution->handle_stack.back().resume();
     if (cancel_cleanup()) {
-        ctx.end(true);
-        m_domain = nullptr;
-        m_execution = nullptr;
+        exit_stack(true);
         return false;
     }
 
     bool res = !m_execution->handle_stack.empty();
-    ctx.end(!res);
-    m_domain = nullptr;
-    m_execution = nullptr;
+    exit_stack(!res);
     return res;
 }
 

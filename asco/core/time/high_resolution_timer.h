@@ -24,8 +24,9 @@ public:
     high_resolution_timer(high_resolution_timer &&) = delete;
     high_resolution_timer &operator=(high_resolution_timer &&) = delete;
 
-    std::optional<timer_id>
-    register_timer(std::chrono::steady_clock::time_point time_point, task::execution_id exec) override;
+    std::optional<timer_id> register_timer(
+        std::chrono::steady_clock::time_point time_point, task::execution_id exec,
+        core::task::execution_domain *domain) override;
 
     void cancel_timer(timer_id tmid) override;
 

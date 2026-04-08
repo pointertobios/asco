@@ -10,6 +10,7 @@
 #include <semaphore>
 
 #include <asco/core/cancellation.h>
+#include <asco/core/task/execution_domain.h>
 #include <asco/core/worker.h>
 #include <asco/future.h>
 #include <asco/util/erased.h>
@@ -22,17 +23,23 @@ namespace asco {
 
 namespace detail {
 
-inline void awake_coroutine(std::coroutine_handle<> handle) {
+inline void awake_coroutine(std::coroutine_handle<> handle, core::task::execution_domain *domain) {
+    if (!domain) {
+        return;
+    }
     if (auto w = core::worker::of_handle(handle)) {
-        auto id = w->get_execution_domain().execution_of_coroutine(handle);
-        w->get_scheduler().awake_execution(id);
+        auto id = domain->execution_of_coroutine(handle);
+        domain->get_scheduler().awake_execution(id);
         w->awake();
     }
 }
 
-inline void awake_execution(core::task::execution_id id) {
+inline void awake_execution(core::task::execution_id id, core::task::execution_domain *domain) {
+    if (!domain) {
+        return;
+    }
     if (auto w = core::worker::of_handle(id)) {
-        w->get_scheduler().awake_execution(id);
+        domain->get_scheduler().awake_execution(id);
         w->awake();
     }
 }
@@ -59,6 +66,7 @@ private:
 
     struct task_state {
         coroutine_handle this_handle;
+        std::atomic<core::task::execution_domain *> this_domain{nullptr};
 
         std::exception_ptr e_ptr{};
         [[no_unique_address]] util::raw_storage<output_type> value{};
@@ -66,6 +74,7 @@ private:
         std::binary_semaphore sync_awaiter{0};
 
         std::atomic<std::coroutine_handle<>> caller_handle{};
+        std::atomic<core::task::execution_domain *> caller_domain{nullptr};
 
         util::erased bound_lambda{};
 
@@ -114,7 +123,8 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    detail::awake_coroutine(handle);
+                    detail::awake_coroutine(
+                        handle, this->m_state->caller_domain.load(std::memory_order::acquire));
                 }
             }
         }
@@ -129,7 +139,8 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    detail::awake_coroutine(handle);
+                    detail::awake_coroutine(
+                        handle, this->m_state->caller_domain.load(std::memory_order::acquire));
                 }
             }
         }
@@ -152,7 +163,8 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    detail::awake_coroutine(handle);
+                    detail::awake_coroutine(
+                        handle, this->m_state->caller_domain.load(std::memory_order::acquire));
                 }
             }
         }
@@ -162,7 +174,8 @@ public:
                 this->m_state->sync_awaiter.release();
                 auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
                 if (handle) {
-                    detail::awake_coroutine(handle);
+                    detail::awake_coroutine(
+                        handle, this->m_state->caller_domain.load(std::memory_order::acquire));
                 }
             }
 
@@ -175,7 +188,7 @@ public:
                     auto &w = core::worker::current();
                     auto h = w.get_executor().pop_handle();
                     asco_assert(this_handle == h);
-                    w.get_scheduler().suspend_current(h);
+                    w.get_current_scheduler().suspend_current(h);
                     w.unregister_handle(h);
                     this_handle.destroy();
                     return;
@@ -193,6 +206,8 @@ public:
 
     void await_suspend(std::coroutine_handle<> handle) noexcept {
         this->m_state->caller_handle.store(handle, std::memory_order::release);
+        this->m_state->caller_domain.store(
+            &core::worker::current().get_current_execution_domain(), std::memory_order::release);
         complete_state e;
         do {
             e = this->m_state->cstate.load(std::memory_order::acquire);
@@ -203,7 +218,7 @@ public:
             e, complete_state::awaitable_waiting, std::memory_order::acq_rel, std::memory_order::relaxed));
 
         auto &w = core::worker::current();
-        w.get_scheduler().suspend_current(w.get_executor().current_execution());
+        w.get_current_scheduler().suspend_current(w.get_executor().current_execution());
     }
 
     output_type await_resume() {
@@ -234,11 +249,12 @@ public:
             this->m_state->sync_awaiter.release();
             auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
             if (handle) {
-                detail::awake_coroutine(handle);
+                detail::awake_coroutine(
+                    handle, this->m_state->caller_domain.load(std::memory_order::acquire));
             }
 
-            auto id = this->m_state->this_handle;
-            detail::awake_execution(id);
+            detail::awake_execution(
+                this->m_state->this_handle, this->m_state->this_domain.load(std::memory_order::acquire));
         }
     }
 
