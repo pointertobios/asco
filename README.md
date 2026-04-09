@@ -130,6 +130,10 @@ FetchContent_MakeAvailable(asco)
 
 阅读 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解详情。
 
+### 有关 AI 辅助开发
+
+对于使用 `Github Copilot` 的用户，我们提供了一系列定制化的提示和工作流，帮助你更高效地使用 AI 进行开发。请参阅 [.github/copilot-instructions.md](./.github/copilot-instructions.md) 和 [.github/skills/](./.github/skills/)。
+
 ## License
 
 本项目使用 **MIT License** 发布.
