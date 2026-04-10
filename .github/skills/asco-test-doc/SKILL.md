@@ -1,5 +1,5 @@
 ---
-name: module-test-and-doc
+name: asco-test-doc
 description: "为 ASCO 模块编写单元测试与中文文档。用于新增模块、补齐测试覆盖、补写 API/模块说明、整理行为语义说明。重点产出 tests 下的用例与 docs/zh-cn/src 下的专业文档，文档只描述语义、约束和可观察行为，不描述实现细节。"
 argument-hint: "说明目标模块、需要覆盖的公开接口、是否已有实现，以及文档目标页或章节"
 ---

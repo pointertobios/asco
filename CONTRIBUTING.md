@@ -33,7 +33,7 @@
 
 - 新特性必须包含全面的单元测试和中文或英文的文档，否则将不被接受。
   文档要求较为灵活——只需提供对特性功能的大体描述即可。
-- 本仓库提供了 skill [`/module-test-and-doc`](.github/skills/module-test-and-doc/SKILL.md)，可以用来生成测试和文档的草案，提交者可以在此基础上进行核对和修正。
+- 本仓库提供了 skill [`/asco-test-doc`](.github/skills/asco-test-doc/SKILL.md)，可以用来生成测试和文档的草案，提交者可以在此基础上进行核对和修正。
 
 ## 特性分支生命周期
 
