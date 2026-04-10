@@ -15,6 +15,7 @@
 
 - 对于用户明确提出的长期协作要求，应记录到全局记忆中，避免后续机械地只遵循仓库文档而让用户重复提出相同要求。
 - 遵循 [.clang-format](../.clang-format)，避免无关的格式化改动。
+- 函数返回的指针在无特殊说明时表示可空语义，使用前应先检查是否为空；如果返回值语义上不可为空，应使用引用返回，而不是指针。
 - 新增测试文件必须加入 [tests/CMakeLists.txt](../tests/CMakeLists.txt)。测试使用 `ASCO_TEST(...)`、`ASCO_CHECK(...)` 和 `asco::test`；参见 [docs/zh-cn/src/advanced/testing.md](../docs/zh-cn/src/advanced/testing.md)。
 - [docs/zh-cn/src](../docs/zh-cn/src) 下的中文文档是实际维护的 API 文档。新增文档页时，需要同时更新 [docs/zh-cn/src/SUMMARY.md](../docs/zh-cn/src/SUMMARY.md) 和对应章节的 `README.md`。
 - 除非 API 会显式消费 guard 作为操作的一部分，否则不要让自旋锁 guard 跨越 `co_await` 存活。
