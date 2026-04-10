@@ -53,7 +53,7 @@ public:
 
     sender &operator=(const sender &rhs) {
         if (this != &rhs) {
-            this->~receiver();
+            this->~serder();
             new (this) sender{rhs};
         }
         return *this;
