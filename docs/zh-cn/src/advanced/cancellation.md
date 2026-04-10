@@ -7,6 +7,8 @@ ASCO 的“任务取消”主要面向由 runtime 调度的任务（`join_handle
 - 取消发生并被处理后，该任务会被终止，不再继续执行。
 
 > 术语：本文的“任务”指 `spawn(...)` 产生的 runtime 任务（`join_handle`）。
+>
+> 当前文档描述的是“按任务独立”的取消模型：每个任务有自己的取消状态与取消回调；当前公开语义不包含父子任务之间的树形取消传播。
 
 ---
 
@@ -21,13 +23,14 @@ ASCO 的“任务取消”主要面向由 runtime 调度的任务（`join_handle
 核心类型：
 
 - `asco::core::cancel_source`：取消信号的来源
-  - `request_cancel()`：请求取消（仅发出 stop 请求）
-  - `invoke_callbacks()`：执行已注册的取消回调（LIFO 顺序）
+  - `request_cancel()`：发出取消请求，仅设置 stop 请求本身
+  - `invoke_callbacks()`：执行当前任务已注册的取消回调；回调按 LIFO 顺序执行
 - `asco::core::cancel_token`：取消信号的观察者
   - `cancel_requested()`：查询是否已请求取消
-  - `close_cancellation()` / `cancellation_closed()`：关闭/查询“取消关闭”状态
+  - `close_cancellation()` / `cancellation_closed()`：关闭或查询“取消关闭”状态
 - `asco::core::cancel_callback`
-  - 基于 token 注册一个回调；对象析构时自动注销
+  - 基于 token 注册一个回调；其设计用途是“当前任务中的局部 RAII guard”
+  - 在这种用法下，对象析构时自动注销
 
 任务内入口（当前正在运行的任务）：
 
@@ -101,7 +104,11 @@ future<void> with_cancel_callback(std::atomic_bool &flag) {
 
 回调顺序与生命周期：
 
-- 取消回调以 **LIFO** 顺序执行。
+- `cancel_callback` 的预期用法，是在当前任务内作为局部自动对象按词法作用域注册一个取消回调。
+- 注册与销毁应发生在同一任务的协程栈上；它不是面向跨任务、跨所有权边界传递的通用“注销句柄”。
+- 在这种局部 RAII 用法下，对象析构时会自动注销对应回调。
+- 取消回调以 **LIFO** 顺序执行；这里的 LIFO 语义，针对的是同一任务栈上按嵌套作用域注册的回调。
+- 不要把 `cancel_callback` 当成可以长期保存、放入共享状态、容器或堆对象中并任意延后销毁的通用注册对象使用。
 
 ### 3.2 补充：查询取消请求（`cancel_requested()`）
 
