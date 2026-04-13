@@ -11,8 +11,8 @@
 
 #include <asco/core/os/terminal.h>
 #include <asco/future.h>
-#include <asco/join_set.h>
 #include <asco/panic.h>
+#include <asco/task/join_set.h>
 
 namespace asco::test {
 
@@ -65,7 +65,7 @@ int main() {
     core::runtime rt = core::runtime_builder::multi_threaded()  //
                            .with_timer()
                            .build();
-    join_set<test::test_result_wrap> set{rt};
+    task::join_set<test::test_result_wrap> set{rt};
 
     auto total = test::get_tests().size();
 

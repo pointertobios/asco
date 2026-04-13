@@ -11,7 +11,7 @@
 #include <asco/sync/channel.h>
 #include <asco/util/types.h>
 
-namespace asco {
+namespace asco::task {
 
 template<util::types::move_secure Output>
 class join_set final {
@@ -96,4 +96,4 @@ private:
     std::atomic_size_t m_task_count{0};
 };
 
-};  // namespace asco
+};  // namespace asco::task

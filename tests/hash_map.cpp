@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <asco/concurrency/hash_map.h>
-#include <asco/join_set.h>
+#include <asco/task/join_set.h>
 #include <asco/test/test.h>
 #include <asco/this_task.h>
 
@@ -220,11 +220,11 @@ ASCO_TEST(hash_map_rehash_needed_then_rehash) {
 }
 
 ASCO_TEST(hash_map_concurrent_stress) {
-    using asco::join_set;
     using asco::concurrency::get_failed;
     using asco::concurrency::hash_map;
     using asco::concurrency::insert_failed;
     using asco::concurrency::remove_failed;
+    using asco::task::join_set;
 
     hash_map<int, int> m;
 

@@ -120,13 +120,13 @@ future<void> parent() {
 - `co_await set`：按完成顺序收集结果。
 - `join_all()`：停止收集并返回已到达的结果。
 
-更完整的语义与注意事项见：[`join_set<T>`：批量任务收集](./join_set.md)。
+更完整的语义与注意事项见：[`join_set<T>`：批量任务收集](./task/join_set.md)。
 
 示例（非 `void` 输出）：
 
 ```cpp
 #include <asco/core/runtime.h>
-#include <asco/join_set.h>
+#include <asco/task/join_set.h>
 #include <asco/yield.h>
 
 using namespace asco;
@@ -139,7 +139,7 @@ future<int> job(int x) {
 int main() {
     core::runtime rt;
     return rt.block_on([&]() -> future<int> {
-        join_set<int> set{rt};
+        task::join_set<int> set{rt};
         for (int i = 0; i < 10; ++i) {
             set.spawn([i]() -> future<int> { co_return co_await job(i); });
         }

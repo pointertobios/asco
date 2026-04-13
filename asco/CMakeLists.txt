@@ -40,7 +40,6 @@ set(PRECOMPILE_HEADERS
     future.h
     invoke.h
     join_handle.h
-    join_set.h
     panic.h
     sync/channel.h
     sync/condition_variable.h
@@ -52,6 +51,7 @@ set(PRECOMPILE_HEADERS
     test/bench.h
     test/test.h
     this_task.h
+    task/join_set.h
     time/interval.h
     time/sleep.h
     util/consts.h

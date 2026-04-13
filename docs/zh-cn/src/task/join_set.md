@@ -7,7 +7,7 @@
 - 你要同时跑很多个任务；
 - 想边完成边消费结果（streaming），而不是固定按提交顺序等待。
 
-对应头文件：`asco/join_set.h`。
+对应头文件：`asco/task/join_set.h`。
 
 ---
 
@@ -15,7 +15,7 @@
 
 ```cpp
 #include <asco/core/runtime.h>
-#include <asco/join_set.h>
+#include <asco/task/join_set.h>
 #include <asco/yield.h>
 
 using namespace asco;
@@ -28,7 +28,7 @@ future<int> job(int x) {
 int main() {
     core::runtime rt;
     return rt.block_on([&]() -> future<int> {
-        join_set<int> set{rt};
+        task::join_set<int> set{rt};
 
         for (int i = 0; i < 10; ++i) {
             set.spawn([i]() -> future<int> { co_return co_await job(i); });
@@ -79,7 +79,7 @@ void spawn(async_function<> auto &&fn);
 ### 2.3 `co_await set`：取回一个结果
 
 ```cpp
-future<std::optional<T>> operator co_await();
+future<std::conditional_t<std::is_void_v<T>, bool, std::optional<T>>> operator co_await();
 ```
 
 当 `T` 为非 `void` 类型时：

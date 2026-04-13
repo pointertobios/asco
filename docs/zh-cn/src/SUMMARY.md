@@ -1,7 +1,8 @@
 # Summary
 
 - [`future<T>` 与异步函数](./future.md)
-- [`join_set<T>`：批量任务收集](./join_set.md)
+- [任务](./task/README.md)
+  - [`join_set<T>`：批量任务收集](./task/join_set.md)
 - [同步原语](./sync/README.md)
   - [通道](./sync/channel.md)
   - [条件变量](./sync/condition_variable.md)
