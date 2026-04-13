@@ -14,7 +14,7 @@
 namespace asco::core::task {
 
 class dynprio_scheduler final : public scheduler {
-    class dynprio_context : public context {
+    class dynprio_context final : public context {
     public:
         dynprio_context(dynprio_scheduler *scheduler, execution_id id)
                 : m_scheduler{scheduler}

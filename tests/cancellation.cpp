@@ -107,11 +107,18 @@ ASCO_TEST(cancel_callback_destroyed_before_cancel_is_not_invoked) {
 
 ASCO_TEST(cancel_callbacks_execute_in_lifo_order_when_task_is_cancelled) {
     sync::binary_semaphore callbacks_registered{0};
+    sync::semaphore<2> callbacks_called{0};
     std::vector<int> order;
 
     auto h = spawn([&]() -> future<void> {
-        cancel_callback cb1{[&]() { order.push_back(1); }};
-        cancel_callback cb2{[&]() { order.push_back(2); }};
+        cancel_callback cb1{[&]() {
+            order.push_back(1);
+            callbacks_called.release();
+        }};
+        cancel_callback cb2{[&]() {
+            order.push_back(2);
+            callbacks_called.release();
+        }};
         callbacks_registered.release();
 
         while (true) {
@@ -124,6 +131,13 @@ ASCO_TEST(cancel_callbacks_execute_in_lifo_order_when_task_is_cancelled) {
         "callbacks did not register in time");
 
     h.cancel();
+
+    ASCO_CHECK(
+        co_await acquire_for(callbacks_called, std::chrono::seconds{1}),
+        "first cancel callback was not called in time");
+    ASCO_CHECK(
+        co_await acquire_for(callbacks_called, std::chrono::seconds{1}),
+        "second cancel callback was not called in time");
 
     bool threw_cancelled = false;
     try {

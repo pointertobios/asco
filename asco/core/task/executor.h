@@ -13,8 +13,8 @@ namespace asco::core::task {
 
 class scheduler_context {
 public:
-    virtual void begin() noexcept = 0;
-    virtual void end(bool completed) noexcept = 0;
+    virtual void begin() noexcept {}
+    virtual void end(bool completed) noexcept { (void)completed; }
 };
 
 class executor final {
