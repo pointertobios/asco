@@ -20,6 +20,7 @@ using execution_id = std::coroutine_handle<>;
 
 struct execution {
     std::vector<std::coroutine_handle<>> handle_stack;
+    std::vector<std::function<void()>> cancel_callback_stack;
     cancel_source *cancel_src;
     execution_domain *subdomain;  // 此 subdomain 所有权必须在顶层 coroutine_handle，
                                   // 应在顶层 coroutine_handle 持有的 subdomain 销毁时将此指针置回 nullptr。
@@ -33,6 +34,8 @@ struct execution {
 
     execution(execution &&rhs) noexcept;
     execution &operator=(execution &&rhs) noexcept;
+
+    void remove_subdomain() noexcept { subdomain = nullptr; }
 
 private:
     util::raw_storage<cancel_source> cancel_src_storage;
@@ -49,6 +52,9 @@ struct scheduled_execution {
 
 class execution_domain final {
     friend class executor;
+    friend class execution_domain_proxy;
+    friend class asco::core::cancel_source;
+    friend class asco::core::cancel_callback;
 
 public:
     explicit execution_domain(scheduler &sched)
@@ -59,6 +65,12 @@ public:
 
     execution_domain(execution_domain &&) = delete;
     execution_domain &operator=(execution_domain &&) = delete;
+
+    void set_parent_domain(execution_domain &parent) { m_parent_domain = &parent; }
+    execution_domain *get_parent_domain() const { return m_parent_domain; }
+
+    void set_parent_execution(execution_id id) { m_parent_execution_id = id; }
+    execution_id get_parent_execution() const { return m_parent_execution_id; }
 
     void attach_execution(execution_id id);
     void attach_execution(execution_id id, cancel_source *cancel_src);
@@ -74,10 +86,13 @@ public:
     scheduler &get_scheduler() const { return m_scheduler; }
 
 private:
-    concurrency::hash_map<execution_id, execution> m_executions;
-    concurrency::hash_map<std::coroutine_handle<>, execution_id> m_corohandle_exec_map;
+    execution_domain *m_parent_domain{nullptr};
+    execution_id m_parent_execution_id{};
 
     scheduler &m_scheduler;
+
+    concurrency::hash_map<execution_id, execution> m_executions;
+    concurrency::hash_map<std::coroutine_handle<>, execution_id> m_corohandle_exec_map;
 };
 
 };  // namespace asco::core::task

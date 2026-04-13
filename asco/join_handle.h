@@ -188,6 +188,7 @@ public:
                     auto &w = core::worker::current();
                     auto h = w.get_executor().pop_handle();
                     asco_assert(this_handle == h);
+                    // worker 任务清理协议动作：只有 suspended execution 才能被正确清理
                     w.get_current_scheduler().suspend_current(h);
                     w.unregister_handle(h);
                     this_handle.destroy();

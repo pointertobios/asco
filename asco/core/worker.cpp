@@ -6,13 +6,13 @@
 #include <atomic>
 #include <coroutine>
 #include <format>
+#include <ranges>
 
 #include <asco/core/cancellation.h>
 #include <asco/core/os/process.h>
 #include <asco/core/runtime.h>
 #include <asco/core/task/execution_domain.h>
 #include <asco/panic.h>
-#include <asco/util/tsc.h>
 
 namespace asco::core {
 
@@ -28,7 +28,8 @@ worker::worker(
         , m_idle_workers_tx{idle_tx}
         , m_runtime_storage_ptr{runtime_storage_ptr}
         , m_runtime_ptr{runtime_ptr} {
-    { daemon::start(); }
+    m_scheduler.bind_execution_domain(m_execution_domain);
+    auto _ = daemon::start();
 }
 
 worker &worker::current() {
@@ -80,7 +81,12 @@ bool worker::run_once(std::stop_token &st) {
     }
 
     if (m_scheduler.has_active_execution()) {
-        auto exit_stack = [&] {
+        auto exit_stack = [&](bool executed = false) {
+            if (!executed) {
+                std::ranges::for_each(m_context_stack, [](auto &ctx) { ctx->begin(); });
+                std::ranges::for_each(
+                    m_context_stack | std::views::reverse, [](auto &ctx) { ctx->end(false); });
+            }
             m_domain_stack.clear();
             m_context_stack.clear();
             m_sexec_stack.clear();
@@ -90,15 +96,29 @@ bool worker::run_once(std::stop_token &st) {
         m_domain_stack.push_back(current_domain);
 
         do {
-            auto [exec, ctx] = m_scheduler.schedule();
+            auto &current_scheduler = current_domain->get_scheduler();
+            auto [exec, ctx] = current_scheduler.schedule();
             m_context_stack.push_back(&ctx);
             m_sexec_stack.push_back(current_domain->schedule_execution(exec));
             current_domain = m_sexec_stack.back().get_subdomain();
             if (current_domain) {
-                m_domain_stack.push_back(current_domain);
-                if (!current_domain->get_scheduler().has_active_execution()) {
+                if (current_domain->is_empty()) {  // 空子执行域协议：如果子执行域没有附加任何 execution
+                                                   // 视为子执行域已经完成， 自动从父 execution 移除
+                    m_sexec_stack.back().m_exec->remove_subdomain();
                     exit_stack();
                     return true;
+                } else {
+                    m_domain_stack.push_back(current_domain);
+                }
+                if (!current_domain->get_scheduler().has_active_execution()) {
+                    // 适应性挂起，对应调度器的唤醒应有唤醒传递，将当前 execution 的唤醒向所在
+                    // execution_domain 的父 execution 传递
+                    current_domain->get_parent_domain()->get_scheduler().suspend_current(
+                        m_sexec_stack.back().m_id);
+                    // suspend_current 内部设置挂起标志，随后 exit_stack 中的 ctx->end(false) 会挂起当前
+                    // execution 这与普通的协程挂起是一致的
+                    exit_stack();
+                    goto executed_once;
                 }
             }
         } while (current_domain);
@@ -110,8 +130,9 @@ bool worker::run_once(std::stop_token &st) {
             domain.detach_execution(exec);
         }
 
-        exit_stack();
+        exit_stack(true);
     }
+executed_once:
 
     return !st.stop_requested() ||  //
            !m_execution_domain.is_empty() || fetch_task();

@@ -35,7 +35,9 @@ public:
 
     std::coroutine_handle<> current_coroutine() const;
     execution_id current_execution() const;
+    bool is_base_coroutine(std::coroutine_handle<> handle) const;
 
+    cancel_source *current_cancel_source() const { return m_execution->cancel_src; }
     cancel_token &get_cancel_token() { return m_current_cancel_token; }
     void close_cancellation() noexcept;
 

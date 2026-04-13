@@ -83,8 +83,14 @@ public:
 
                 void await_suspend(std::coroutine_handle<>) noexcept {
                     auto &w = core::worker::current();
-                    auto wchdl = w.get_executor().pop_handle();
+                    auto &exe = w.get_executor();
+                    auto wchdl = exe.pop_handle();
                     asco_assert(this_handle == wchdl);
+                    if (exe.is_base_coroutine(wchdl)) {
+                        // worker 任务清理 / 空子执行域协议的协议动作：保证当前 execution 是 suspended
+                        // execution，保证被 worker 正确清理，进一步保证当前执行域符合空子执行域协议
+                        w.get_current_scheduler().suspend_current(wchdl);
+                    }
                     w.unregister_handle(wchdl);
                     this_handle.destroy();
                     return;

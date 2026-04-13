@@ -18,7 +18,7 @@ future<void> sleep_until(std::chrono::steady_clock::time_point time_point) {
         co_return;
     }
 
-    cancel_callback cb{this_task::get_cancel_token(), [&timer, tmid = *tmid]() { timer.cancel_timer(tmid); }};
+    cancel_callback cb{[&timer, tmid = *tmid]() { timer.cancel_timer(tmid); }};
     w.get_current_scheduler().suspend_current(exec);
     co_await this_task::yield();
 }

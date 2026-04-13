@@ -22,7 +22,6 @@
 #include <asco/util/safe_erased.h>
 #include <asco/yield.h>
 
-
 namespace asco::core {
 
 namespace detail {
@@ -100,8 +99,9 @@ private:
     std::vector<task::scheduler_context *> m_context_stack;
     std::vector<task::scheduled_execution> m_sexec_stack;
 
-    task::dynprio_scheduler m_scheduler;
     task::executor m_executor;
+
+    task::dynprio_scheduler m_scheduler;
     task::execution_domain m_execution_domain;
 
     concurrency::hash_map<std::coroutine_handle<>, detail::coroutine_meta> m_coroutine_metas;

@@ -20,6 +20,8 @@ bool executor::execute(scheduled_execution exec, const std::vector<scheduler_con
         return false;
     }
 
+    m_current_cancel_token = m_execution->cancel_src ? m_execution->cancel_src->get_token() : cancel_token{};
+
     std::ranges::for_each(ctxs, [](scheduler_context *ctx) { ctx->begin(); });
     auto exit_stack = [&](bool completed) {
         std::ranges::for_each(
@@ -27,8 +29,6 @@ bool executor::execute(scheduled_execution exec, const std::vector<scheduler_con
         m_domain = nullptr;
         m_execution = nullptr;
     };
-
-    m_current_cancel_token = m_execution->cancel_src ? m_execution->cancel_src->get_token() : cancel_token{};
 
     if (cancel_cleanup()) {
         exit_stack(true);
@@ -76,6 +76,10 @@ execution_id executor::current_execution() const {
         return {};
     }
     return m_current_id;
+}
+
+bool executor::is_base_coroutine(std::coroutine_handle<> handle) const {
+    return m_execution && m_execution->handle_stack.size() && m_execution->handle_stack.front() == handle;
 }
 
 void executor::close_cancellation() noexcept {

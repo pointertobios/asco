@@ -5,7 +5,6 @@
 
 #include <functional>
 #include <stop_token>
-#include <vector>
 
 #include <asco/sync/spinlock.h>
 
@@ -32,7 +31,6 @@ public:
 
 private:
     std::stop_source m_stop_source{};
-    sync::spinlock<std::vector<std::function<void()>>> m_callbacks{};
 
     std::atomic_bool m_closed{false};
 };
@@ -62,7 +60,7 @@ private:
 
 class cancel_callback final {
 public:
-    cancel_callback(cancel_token &token, std::function<void()> callback) noexcept;
+    cancel_callback(std::function<void()> callback) noexcept;
     ~cancel_callback();
 
     cancel_callback(const cancel_callback &) = delete;

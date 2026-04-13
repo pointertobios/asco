@@ -1,7 +1,6 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -39,8 +38,7 @@ struct cancellable_never_ready {
     bool await_ready() const noexcept { return false; }
 
     void await_suspend(std::coroutine_handle<>) noexcept {
-        auto &token = this_task::get_cancel_token();
-        cb = std::make_unique<cancel_callback>(token, [this]() {
+        cb = std::make_unique<cancel_callback>([this]() {
             if (callback_called)
                 callback_called->release();
         });
@@ -64,38 +62,78 @@ ASCO_TEST(cancel_source_token_and_callback_basic) {
     ASCO_CHECK(bool(token), "token should be valid");
     ASCO_CHECK(!token.cancel_requested(), "cancel should not be requested initially");
 
-    {
-        std::atomic_int called{0};
-        cancel_callback cb{token, [&]() { called.fetch_add(1, std::memory_order::acq_rel); }};
+    src.request_cancel();
+    ASCO_CHECK(
+        token.cancel_requested(), "token.cancel_requested() should become true after request_cancel()");
 
-        src.request_cancel();
-        ASCO_CHECK(
-            token.cancel_requested(), "token.cancel_requested() should become true after request_cancel()");
+    ASCO_SUCCESS();
+}
 
-        src.invoke_callbacks();
-        ASCO_CHECK(called.load(std::memory_order::acquire) == 1, "callback should be invoked exactly once");
-    }
+ASCO_TEST(cancel_callback_destroyed_before_cancel_is_not_invoked) {
+    sync::binary_semaphore callback_destroyed{0};
+    sync::binary_semaphore callback_called{0};
 
-    {
-        std::atomic_int called{0};
+    auto h = spawn([&]() -> future<void> {
         {
-            cancel_callback cb{token, [&]() { called.fetch_add(1, std::memory_order::acq_rel); }};
+            cancel_callback cb{[&]() { callback_called.release(); }};
         }
+        callback_destroyed.release();
 
-        src.invoke_callbacks();
-        ASCO_CHECK(called.load(std::memory_order::acquire) == 0, "destroyed callback should not be invoked");
+        while (true) {
+            co_await this_task::yield();
+        }
+    });
+
+    ASCO_CHECK(
+        co_await acquire_for(callback_destroyed, std::chrono::seconds{1}),
+        "callback scope did not finish in time");
+
+    h.cancel();
+
+    ASCO_CHECK(
+        !(co_await acquire_for(callback_called, std::chrono::milliseconds{200})),
+        "destroyed callback should not be invoked after task cancellation");
+
+    bool threw_cancelled = false;
+    try {
+        co_await h;
+    } catch (core::coroutine_cancelled &) { threw_cancelled = true; } catch (...) {
     }
 
-    {
-        std::vector<int> order;
-        cancel_callback cb1{token, [&]() { order.push_back(1); }};
-        cancel_callback cb2{token, [&]() { order.push_back(2); }};
+    ASCO_CHECK(threw_cancelled, "awaiting a cancelled join_handle should throw coroutine_cancelled");
 
-        src.invoke_callbacks();
+    ASCO_SUCCESS();
+}
 
-        ASCO_CHECK(order.size() == 2, "callbacks should be invoked");
-        ASCO_CHECK(order[0] == 2 && order[1] == 1, "callbacks should be invoked in LIFO order");
+ASCO_TEST(cancel_callbacks_execute_in_lifo_order_when_task_is_cancelled) {
+    sync::binary_semaphore callbacks_registered{0};
+    std::vector<int> order;
+
+    auto h = spawn([&]() -> future<void> {
+        cancel_callback cb1{[&]() { order.push_back(1); }};
+        cancel_callback cb2{[&]() { order.push_back(2); }};
+        callbacks_registered.release();
+
+        while (true) {
+            co_await this_task::yield();
+        }
+    });
+
+    ASCO_CHECK(
+        co_await acquire_for(callbacks_registered, std::chrono::seconds{1}),
+        "callbacks did not register in time");
+
+    h.cancel();
+
+    bool threw_cancelled = false;
+    try {
+        co_await h;
+    } catch (core::coroutine_cancelled &) { threw_cancelled = true; } catch (...) {
     }
+
+    ASCO_CHECK(threw_cancelled, "awaiting a cancelled join_handle should throw coroutine_cancelled");
+    ASCO_CHECK(order.size() == 2, "callbacks should be invoked exactly twice");
+    ASCO_CHECK(order[0] == 2 && order[1] == 1, "callbacks should be invoked in LIFO order");
 
     ASCO_SUCCESS();
 }
@@ -105,8 +143,7 @@ ASCO_TEST(join_handle_cancel_triggers_callback_and_throws) {
     sync::binary_semaphore cancel_cb_called{0};
 
     auto h = spawn([&]() -> future<void> {
-        auto &token = this_task::get_cancel_token();
-        cancel_callback cb{token, [&]() { cancel_cb_called.release(); }};
+        cancel_callback cb{[&]() { cancel_cb_called.release(); }};
         cb_registered.release();
 
         while (true) {

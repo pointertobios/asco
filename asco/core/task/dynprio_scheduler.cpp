@@ -50,6 +50,11 @@ void dynprio_scheduler::awake_execution(execution_id id) noexcept {
     } else {
         m_preawake_executions.insert(id);
     }
+    auto parent_domain = m_domain->get_parent_domain();
+    auto parent_exec = m_domain->get_parent_execution();
+    if (parent_domain && parent_domain->get_scheduler().is_suspended(parent_exec)) {
+        parent_domain->get_scheduler().awake_execution(parent_exec);
+    }
 }
 
 void dynprio_scheduler::suspend_current(execution_id id) noexcept {
@@ -79,6 +84,10 @@ bool dynprio_scheduler::has_active_execution() {
 
 bool dynprio_scheduler::has_suspended_execution() {
     return m_suspended_executions.size() || m_current_suspend;
+}
+
+bool dynprio_scheduler::is_suspended(execution_id id) {
+    return m_suspended_executions.contains(id) || (m_current_suspend && m_current_execution.id == id);
 }
 
 };  // namespace asco::core::task
