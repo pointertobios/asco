@@ -9,6 +9,7 @@ add_executable(tests
     sync/mutex.cpp
     sync/rwlock.cpp
     sync/semaphore.cpp
+    task/join_all.cpp
     task_local.cpp
     time.cpp
 )

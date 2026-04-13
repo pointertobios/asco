@@ -87,6 +87,10 @@ public:
 
     task::executor &get_executor() noexcept { return m_executor; }
 
+    void set_corohandle_worker_map(std::coroutine_handle<> handle) {
+        _corohandle_worker_map->insert(handle, this);
+    }
+
 private:
     bool init() override;
     bool run_once(std::stop_token &st) override;

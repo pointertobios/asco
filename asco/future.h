@@ -133,6 +133,10 @@ public:
         return m_bound_lambda;
     }
 
+    std::coroutine_handle<> as_execution() const noexcept {
+        return m_this_handle;
+    }
+
     future(const future &) = delete;
     future &operator=(const future &) = delete;
 

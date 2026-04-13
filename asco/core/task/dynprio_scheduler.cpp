@@ -27,6 +27,7 @@ void dynprio_scheduler::dynprio_context::end(bool completed) noexcept {
     if ((m_scheduler->m_current_suspend && !m_scheduler->m_preawake_executions.remove(m_id)) || completed) {
         m_scheduler->m_suspended_executions.insert(m_id);
     } else {
+        m_scheduler->m_suspended_executions.remove(m_id);
         m_scheduler->m_active_executions.lock()->push(
             prioritied_execution{m_id, m_scheduler->m_current_execution.priority + exec_time});
     }

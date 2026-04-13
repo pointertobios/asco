@@ -13,6 +13,7 @@ class execution_domain_proxy {
 public:
     execution_domain_proxy(scheduler &sched)
             : m_domain{sched} {
+        sched.bind_execution_domain(m_domain);
         auto &w = worker::current();
         auto exec = w.get_executor().current_execution();
         auto &current_domain = w.get_current_execution_domain();
@@ -27,6 +28,8 @@ public:
         auto &w = core::worker::current();
         auto cancel_src = w.get_executor().current_cancel_source();
         m_domain.attach_execution(id, cancel_src);
+        m_domain.get_scheduler().attach_execution(id);
+        w.set_corohandle_worker_map(id);
     }
 
     execution_domain &get_domain() { return m_domain; }

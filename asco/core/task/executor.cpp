@@ -24,8 +24,10 @@ bool executor::execute(scheduled_execution exec, const std::vector<scheduler_con
 
     std::ranges::for_each(ctxs, [](scheduler_context *ctx) { ctx->begin(); });
     auto exit_stack = [&](bool completed) {
-        std::ranges::for_each(
-            ctxs | std::views::reverse, [completed](scheduler_context *ctx) { ctx->end(completed); });
+        std::ranges::for_each(ctxs | std::views::reverse, [&completed](scheduler_context *ctx) {
+            ctx->end(completed);
+            completed = false;  // 只有最内层的 ctx 的 completed 参数为 true
+        });
         m_domain = nullptr;
         m_execution = nullptr;
     };

@@ -85,9 +85,10 @@ FetchContent_MakeAvailable(asco)
 - [x] 测试框架
 - [ ] 并发
   - [ ] 任务组合原语
-    - [x] join_set
-    - [ ] select
-    - [ ] join
+    - [x] join_all - 任务内轻量并发
+    - [x] join_set - 多任务并发
+    - [ ] select - 任务内轻量选择
+    - [ ] when_any - 多任务竞速
   - [x] 同步原语
     - [x] 自旋锁
     - [x] 条件变量

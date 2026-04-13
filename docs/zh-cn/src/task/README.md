@@ -8,4 +8,5 @@
 
 ## 目录
 
+- [`join_all`：等待多个任务并汇总结果](./join_all.md)
 - [`join_set<T>`：批量任务收集](./join_set.md)
