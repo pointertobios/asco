@@ -3,23 +3,22 @@
 
 #include <asco/time/sleep.h>
 
+#include <asco/core/worker.h>
+
 namespace asco::time {
 
 future<void> sleep_until(std::chrono::steady_clock::time_point time_point) {
-    auto &rt = core::runtime::current();
-    auto &w = core::worker::current();
-    auto &timer = rt.get_timer();
+    auto &timer = core::runtime::current().get_timer();
 
-    auto exec = w.get_executor().current_execution();
-    auto domain = &w.get_current_execution_domain();
-    auto tmid = timer.register_timer(time_point, exec, domain);
+    core::awake_token token{};
+    auto tmid = timer.register_timer(time_point, token);
 
     if (!tmid) {
         co_return;
     }
 
     cancel_callback cb{[&timer, tmid = *tmid]() { timer.cancel_timer(tmid); }};
-    w.get_current_scheduler().suspend_current(exec);
+    token.suspend();
     co_await this_task::yield();
 }
 

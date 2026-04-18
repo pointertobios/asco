@@ -31,6 +31,7 @@ execution::execution(execution &&rhs) noexcept
         : handle_stack{std::move(rhs.handle_stack)}
         , cancel_src{rhs.cancel_src}
         , subdomain{rhs.subdomain}
+        , state{rhs.state.load(std::memory_order_acquire)}
         , cancel_src_owned{rhs.cancel_src_owned} {
     rhs.cancel_src = nullptr;
     rhs.cancel_src_owned = false;
@@ -67,7 +68,26 @@ void execution_domain::detach_execution(execution_id id) {
 scheduled_execution execution_domain::schedule_execution(execution_id id) {
     auto g = m_executions.get(id);
     asco_assert(g);
+    g.value().state.store(execution_state::running, std::memory_order::release);
     return {*this, id, &g.value()};
+}
+
+void execution_domain::suspend_execution(execution_id id) {
+    auto g = m_executions.get(id);
+    asco_assert(g);
+    g.value().state.store(execution_state::suspended, std::memory_order::release);
+}
+
+void execution_domain::activate_execution(execution_id id) {
+    auto g = m_executions.get(id);
+    asco_assert(g);
+    g.value().state.store(execution_state::active, std::memory_order::release);
+}
+
+execution_state execution_domain::get_execution_state(execution_id id) {
+    auto g = m_executions.get(id);
+    asco_assert(g);
+    return g.value().state.load(std::memory_order::acquire);
 }
 
 std::coroutine_handle<> execution_domain::top_of_execution(execution_id id) {

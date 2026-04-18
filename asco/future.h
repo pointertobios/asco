@@ -91,7 +91,6 @@ public:
                         // execution，保证被 worker 正确清理，进一步保证当前执行域符合空子执行域协议
                         w.get_current_scheduler().suspend_current(wchdl);
                     }
-                    w.unregister_handle(wchdl);
                     this_handle.destroy();
                     return;
                 }
@@ -112,7 +111,6 @@ public:
         m_caller_handle = handle;
         auto &w = core::worker::current();
         w.get_executor().push_handle(m_this_handle);
-        w.register_handle(m_this_handle);
     }
 
     output_type await_resume() {
@@ -133,9 +131,7 @@ public:
         return m_bound_lambda;
     }
 
-    std::coroutine_handle<> as_execution() const noexcept {
-        return m_this_handle;
-    }
+    std::coroutine_handle<> as_execution() const noexcept { return m_this_handle; }
 
     future(const future &) = delete;
     future &operator=(const future &) = delete;

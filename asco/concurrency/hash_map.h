@@ -363,7 +363,7 @@ public:
         return try_insert(key, {});
     }
 
-    bool insert(const K &key, util::types::monostate_if_void<V> &&value) {
+    bool insert(const K &key, util::types::copy_small_or_move<util::types::monostate_if_void<V>> value) {
         while (true) {
             auto res = try_insert(key, std::move(value));
             if (res) {

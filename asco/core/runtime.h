@@ -86,8 +86,8 @@ public:
 
         m_backsem_sync->acquire();
         m_coroutine_tx.try_send(
-            {jh.m_state->this_handle, &jh.m_state->this_domain, &jh.get_cancel_source(), std::move(tls),
-             false});
+            {jh.m_state->this_handle, &jh.m_state->cancel_awake_token,
+             &jh.m_state->__cancel_awake_token_storage, &jh.get_cancel_source(), std::move(tls), false});
         awake_next();
         if constexpr (std::is_void_v<return_type>) {
             jh.await();
@@ -122,8 +122,8 @@ public:
             m_backsem_sync->acquire();
         }
         m_coroutine_tx.try_send(
-            {jh.m_state->this_handle, &jh.m_state->this_domain, &jh.get_cancel_source(), std::move(tls),
-             false});
+            {jh.m_state->this_handle, &jh.m_state->cancel_awake_token,
+             &jh.m_state->__cancel_awake_token_storage, &jh.get_cancel_source(), std::move(tls), false});
         awake_next();
 
         return jh;
@@ -154,8 +154,8 @@ public:
             m_backsem_sync->acquire();
         }
         m_coroutine_tx.try_send(
-            {jh.m_state->this_handle, &jh.m_state->this_domain, &jh.get_cancel_source(), std::move(tls),
-             true});
+            {jh.m_state->this_handle, &jh.m_state->cancel_awake_token,
+             &jh.m_state->__cancel_awake_token_storage, &jh.get_cancel_source(), std::move(tls), true});
         awake_next();
 
         return jh;

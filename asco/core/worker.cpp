@@ -20,7 +20,7 @@ worker::worker(
     std::size_t id, detail::coroutine_receiver rx,
     std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity + 1>> backsem,
     void *runtime_storage_ptr, void *runtime_ptr, detail::idle_workers_sender idle_tx)
-        : daemon(std::format("asco-w{}", id))
+        : daemon(std::format("asco::w{}", id))
         , m_execution_domain{m_scheduler}
         , m_id{id}
         , m_coroutine_rx{std::move(rx)}
@@ -37,27 +37,7 @@ worker &worker::current() {
     return *_current_worker;
 }
 
-worker *worker::of_handle(std::coroutine_handle<> handle) {
-    if (auto g = _corohandle_worker_map->get(handle)) {
-        return g.value();
-    } else {
-        return nullptr;
-    }
-}
-
-bool worker::handle_valid(std::coroutine_handle<> handle) { return _corohandle_worker_map->contains(handle); }
-
 std::size_t worker::id() const { return m_id; }
-
-void worker::register_handle(std::coroutine_handle<> handle) {
-    asco_assert(handle);
-    _corohandle_worker_map->insert(handle, this);
-}
-
-void worker::unregister_handle(std::coroutine_handle<> handle) {
-    asco_assert(handle);
-    _corohandle_worker_map->remove(handle);
-}
 
 bool worker::init() {
     if (m_runtime_storage_ptr != nullptr) {
@@ -142,16 +122,36 @@ void worker::shutdown() {}
 
 bool worker::fetch_task() {
     if (auto meta = m_coroutine_rx.try_recv()) {
-        auto handle = meta->handle;
-        meta->pdomain_location->store(&m_execution_domain, std::memory_order::release);
         m_backsem->release();
-        m_coroutine_metas.insert(handle, std::move(*meta));
+        auto handle = meta->handle;
+        new (meta->pcancel_awake_token_storage->get()) awake_token{this, &m_execution_domain, meta->handle};
+        meta->pcancel_awake_token_location->store(
+            meta->pcancel_awake_token_storage->get(), std::memory_order::release);
         m_execution_domain.attach_execution(handle, meta->cancel_source);
+        m_coroutine_metas.insert(handle, std::move(*meta));
         m_scheduler.attach_execution(handle);
-        _corohandle_worker_map->insert(handle, this);
         return true;
     }
     return false;
+}
+
+awake_token::awake_token()
+        : m_worker{&worker::current()}
+        , m_domain{&m_worker->get_current_execution_domain()}
+        , m_exec{m_worker->get_executor().current_execution()} {}
+
+void awake_token::suspend() noexcept { m_domain->get_scheduler().suspend_current(m_exec); }
+
+void awake_token::awake() noexcept {
+    m_domain->get_scheduler().awake_execution(m_exec);
+    m_worker->awake();
+}
+
+std::size_t awake_token::hash() const noexcept {
+    std::size_t h1 = std::hash<worker *>{}(m_worker);
+    std::size_t h2 = std::hash<task::execution_domain *>{}(m_domain);
+    std::size_t h3 = std::hash<task::execution_id>{}(m_exec);
+    return h1 ^ (h2 << 1) ^ (h3 << 2);
 }
 
 };  // namespace asco::core

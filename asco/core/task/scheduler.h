@@ -43,8 +43,6 @@ public:
     virtual bool has_active_execution() = 0;
     virtual bool has_suspended_execution() = 0;
 
-    virtual bool is_suspended(execution_id id) = 0;
-
 protected:
     execution_domain *m_domain{nullptr};
 };

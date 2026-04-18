@@ -21,31 +21,6 @@
 
 namespace asco {
 
-namespace detail {
-
-inline void awake_coroutine(std::coroutine_handle<> handle, core::task::execution_domain *domain) {
-    if (!domain) {
-        return;
-    }
-    if (auto w = core::worker::of_handle(handle)) {
-        auto id = domain->execution_of_coroutine(handle);
-        domain->get_scheduler().awake_execution(id);
-        w->awake();
-    }
-}
-
-inline void awake_execution(core::task::execution_id id, core::task::execution_domain *domain) {
-    if (!domain) {
-        return;
-    }
-    if (auto w = core::worker::of_handle(id)) {
-        domain->get_scheduler().awake_execution(id);
-        w->awake();
-    }
-}
-
-};  // namespace detail
-
 template<util::types::move_secure Output, typename TaskLocalStorage = void>
 class [[nodiscard]] join_handle final {
     friend class core::runtime;
@@ -66,15 +41,17 @@ private:
 
     struct task_state {
         coroutine_handle this_handle;
-        std::atomic<core::task::execution_domain *> this_domain{nullptr};
+
+        std::atomic<core::awake_token *> cancel_awake_token{nullptr};
+        util::raw_storage<core::awake_token> __cancel_awake_token_storage{};
 
         std::exception_ptr e_ptr{};
         [[no_unique_address]] util::raw_storage<output_type> value{};
         std::atomic<complete_state> cstate{complete_state::not_completed};
         std::binary_semaphore sync_awaiter{0};
 
-        std::atomic<std::coroutine_handle<>> caller_handle{};
-        std::atomic<core::task::execution_domain *> caller_domain{nullptr};
+        std::atomic<core::awake_token *> caller_awake_token{nullptr};
+        util::raw_storage<core::awake_token> __caller_awake_token_storage{};
 
         util::erased bound_lambda{};
 
@@ -92,6 +69,9 @@ private:
             }
             if constexpr (!std::is_void_v<TaskLocalStorage>) {
                 this->task_local_storage.get()->~TaskLocalStorage();
+            }
+            if (auto token = caller_awake_token.load(std::memory_order::acquire)) {
+                token->~awake_token();
             }
         }
 
@@ -121,10 +101,8 @@ public:
         void return_void() noexcept {
             if (this->m_state->try_mark_completed()) {
                 this->m_state->sync_awaiter.release();
-                auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
-                if (handle) {
-                    detail::awake_coroutine(
-                        handle, this->m_state->caller_domain.load(std::memory_order::acquire));
+                if (auto awake_token = this->m_state->caller_awake_token.load(std::memory_order::acquire)) {
+                    awake_token->awake();
                 }
             }
         }
@@ -137,10 +115,8 @@ public:
                 new (this->m_state->value.get())
                     util::types::monostate_if_void<output_type>{std::move(value)};
                 this->m_state->sync_awaiter.release();
-                auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
-                if (handle) {
-                    detail::awake_coroutine(
-                        handle, this->m_state->caller_domain.load(std::memory_order::acquire));
+                if (auto awake_token = this->m_state->caller_awake_token.load(std::memory_order::acquire)) {
+                    awake_token->awake();
                 }
             }
         }
@@ -161,10 +137,8 @@ public:
             if (this->m_state->try_mark_completed()) {
                 this->m_state->e_ptr = std::current_exception();
                 this->m_state->sync_awaiter.release();
-                auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
-                if (handle) {
-                    detail::awake_coroutine(
-                        handle, this->m_state->caller_domain.load(std::memory_order::acquire));
+                if (auto awake_token = this->m_state->caller_awake_token.load(std::memory_order::acquire)) {
+                    awake_token->awake();
                 }
             }
         }
@@ -172,10 +146,8 @@ public:
         auto final_suspend() noexcept {
             if (this->m_state->try_mark_completed()) {
                 this->m_state->sync_awaiter.release();
-                auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
-                if (handle) {
-                    detail::awake_coroutine(
-                        handle, this->m_state->caller_domain.load(std::memory_order::acquire));
+                if (auto awake_token = this->m_state->caller_awake_token.load(std::memory_order::acquire)) {
+                    awake_token->awake();
                 }
             }
 
@@ -190,7 +162,6 @@ public:
                     asco_assert(this_handle == h);
                     // worker 任务清理协议动作：只有 suspended execution 才能被正确清理
                     w.get_current_scheduler().suspend_current(h);
-                    w.unregister_handle(h);
                     this_handle.destroy();
                     return;
                 }
@@ -205,10 +176,10 @@ public:
         return this->m_state->cstate.load(std::memory_order::acquire) == complete_state::completed;
     }
 
-    void await_suspend(std::coroutine_handle<> handle) noexcept {
-        this->m_state->caller_handle.store(handle, std::memory_order::release);
-        this->m_state->caller_domain.store(
-            &core::worker::current().get_current_execution_domain(), std::memory_order::release);
+    void await_suspend(std::coroutine_handle<>) noexcept {
+        new (this->m_state->__caller_awake_token_storage.get()) core::awake_token{};
+        this->m_state->caller_awake_token.store(
+            this->m_state->__caller_awake_token_storage.get(), std::memory_order::release);
         complete_state e;
         do {
             e = this->m_state->cstate.load(std::memory_order::acquire);
@@ -248,14 +219,12 @@ public:
             this->m_state->cancel_source.request_cancel();
 
             this->m_state->sync_awaiter.release();
-            auto handle = this->m_state->caller_handle.load(std::memory_order::acquire);
-            if (handle) {
-                detail::awake_coroutine(
-                    handle, this->m_state->caller_domain.load(std::memory_order::acquire));
+            if (auto token = this->m_state->caller_awake_token.load(std::memory_order::acquire)) {
+                token->awake();
             }
-
-            detail::awake_execution(
-                this->m_state->this_handle, this->m_state->this_domain.load(std::memory_order::acquire));
+            if (auto token = this->m_state->cancel_awake_token.load(std::memory_order::acquire)) {
+                token->awake();
+            }
         }
     }
 

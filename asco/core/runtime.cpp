@@ -37,8 +37,6 @@ runtime::runtime(runtime_builder &&builder)
     auto [idtx, idrx] = detail::idle_workers_create();
     m_idle_workers_rx = std::move(idrx);
 
-    worker::_corohandle_worker_map = &m_corohandle_worker_map;
-
     m_workers_local_runtime_ptr.assign(nthreads, nullptr);
     for (std::size_t i = 0; i < nthreads; ++i) {
         m_workers.push_back(

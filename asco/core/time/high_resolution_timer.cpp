@@ -21,16 +21,13 @@ high_resolution_timer::high_resolution_timer()
     auto _ = daemon::start();
 }
 
-std::optional<high_resolution_timer::timer_id> high_resolution_timer::register_timer(
-    std::chrono::steady_clock::time_point time_point, task::execution_id exec,
-    core::task::execution_domain *domain) {
+std::optional<high_resolution_timer::timer_id>
+high_resolution_timer::register_timer(std::chrono::steady_clock::time_point time_point, awake_token token) {
     if (time_point < std::chrono::steady_clock::now()) {
         return std::nullopt;
     }
 
-    timer_id tmid{
-        static_cast<std::uint64_t>(time_point.time_since_epoch().count()),
-        std::hash<std::coroutine_handle<>>{}(exec)};
+    timer_id tmid{static_cast<std::uint64_t>(time_point.time_since_epoch().count()), token.hash()};
     auto seconds_from_epoch = detail::sec_from_epoch(time_point);
     if (auto g = m_timer_tree.write()) {
         if (!g->contains(seconds_from_epoch)) {
@@ -38,7 +35,7 @@ std::optional<high_resolution_timer::timer_id> high_resolution_timer::register_t
             // entry_area{seconds_from_epoch, {}}
             g->emplace(seconds_from_epoch, seconds_from_epoch);
         }
-        g->at(seconds_from_epoch).entries.lock()->emplace(tmid, timer_entry{time_point, exec, domain});
+        g->at(seconds_from_epoch).entries.lock()->emplace(tmid, timer_entry{time_point, std::move(token)});
     }
 
     awake();
@@ -103,15 +100,8 @@ bool high_resolution_timer::run_once(std::stop_token &st) {
                     break;
                 }
 
-                auto id = it->second.handle;
-                auto domain = it->second.domain;
-                if (auto w = core::worker::of_handle(id)) {
-                    domain->get_scheduler().awake_execution(id);
-                    w->awake();
-                    it = entries_guard->erase(it);
-                } else {
-                    it++;
-                }
+                it->second.token.awake();
+                it = entries_guard->erase(it);
             }
         }
     } while (false);

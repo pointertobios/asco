@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
@@ -19,16 +20,20 @@
 #include <asco/core/task/scheduler.h>
 #include <asco/sync/spinlock.h>
 #include <asco/this_task.h>
+#include <asco/util/raw_storage.h>
 #include <asco/util/safe_erased.h>
 #include <asco/yield.h>
 
 namespace asco::core {
 
+class awake_token;
+
 namespace detail {
 
 struct coroutine_meta {
     std::coroutine_handle<> handle;
-    std::atomic<task::execution_domain *> *pdomain_location;
+    std::atomic<awake_token *> *pcancel_awake_token_location;
+    util::raw_storage<awake_token> *pcancel_awake_token_storage;
     cancel_source *cancel_source;
     util::safe_erased tls;
     bool blocking;
@@ -73,23 +78,12 @@ public:
 
     static worker &current();
 
-    static worker *of_handle(std::coroutine_handle<> handle);
-
-    static bool handle_valid(std::coroutine_handle<> handle);
-
     std::size_t id() const;
-
-    void register_handle(std::coroutine_handle<> handle);
-    void unregister_handle(std::coroutine_handle<> handle);
 
     task::scheduler &get_current_scheduler() noexcept { return m_domain_stack.back()->get_scheduler(); }
     task::execution_domain &get_current_execution_domain() noexcept { return *m_domain_stack.back(); }
 
     task::executor &get_executor() noexcept { return m_executor; }
-
-    void set_corohandle_worker_map(std::coroutine_handle<> handle) {
-        _corohandle_worker_map->insert(handle, this);
-    }
 
 private:
     bool init() override;
@@ -121,9 +115,29 @@ private:
     void *m_runtime_storage_ptr;
     void *m_runtime_ptr;
 
-    inline static concurrency::hash_map<std::coroutine_handle<>, worker *> *_corohandle_worker_map;
-
     inline thread_local static worker *_current_worker{nullptr};
+};
+
+class awake_token {
+    friend class worker;
+
+public:
+    awake_token();
+
+    void suspend() noexcept;
+    void awake() noexcept;
+
+    std::size_t hash() const noexcept;
+
+private:
+    awake_token(worker *w, task::execution_domain *d, task::execution_id exec)
+            : m_worker{w}
+            , m_domain{d}
+            , m_exec{exec} {}
+
+    worker *m_worker;
+    task::execution_domain *m_domain;
+    task::execution_id m_exec;
 };
 
 };  // namespace asco::core

@@ -18,6 +18,10 @@ template<typename T>
 using void_if_monostate = std::conditional_t<std::is_same_v<T, std::monostate>, void, T>;
 
 template<typename T>
+using copy_small_or_move =
+    std::conditional_t<(sizeof(T) <= 4 * sizeof(void *)) && std::is_trivially_copyable_v<T>, T, T &&>;
+
+template<typename T>
 concept move_secure = std::movable<T> || std::is_void_v<T> || std::is_pointer_v<T>;
 
 template<typename T, template<typename...> typename Template>

@@ -34,8 +34,10 @@ class join_all_scheduler : public core::task::scheduler {
             if ((m_scheduler->m_current_suspend && !m_scheduler->m_preawake_executions.remove(m_id))
                 || completed) {
                 m_scheduler->m_suspended_executions.insert(m_id);
+                m_scheduler->m_domain->suspend_execution(m_id);
             } else {
                 m_scheduler->m_executions.lock()->push_back(m_id);
+                m_scheduler->m_domain->activate_execution(m_id);
             }
             m_scheduler->m_current_suspend = false;
         }
@@ -58,26 +60,36 @@ public:
     }
 
     void awake_execution(core::task::execution_id id) noexcept override {
+        if (!m_exec_ctx_map.contains(id)) {
+            return;
+        }
+
         if (m_suspended_executions.remove(id)) {
             m_executions.lock()->push_back(id);
+            m_domain->activate_execution(id);
         } else {
             m_preawake_executions.insert(id);
         }
 
         auto parent_domain = m_domain->get_parent_domain();
         auto parent_exec = m_domain->get_parent_execution();
-        if (parent_domain && parent_domain->get_scheduler().is_suspended(parent_exec)) {
+        if (parent_domain
+            && parent_domain->get_execution_state(parent_exec) == core::task::execution_state::suspended) {
             parent_domain->get_scheduler().awake_execution(parent_exec);
         }
     }
 
     void suspend_current(core::task::execution_id id) noexcept override {
         asco_assert(m_current_execution == id);
+        if (!m_exec_ctx_map.contains(id)) {
+            return;
+        }
 
         if (m_preawake_executions.remove(id)) {
             return;
         }
 
+        m_domain->suspend_execution(id);
         m_current_suspend = true;
     }
 
@@ -91,10 +103,6 @@ public:
 
     bool has_active_execution() override { return !m_executions.lock()->empty(); }
     bool has_suspended_execution() override { return m_suspended_executions.size() || m_current_suspend; }
-
-    bool is_suspended(core::task::execution_id id) override {
-        return m_suspended_executions.contains(id) || (m_current_suspend && m_current_execution == id);
-    }
 
 private:
     core::task::execution_id m_current_execution{};

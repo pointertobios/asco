@@ -107,7 +107,6 @@ bool executor::cancel_cleanup() noexcept {
     while (m_execution->handle_stack.size()) {
         auto h = pop_handle();
         h.destroy();
-        worker::current().unregister_handle(h);
     }
     return true;
 }

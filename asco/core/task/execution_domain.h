@@ -18,6 +18,12 @@ class execution_domain;
 
 using execution_id = std::coroutine_handle<>;
 
+enum class execution_state {
+    active,
+    running,
+    suspended,
+};
+
 struct execution {
     std::vector<std::coroutine_handle<>> handle_stack;
     std::vector<std::function<void()>> cancel_callback_stack;
@@ -25,6 +31,8 @@ struct execution {
     execution_domain *subdomain;  // 此 subdomain 所有权必须在顶层 coroutine_handle，
                                   // 应在顶层 coroutine_handle 持有的 subdomain 销毁时将此指针置回 nullptr。
                                   // 此指针为非 nullptr 时， executor 直接进入 subdomain 调度
+
+    std::atomic<execution_state> state{execution_state::active};
 
     execution(execution_id id, cancel_source *src);
     ~execution();
@@ -77,6 +85,10 @@ public:
     void detach_execution(execution_id id);
 
     scheduled_execution schedule_execution(execution_id id);
+    void suspend_execution(execution_id id);
+    void activate_execution(execution_id id);
+
+    execution_state get_execution_state(execution_id id);
 
     std::coroutine_handle<> top_of_execution(execution_id id);
     execution_id execution_of_coroutine(std::coroutine_handle<> handle);

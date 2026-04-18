@@ -29,7 +29,6 @@ public:
         auto cancel_src = w.get_executor().current_cancel_source();
         m_domain.attach_execution(id, cancel_src);
         m_domain.get_scheduler().attach_execution(id);
-        w.set_corohandle_worker_map(id);
     }
 
     execution_domain &get_domain() { return m_domain; }

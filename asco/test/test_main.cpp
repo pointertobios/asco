@@ -85,7 +85,6 @@ int main() {
 
     return rt.block_on([&set, total] -> future<int> {
         std::println();
-        std::println();
         auto terminal = core::os::terminal::get();
 
         std::unordered_map<std::string, std::vector<test_record>> stats_by_namespace;

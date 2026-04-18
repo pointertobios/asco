@@ -55,8 +55,6 @@ public:
     bool has_active_execution() override;
     bool has_suspended_execution() override;
 
-    bool is_suspended(execution_id id) override;
-
 private:
     prioritied_execution m_current_execution;
     bool m_current_suspend{false};

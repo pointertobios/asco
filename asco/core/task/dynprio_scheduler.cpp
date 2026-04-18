@@ -26,10 +26,12 @@ void dynprio_scheduler::dynprio_context::end(bool completed) noexcept {
     auto exec_time = end - m_begin;
     if ((m_scheduler->m_current_suspend && !m_scheduler->m_preawake_executions.remove(m_id)) || completed) {
         m_scheduler->m_suspended_executions.insert(m_id);
+        m_scheduler->m_domain->suspend_execution(m_id);
     } else {
         m_scheduler->m_suspended_executions.remove(m_id);
         m_scheduler->m_active_executions.lock()->push(
             prioritied_execution{m_id, m_scheduler->m_current_execution.priority + exec_time});
+        m_scheduler->m_domain->activate_execution(m_id);
     }
     m_scheduler->m_current_suspend = false;
 }
@@ -46,25 +48,34 @@ void dynprio_scheduler::detach_suspended_execution(execution_id id) {
 }
 
 void dynprio_scheduler::awake_execution(execution_id id) noexcept {
+    if (!m_exec_ctx_map.contains(id)) {
+        return;
+    }
+    
     if (m_suspended_executions.remove(id)) {
         m_active_executions.lock()->push({id, 0});
+        m_domain->activate_execution(id);
     } else {
         m_preawake_executions.insert(id);
     }
     auto parent_domain = m_domain->get_parent_domain();
     auto parent_exec = m_domain->get_parent_execution();
-    if (parent_domain && parent_domain->get_scheduler().is_suspended(parent_exec)) {
+    if (parent_domain && parent_domain->get_execution_state(parent_exec) == execution_state::suspended) {
         parent_domain->get_scheduler().awake_execution(parent_exec);
     }
 }
 
 void dynprio_scheduler::suspend_current(execution_id id) noexcept {
     asco_assert(m_current_execution.id == id);
+    if (!m_exec_ctx_map.contains(id)) {
+        return;
+    }
 
     if (m_preawake_executions.remove(id)) {
         return;
     }
 
+    m_domain->suspend_execution(id);
     m_current_suspend = true;
 }
 
@@ -85,10 +96,6 @@ bool dynprio_scheduler::has_active_execution() {
 
 bool dynprio_scheduler::has_suspended_execution() {
     return m_suspended_executions.size() || m_current_suspend;
-}
-
-bool dynprio_scheduler::is_suspended(execution_id id) {
-    return m_suspended_executions.contains(id) || (m_current_suspend && m_current_execution.id == id);
 }
 
 };  // namespace asco::core::task
