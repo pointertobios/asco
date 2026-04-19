@@ -252,7 +252,8 @@ public:
             do {
                 e = m_bucket->state.load(std::memory_order::acquire);
             } while (!m_bucket->state.compare_exchange_weak(
-                e, {e.refcount - 1, e.state}, std::memory_order::acq_rel, std::memory_order::relaxed));
+                e, bucket_state{e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                std::memory_order::relaxed));
         }
 
         guard(const guard &) = delete;
@@ -570,32 +571,32 @@ private:
                     e.state == bucket_state_enum::constructing || e.state == bucket_state_enum::predestructing
                     || e.state == bucket_state_enum::destructing) {
                     m_buckets[*insert_index].state.store(
-                        {0, bucket_state_enum::tombstone}, std::memory_order::release);
+                        bucket_state{0, bucket_state_enum::tombstone}, std::memory_order::release);
                     return std::unexpected{insert_failed::retry};
                 } else if (e.state == bucket_state_enum::filled) {
                     if (b.state.compare_exchange_strong(
-                            e, {e.refcount + 1, e.state}, std::memory_order::acq_rel,
+                            e, bucket_state{e.refcount + 1, e.state}, std::memory_order::acq_rel,
                             std::memory_order::relaxed)) {
                         if (*b.key.get() == key) {
                             do {
                                 e = b.state.load(std::memory_order::acquire);
                             } while (!b.state.compare_exchange_weak(
-                                e, {e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                                e, bucket_state{e.refcount - 1, e.state}, std::memory_order::acq_rel,
                                 std::memory_order::relaxed));
                             m_buckets[*insert_index].state.store(
-                                {0, bucket_state_enum::tombstone}, std::memory_order::release);
+                                bucket_state{0, bucket_state_enum::tombstone}, std::memory_order::release);
                             return std::unexpected{insert_failed::key_repeated};
                         } else {
                             do {
                                 e = b.state.load(std::memory_order::acquire);
                             } while (!b.state.compare_exchange_weak(
-                                e, {e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                                e, bucket_state{e.refcount - 1, e.state}, std::memory_order::acq_rel,
                                 std::memory_order::relaxed));
                             continue;
                         }
                     } else if (e.state == bucket_state_enum::predestructing) {
                         m_buckets[*insert_index].state.store(
-                            {0, bucket_state_enum::tombstone}, std::memory_order::release);
+                            bucket_state{0, bucket_state_enum::tombstone}, std::memory_order::release);
                         return std::unexpected{insert_failed::retry};
                     } else {
                         goto begin_insert;
@@ -607,27 +608,27 @@ private:
 
             if (bucket_state e{0, bucket_state_enum::empty};  //
                 !b.state.compare_exchange_strong(
-                    e, {0, bucket_state_enum::constructing}, std::memory_order::acq_rel,
+                    e, bucket_state{0, bucket_state_enum::constructing}, std::memory_order::acq_rel,
                     std::memory_order::relaxed)) {
                 if (e.state == bucket_state_enum::constructing
                     || e.state == bucket_state_enum::predestructing) {
                     return std::unexpected{insert_failed::retry};
                 } else if (e.state == bucket_state_enum::filled) {
                     if (b.state.compare_exchange_strong(
-                            e, {e.refcount + 1, e.state}, std::memory_order::acq_rel,
+                            e, bucket_state{e.refcount + 1, e.state}, std::memory_order::acq_rel,
                             std::memory_order::relaxed)) {
                         if (*b.key.get() == key) {
                             do {
                                 e = b.state.load(std::memory_order::acquire);
                             } while (!b.state.compare_exchange_weak(
-                                e, {e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                                e, bucket_state{e.refcount - 1, e.state}, std::memory_order::acq_rel,
                                 std::memory_order::relaxed));
                             return std::unexpected{insert_failed::key_repeated};
                         } else {
                             do {
                                 e = b.state.load(std::memory_order::acquire);
                             } while (!b.state.compare_exchange_weak(
-                                e, {e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                                e, bucket_state{e.refcount - 1, e.state}, std::memory_order::acq_rel,
                                 std::memory_order::relaxed));
                             continue;
                         }
@@ -645,7 +646,7 @@ private:
                             goto begin_insert;
                         }
                     } while (!b.state.compare_exchange_weak(
-                        e, {0, bucket_state_enum::constructing}, std::memory_order::acq_rel,
+                        e, bucket_state{0, bucket_state_enum::constructing}, std::memory_order::acq_rel,
                         std::memory_order::relaxed));
                     if (!insert_index) {
                         insert_index = index;
@@ -670,7 +671,7 @@ private:
                 new (b.value.get()) util::types::monostate_if_void<V>(std::move(value));
             }
             m_load.fetch_add(1, std::memory_order::relaxed);
-            b.state.store({0, bucket_state_enum::filled}, std::memory_order::release);
+            b.state.store(bucket_state{0, bucket_state_enum::filled}, std::memory_order::release);
 
             return {};
         } else {
@@ -691,7 +692,7 @@ private:
         begin_remove:
             if (bucket_state e{0, bucket_state_enum::filled};  //
                 !b.state.compare_exchange_strong(
-                    e, {1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
+                    e, bucket_state{1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
                     std::memory_order::relaxed)) {
                 if (e.state == bucket_state_enum::filled && e.refcount != 0) {
                     do {
@@ -702,8 +703,8 @@ private:
                             goto begin_remove;
                         }
                     } while (!b.state.compare_exchange_weak(
-                        e, {e.refcount + 1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
-                        std::memory_order::relaxed));
+                        e, bucket_state{e.refcount + 1, bucket_state_enum::predestructing},
+                        std::memory_order::acq_rel, std::memory_order::relaxed));
                 } else if (e.state == bucket_state_enum::empty) {
                     return std::unexpected{remove_failed::none};
                 } else if (
@@ -720,7 +721,7 @@ private:
                 do {
                     e = b.state.load(std::memory_order::acquire);
                 } while (!b.state.compare_exchange_weak(
-                    e, {e.refcount - 1, bucket_state_enum::filled}, std::memory_order::acq_rel,
+                    e, bucket_state{e.refcount - 1, bucket_state_enum::filled}, std::memory_order::acq_rel,
                     std::memory_order::relaxed));
                 continue;
             }
@@ -730,7 +731,8 @@ private:
                 do {
                     e = b.state.load(std::memory_order::acquire);
                 } while (!b.state.compare_exchange_weak(
-                    e, {e.refcount - 1, e.state}, std::memory_order::acq_rel, std::memory_order::relaxed));
+                    e, bucket_state{e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                    std::memory_order::relaxed));
                 return std::unexpected{remove_failed::retry};
             }
 
@@ -741,13 +743,13 @@ private:
                     do {
                         e = b.state.load(std::memory_order::acquire);
                     } while (!b.state.compare_exchange_weak(
-                        e, {e.refcount - 1, bucket_state_enum::filled}, std::memory_order::acq_rel,
-                        std::memory_order::relaxed));
+                        e, bucket_state{e.refcount - 1, bucket_state_enum::filled},
+                        std::memory_order::acq_rel, std::memory_order::relaxed));
                     return std::unexpected{remove_failed::guard_protecting};
                 }
             } while (!b.state.compare_exchange_weak(
-                e, {e.refcount - 1, bucket_state_enum::predestructing}, std::memory_order::acq_rel,
-                std::memory_order::relaxed));
+                e, bucket_state{e.refcount - 1, bucket_state_enum::predestructing},
+                std::memory_order::acq_rel, std::memory_order::relaxed));
 
             if constexpr (std::is_void_v<V>) {
                 b.key.get()->~K();
@@ -755,7 +757,7 @@ private:
                     b.value.get()->~V();
                 }
                 m_load.fetch_sub(1, std::memory_order::relaxed);
-                b.state.store({0, bucket_state_enum::tombstone}, std::memory_order::release);
+                b.state.store(bucket_state{0, bucket_state_enum::tombstone}, std::memory_order::release);
 
                 return std::monostate{};
             } else {
@@ -766,7 +768,7 @@ private:
                     b.value.get()->~V();
                 }
                 m_load.fetch_sub(1, std::memory_order::relaxed);
-                b.state.store({0, bucket_state_enum::tombstone}, std::memory_order::release);
+                b.state.store(bucket_state{0, bucket_state_enum::tombstone}, std::memory_order::release);
 
                 return res;
             }
@@ -798,13 +800,15 @@ private:
                     goto next;
                 }
             } while (!b.state.compare_exchange_weak(
-                e, {e.refcount + 1, e.state}, std::memory_order::acq_rel, std::memory_order::relaxed));
+                e, bucket_state{e.refcount + 1, e.state}, std::memory_order::acq_rel,
+                std::memory_order::relaxed));
 
             if (*b.key.get() != key) {
                 do {
                     e = b.state.load(std::memory_order::acquire);
                 } while (!b.state.compare_exchange_weak(
-                    e, {e.refcount - 1, e.state}, std::memory_order::acq_rel, std::memory_order::relaxed));
+                    e, bucket_state{e.refcount - 1, e.state}, std::memory_order::acq_rel,
+                    std::memory_order::relaxed));
                 continue;
             }
 
@@ -849,8 +853,8 @@ private:
                     new (newb.value.get()) V(std::move(*b.value.get()));
                     b.value.get()->~V();
                 }
-                b.state.store({0, bucket_state_enum::tombstone}, std::memory_order::release);
-                newb.state.store({0, bucket_state_enum::filled}, std::memory_order::release);
+                b.state.store(bucket_state{0, bucket_state_enum::tombstone}, std::memory_order::release);
+                newb.state.store(bucket_state{0, bucket_state_enum::filled}, std::memory_order::release);
                 break;
             }
         }

@@ -6,6 +6,14 @@
 #include <chrono>  // IWYU pragma: keep
 #include <cstdint>
 
+#ifdef __x86_64__
+#    ifdef _MSC_VER
+#        include <intrin.h>
+#    else
+#        include <x86intrin.h>
+#    endif
+#endif
+
 namespace asco::util {
 
 inline std::uint64_t get_tsc() noexcept {

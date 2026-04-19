@@ -31,7 +31,7 @@ public:
 
     template<typename T>
     consteval static type_id of() noexcept {
-#ifdef __clang__
+#if defined(__clang__) || defined(__GNUC__)
         constexpr std::string_view funcname = __PRETTY_FUNCTION__;
 #elif defined(__FUNCSIG__)
         constexpr std::string_view funcname = __FUNCSIG__;
