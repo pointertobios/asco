@@ -1,11 +1,11 @@
-# `join_all`：等待多个任务并按参数位置汇总结果
+# `join_all`：等待多个异步操作并按参数位置汇总结果
 
-`asco::task::join_all` 用于同时等待多个异步任务，并在全部结束后一次性返回结果。
+`asco::task::join_all` 用于同时等待多个异步操作，并在全部结束后一次性返回结果。
 
 它适合：
 
-- 你已经知道要等待的任务集合；
-- 需要并发运行这些任务；
+- 你已经知道要等待的异步操作集合；
+- 需要并发运行这些异步操作；
 - 关心“每个参数位置对应哪个结果”，而不是“谁先完成”。
 
 对应头文件：`asco/task/join_all.h`。
@@ -28,10 +28,7 @@ future<int> calc_b() {
 }
 
 future<int> run() {
-    auto [a, b] = co_await task::join_all{
-        []() -> future<int> { co_return co_await calc_a(); },
-        []() -> future<int> { co_return co_await calc_b(); },
-    };
+    auto [a, b] = co_await task::join_all{calc_a, calc_b};
 
     co_return task::fetch(std::move(a)) + task::fetch(std::move(b));
 }
@@ -39,7 +36,7 @@ future<int> run() {
 
 要点：
 
-- `join_all` 会并发启动传入的任务。
+- `join_all` 会并发启动传入的异步函数（不产生新任务）。
 - 返回值是一个 `std::tuple`，槽位顺序与传入参数顺序一致。
 - 每个槽位都是 `std::expected<结果类型, std::exception_ptr>`；成功时取值，失败时保存异常。
 
