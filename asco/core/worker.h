@@ -64,8 +64,7 @@ class runtime;
 
 class worker final : public daemon {
     friend class runtime;
-    friend void asco::this_task::close_cancellation() noexcept;
-    friend cancel_token &asco::this_task::get_cancel_token() noexcept;
+    friend cancel_token &asco::this_task::get_current_cancel_token() noexcept;
     template<typename TaskLocalStorage>
     friend TaskLocalStorage &asco::this_task::task_local() noexcept;
     friend bool asco::this_task::is_blocking_env() noexcept;

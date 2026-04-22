@@ -106,7 +106,6 @@ enable_testing()
 
 # ASCO config
 
-option(ASCO_PERF_RECORD "ASCO Performance Recording" OFF)
 option(ASCO_IO_URING "io_uring support for linux" ON)
 option(ASCO_IOCP "IOCP support for windows" OFF)
 
@@ -122,6 +121,11 @@ add_subdirectory(asco)
 add_subdirectory(benchmarks)
 add_subdirectory(examples)
 add_subdirectory(tests)
+
+## asco/util/compile_config.h
+
+option(ASCO_PERF_RECORD "ASCO Performance Recording" OFF)
+set(ASCO_CORE_TASK__EXECUTION_DOMAIN_NEST_MAX_DEPTH 8 CACHE STRING "Max depth of execution domain nesting. Must be >= 1.")
 
 # Packaging for build-tree find_package
 

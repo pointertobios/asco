@@ -4,10 +4,13 @@
 #pragma once
 
 #include <coroutine>
+#include <span>
+#include <unordered_set>
 #include <vector>
 
 #include <asco/concurrency/hash_map.h>
 #include <asco/core/cancellation.h>
+#include <asco/util/compile_config.h>
 #include <asco/util/raw_storage.h>
 
 namespace asco::core::task {
@@ -25,16 +28,19 @@ enum class execution_state {
 };
 
 struct execution {
+    const execution_id id;
     std::vector<std::coroutine_handle<>> handle_stack;
-    std::vector<std::function<void()>> cancel_callback_stack;
-    cancel_source *cancel_src;
-    execution_domain *subdomain;  // 此 subdomain 所有权必须在顶层 coroutine_handle，
-                                  // 应在顶层 coroutine_handle 持有的 subdomain 销毁时将此指针置回 nullptr。
+    cancel_source *cancel_src_stack[util::compile_config::core::task::execution_domain_nest_max_depth + 1]{
+        nullptr};
+    execution_domain *subdomain;  // 此 subdomain 所有权必须在顶层 coroutine_handle 中，
                                   // 此指针为非 nullptr 时， executor 直接进入 subdomain 调度
 
+    std::size_t cancel_src_stack_size{0};
+
+    std::vector<std::function<void()>> cancel_callback_stack{};
     std::atomic<execution_state> state{execution_state::active};
 
-    execution(execution_id id, cancel_source *src);
+    execution(execution_id id);
     ~execution();
 
     execution(const execution &) = delete;
@@ -45,9 +51,9 @@ struct execution {
 
     void remove_subdomain() noexcept { subdomain = nullptr; }
 
-private:
-    util::raw_storage<cancel_source> cancel_src_storage;
-    bool cancel_src_owned;
+    std::span<cancel_source *> get_cancel_source_stack() {
+        return std::span{cancel_src_stack, cancel_src_stack_size};
+    }
 };
 
 struct scheduled_execution {
@@ -80,13 +86,15 @@ public:
     void set_parent_execution(execution_id id) { m_parent_execution_id = id; }
     execution_id get_parent_execution() const { return m_parent_execution_id; }
 
-    void attach_execution(execution_id id);
-    void attach_execution(execution_id id, cancel_source *cancel_src);
+    void attach_execution(
+        execution_id id, const std::span<cancel_source *> &parent_srcstack, cancel_source *cancel_src);
     void detach_execution(execution_id id);
 
     scheduled_execution schedule_execution(execution_id id);
     void suspend_execution(execution_id id);
     void activate_execution(execution_id id);
+
+    void activate_all();
 
     execution_state get_execution_state(execution_id id);
 
@@ -103,6 +111,8 @@ private:
 
     scheduler &m_scheduler;
 
+    std::unordered_set<execution_id>
+        m_execution_list;  // TODO 暂时方案，未来给 concurrency::hash_map 添加迭代器后移除
     concurrency::hash_map<execution_id, execution> m_executions;
     concurrency::hash_map<std::coroutine_handle<>, execution_id> m_corohandle_exec_map;
 };

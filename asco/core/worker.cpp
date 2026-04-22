@@ -127,7 +127,7 @@ bool worker::fetch_task() {
         new (meta->pcancel_awake_token_storage->get()) awake_token{this, &m_execution_domain, meta->handle};
         meta->pcancel_awake_token_location->store(
             meta->pcancel_awake_token_storage->get(), std::memory_order::release);
-        m_execution_domain.attach_execution(handle, meta->cancel_source);
+        m_execution_domain.attach_execution(handle, {}, meta->cancel_source);
         m_coroutine_metas.insert(handle, std::move(*meta));
         m_scheduler.attach_execution(handle);
         return true;

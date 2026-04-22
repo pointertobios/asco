@@ -31,8 +31,6 @@ public:
 
 private:
     std::stop_source m_stop_source{};
-
-    std::atomic_bool m_closed{false};
 };
 
 class cancel_token final {
@@ -44,8 +42,6 @@ public:
 
     bool cancel_requested();
 
-    void close_cancellation() noexcept;
-    bool cancellation_closed() const noexcept;
     cancel_source *source() noexcept;
 
     operator bool() const noexcept;

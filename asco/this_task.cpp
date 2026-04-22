@@ -9,27 +9,15 @@
 
 namespace asco::this_task {
 
-void close_cancellation() noexcept {
+core::cancel_token &get_current_cancel_token() noexcept {
     if (!in_runtime()) {
-        panic("asco::this_task::stop_cancellation: 不在 runtime 中");
+        panic("asco::this_task::get_current_cancel_token: 不在 runtime 中");
     }
     auto &worker = core::worker::current();
     if (worker.get_executor().current_coroutine()) {
-        worker.get_executor().close_cancellation();
+        return worker.get_executor().get_cancel_token_stack().back();
     } else {
-        panic("asco::this_task::stop_cancellation: 当前没有正在运行的任务");
-    }
-}
-
-core::cancel_token &get_cancel_token() noexcept {
-    if (!in_runtime()) {
-        panic("asco::this_task::get_cancel_token: 不在 runtime 中");
-    }
-    auto &worker = core::worker::current();
-    if (worker.get_executor().current_coroutine()) {
-        return worker.get_executor().get_cancel_token();
-    } else {
-        panic("asco::this_task::get_cancel_token: 当前没有正在运行的任务");
+        panic("asco::this_task::get_current_cancel_token: 当前没有正在运行的任务");
     }
 }
 

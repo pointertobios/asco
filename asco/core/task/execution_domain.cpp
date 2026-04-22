@@ -9,37 +9,22 @@
 
 namespace asco::core::task {
 
-execution::execution(execution_id id, cancel_source *src)
-        : handle_stack{{id}}
-        , cancel_src{src}
-        , subdomain{nullptr}
-        , cancel_src_owned{false} {
-    if (!src) {
-        new (cancel_src_storage.get()) cancel_source{};
-        cancel_src = cancel_src_storage.get();
-        cancel_src_owned = true;
-    }
-}
+execution::execution(execution_id id)
+        : id{id}
+        , handle_stack{{id}}
+        , cancel_src_stack{}
+        , subdomain{nullptr} {}
 
-execution::~execution() {
-    if (cancel_src_owned) {
-        cancel_src_storage.get()->~cancel_source();
-    }
-}
+execution::~execution() {}
 
 execution::execution(execution &&rhs) noexcept
-        : handle_stack{std::move(rhs.handle_stack)}
-        , cancel_src{rhs.cancel_src}
+        : id{rhs.id}
+        , handle_stack{std::move(rhs.handle_stack)}
+        , cancel_src_stack{}
         , subdomain{rhs.subdomain}
-        , state{rhs.state.load(std::memory_order_acquire)}
-        , cancel_src_owned{rhs.cancel_src_owned} {
-    rhs.cancel_src = nullptr;
-    rhs.cancel_src_owned = false;
-    rhs.subdomain = nullptr;
-    if (cancel_src_owned) {
-        rhs.cancel_src_storage.get()->~cancel_source();
-        cancel_src = new (cancel_src_storage.get()) cancel_source{};
-    }
+        , cancel_src_stack_size{rhs.cancel_src_stack_size}
+        , state{rhs.state.load(std::memory_order_acquire)} {
+    std::ranges::copy(rhs.cancel_src_stack, cancel_src_stack);
 }
 
 execution &execution::operator=(execution &&rhs) noexcept {
@@ -50,19 +35,24 @@ execution &execution::operator=(execution &&rhs) noexcept {
     return *this;
 }
 
-void execution_domain::attach_execution(execution_id id) {
-    m_executions.insert(id, execution{id, nullptr});
-    m_corohandle_exec_map.insert(id, execution_id{id});
-}
+void execution_domain::attach_execution(
+    execution_id id, const std::span<cancel_source *> &parent_srcstack, cancel_source *cancel_src) {
+    asco_assert(parent_srcstack.size() < util::compile_config::core::task::execution_domain_nest_max_depth);
 
-void execution_domain::attach_execution(execution_id id, cancel_source *cancel_src) {
-    m_executions.insert(id, execution{id, cancel_src});
+    execution exec{id};
+    std::ranges::copy(parent_srcstack, exec.cancel_src_stack);
+    exec.cancel_src_stack[parent_srcstack.size()] = cancel_src;
+    exec.cancel_src_stack[parent_srcstack.size() + 1] = nullptr;
+    exec.cancel_src_stack_size = parent_srcstack.size() + 1;
+    m_executions.insert(id, std::move(exec));
     m_corohandle_exec_map.insert(id, execution_id{id});
+    m_execution_list.insert(id);
 }
 
 void execution_domain::detach_execution(execution_id id) {
     m_executions.remove(id);
     m_corohandle_exec_map.remove(id);
+    m_execution_list.erase(id);
 }
 
 scheduled_execution execution_domain::schedule_execution(execution_id id) {
@@ -82,6 +72,12 @@ void execution_domain::activate_execution(execution_id id) {
     auto g = m_executions.get(id);
     asco_assert(g);
     g.value().state.store(execution_state::active, std::memory_order::release);
+}
+
+void execution_domain::activate_all() {
+    for (auto id : m_execution_list) {
+        activate_execution(id);
+    }
 }
 
 execution_state execution_domain::get_execution_state(execution_id id) {

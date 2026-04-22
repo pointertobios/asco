@@ -54,6 +54,7 @@ set(PRECOMPILE_HEADERS
     task/join_set.h
     time/interval.h
     time/sleep.h
+    util/compile_config.h
     util/consts.h
     util/erased.h
     util/murmur.h
@@ -105,14 +106,19 @@ elseif (WIN32)
     endif()
 endif()
 
-if (ASCO_PERF_RECORD)
-    set (MDEFS ${MDEFS} ASCO_PERF_RECORD)
-endif()
 if (ASCO_IO_URING)
     set (MDEFS ${MDEFS} ASCO_IO_URING)
 endif()
 if (ASCO_IOCP)
     set (MDEFS ${MDEFS} ASCO_IOCP)
+endif()
+
+if (ASCO_PERF_RECORD)
+    set (MDEFS ${MDEFS} ASCO_PERF_RECORD)
+endif()
+
+if (ASCO_CORE_TASK__EXECUTION_DOMAIN_NEST_MAX_DEPTH)
+    set (MDEFS ${MDEFS} ASCO_CORE_TASK__EXECUTION_DOMAIN_NEST_MAX_DEPTH=${ASCO_CORE_TASK__EXECUTION_DOMAIN_NEST_MAX_DEPTH})
 endif()
 
 set(COMPILE_OPTIONS

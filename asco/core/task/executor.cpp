@@ -1,6 +1,8 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include "asco/core/cancellation.h"
+#include <algorithm>
 #include <asco/core/task/executor.h>
 
 #include <ranges>
@@ -20,7 +22,10 @@ bool executor::execute(scheduled_execution exec, const std::vector<scheduler_con
         return false;
     }
 
-    m_current_cancel_token = m_execution->cancel_src ? m_execution->cancel_src->get_token() : cancel_token{};
+    m_current_cancel_token_stack =
+        m_execution->get_cancel_source_stack()
+        | std::views::transform([](cancel_source *src) { return src->get_token(); })
+        | std::ranges::to<std::vector<cancel_token>>();
 
     std::ranges::for_each(ctxs, [](scheduler_context *ctx) { ctx->begin(); });
     auto exit_stack = [&](bool completed) {
@@ -84,25 +89,13 @@ bool executor::is_base_coroutine(std::coroutine_handle<> handle) const {
     return m_execution && m_execution->handle_stack.size() && m_execution->handle_stack.front() == handle;
 }
 
-void executor::close_cancellation() noexcept {
-    if (m_current_cancel_token) {
-        m_current_cancel_token.close_cancellation();
-    }
-}
-
 bool executor::cancel_cleanup() noexcept {
-    if (!m_execution->handle_stack.size() ||  //
-        !m_current_cancel_token || !m_current_cancel_token.cancel_requested()) {
+    if (std::ranges::all_of(
+            m_current_cancel_token_stack, [](cancel_token &token) { return !token.cancel_requested(); })) {
         return false;
     }
 
-    if (m_current_cancel_token.cancellation_closed()) {
-        panic(
-            "asco::worker: 外部取消了已被关闭取消的执行流 {{{}}}",
-            m_execution->handle_stack.front().address());
-    }
-
-    auto s = m_current_cancel_token.source();
+    auto s = m_current_cancel_token_stack.back().source();
     s->invoke_callbacks();
     while (m_execution->handle_stack.size()) {
         auto h = pop_handle();

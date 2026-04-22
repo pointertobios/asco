@@ -1,6 +1,7 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -9,6 +10,7 @@
 #include <asco/cancellation.h>
 #include <asco/core/runtime.h>
 #include <asco/sync/semaphore.h>
+#include <asco/task/join_all.h>
 #include <asco/test/test.h>
 #include <asco/this_task.h>
 #include <asco/yield.h>
@@ -27,6 +29,22 @@ future<bool> acquire_for(sync::semaphore<N> &sem, std::chrono::steady_clock::dur
         co_await this_task::yield();
     }
     co_return sem.try_acquire();
+}
+
+future<void> wait_for_direct_cancel_with_current_token_callback(
+    std::atomic_bool &token_valid, std::atomic_bool &cancel_requested_in_callback,
+    sync::binary_semaphore &started, sync::binary_semaphore &cancel_callback_called) {
+    auto token = this_task::get_current_cancel_token();
+    token_valid.store(bool(token), std::memory_order::release);
+    cancel_callback cb{[&, token]() mutable {
+        cancel_requested_in_callback.store(token.cancel_requested(), std::memory_order::release);
+        cancel_callback_called.release();
+    }};
+    started.release();
+
+    while (true) {
+        co_await this_task::yield();
+    }
 }
 
 struct cancellable_never_ready {
@@ -93,6 +111,42 @@ ASCO_TEST(cancel_callback_destroyed_before_cancel_is_not_invoked) {
     ASCO_CHECK(
         !(co_await acquire_for(callback_called, std::chrono::milliseconds{200})),
         "destroyed callback should not be invoked after task cancellation");
+
+    bool threw_cancelled = false;
+    try {
+        co_await h;
+    } catch (core::coroutine_cancelled &) { threw_cancelled = true; } catch (...) {
+    }
+
+    ASCO_CHECK(threw_cancelled, "awaiting a cancelled join_handle should throw coroutine_cancelled");
+
+    ASCO_SUCCESS();
+}
+
+ASCO_TEST(current_cancel_token_callback_runs_on_direct_join_handle_cancel) {
+    std::atomic_bool token_valid{false};
+    std::atomic_bool cancel_requested_in_callback{false};
+    sync::binary_semaphore started{0};
+    sync::binary_semaphore cancel_callback_called{0};
+
+    auto h = spawn([&]() -> future<void> {
+        co_await wait_for_direct_cancel_with_current_token_callback(
+            token_valid, cancel_requested_in_callback, started, cancel_callback_called);
+    });
+
+    ASCO_CHECK(co_await acquire_for(started, std::chrono::seconds{1}), "task did not start in time");
+    ASCO_CHECK(
+        token_valid.load(std::memory_order::acquire),
+        "get_current_cancel_token should return a valid token inside runtime");
+
+    h.cancel();
+
+    ASCO_CHECK(
+        co_await acquire_for(cancel_callback_called, std::chrono::seconds{1}),
+        "direct join_handle cancellation did not trigger current-token callback in time");
+    ASCO_CHECK(
+        cancel_requested_in_callback.load(std::memory_order::acquire),
+        "current token should report cancel_requested() == true inside direct-cancel callback");
 
     bool threw_cancelled = false;
     try {
@@ -207,6 +261,42 @@ ASCO_TEST(join_handle_cancel_works_when_task_is_suspended) {
     }
 
     ASCO_CHECK(threw_cancelled, "awaiting a cancelled join_handle should throw coroutine_cancelled");
+
+    ASCO_SUCCESS();
+}
+
+ASCO_TEST(parent_task_cancellation_triggers_join_all_child_cancel_callback) {
+    sync::binary_semaphore child_started{0};
+    sync::binary_semaphore child_cancel_cb_called{0};
+
+    auto h = spawn([&]() -> future<void> {
+        co_await task::join_all{[&]() -> future<void> {
+            cancel_callback cb{[&]() { child_cancel_cb_called.release(); }};
+            child_started.release();
+
+            while (true) {
+                co_await this_task::yield();
+            }
+        }};
+    });
+
+    ASCO_CHECK(
+        co_await acquire_for(child_started, std::chrono::seconds{1}),
+        "join_all child task did not start in time");
+
+    h.cancel();
+
+    ASCO_CHECK(
+        co_await acquire_for(child_cancel_cb_called, std::chrono::seconds{1}),
+        "join_all child cancel callback was not called after parent cancellation");
+
+    bool threw_cancelled = false;
+    try {
+        co_await h;
+    } catch (core::coroutine_cancelled &) { threw_cancelled = true; } catch (...) {
+    }
+
+    ASCO_CHECK(threw_cancelled, "awaiting a cancelled parent join_handle should throw coroutine_cancelled");
 
     ASCO_SUCCESS();
 }

@@ -7,9 +7,7 @@
 
 namespace asco::this_task {
 
-void close_cancellation() noexcept;
-
-core::cancel_token &get_cancel_token() noexcept;
+core::cancel_token &get_current_cancel_token() noexcept;
 
 template<typename TaskLocalStorage>
 TaskLocalStorage &task_local() noexcept;

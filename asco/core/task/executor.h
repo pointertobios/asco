@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <span>
 #include <vector>
 
 #include <asco/core/cancellation.h>
@@ -37,15 +38,16 @@ public:
     execution_id current_execution() const;
     bool is_base_coroutine(std::coroutine_handle<> handle) const;
 
-    cancel_source *current_cancel_source() const { return m_execution->cancel_src; }
-    cancel_token &get_cancel_token() { return m_current_cancel_token; }
-    void close_cancellation() noexcept;
+    std::span<cancel_source *> current_cancel_source_stack() const {
+        return m_execution ? m_execution->get_cancel_source_stack() : std::span<cancel_source *>{};
+    }
+    std::vector<cancel_token> &get_cancel_token_stack() { return m_current_cancel_token_stack; }
 
 private:
     execution_domain *m_domain{nullptr};
     execution_id m_current_id{};
     execution *m_execution{nullptr};
-    cancel_token m_current_cancel_token;
+    std::vector<cancel_token> m_current_cancel_token_stack;
 
     bool cancel_cleanup() noexcept;
 };

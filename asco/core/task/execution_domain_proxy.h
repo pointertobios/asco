@@ -26,15 +26,21 @@ public:
 
     void attach_execution(execution_id id) {
         auto &w = core::worker::current();
-        auto cancel_src = w.get_executor().current_cancel_source();
-        m_domain.attach_execution(id, cancel_src);
+        auto cancel_src = w.get_executor().current_cancel_source_stack();
+        m_domain.attach_execution(id, cancel_src, &m_cancel_src);
         m_domain.get_scheduler().attach_execution(id);
     }
 
     execution_domain &get_domain() { return m_domain; }
 
+    void cancel() {
+        m_cancel_src.request_cancel();
+        m_domain.activate_all();
+    }
+
 private:
     execution_domain m_domain;
+    cancel_source m_cancel_src{};
 };
 
 };  // namespace asco::core::task

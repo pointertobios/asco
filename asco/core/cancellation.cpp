@@ -3,8 +3,6 @@
 
 #include <asco/core/cancellation.h>
 
-#include <atomic>
-
 #include <asco/core/worker.h>
 #include <asco/this_task.h>
 
@@ -35,20 +33,12 @@ cancel_token::cancel_token(cancel_source &source, std::stop_token token) noexcep
 
 bool cancel_token::cancel_requested() { return m_stop_token.stop_requested(); }
 
-void cancel_token::close_cancellation() noexcept {
-    m_source->m_closed.store(true, std::memory_order::release);
-}
-
-bool cancel_token::cancellation_closed() const noexcept {
-    return m_source->m_closed.load(std::memory_order::acquire);
-}
-
 cancel_source *cancel_token::source() noexcept { return m_source; }
 
 cancel_token::operator bool() const noexcept { return m_valid; }
 
 cancel_callback::cancel_callback(std::function<void()> callback) noexcept
-        : m_source{*this_task::get_cancel_token().m_source} {
+        : m_source{*this_task::get_current_cancel_token().m_source} {
     auto &w = worker::current();
     auto exec = w.get_executor().current_execution();
     auto guard = w.get_current_execution_domain().m_executions.get(exec);

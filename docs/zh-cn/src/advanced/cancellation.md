@@ -3,12 +3,15 @@
 ASCO 的“任务取消”主要面向由 runtime 调度的任务（`join_handle<T>`）。它的目标是：
 
 - 由外部请求取消一个正在运行/挂起的任务；
-- 任务内可以通过 token 观察取消请求，并注册回调执行清理/通知；
+- 任务内可以观察当前取消状态，并在取消发生时执行清理或通知；
 - 取消发生并被处理后，该任务会被终止，不再继续执行。
 
 > 术语：本文的“任务”指 `spawn(...)` 产生的 runtime 任务（`join_handle`）。
 >
-> 当前文档描述的是“按任务独立”的取消模型：每个任务有自己的取消状态与取消回调；当前公开语义不包含父子任务之间的树形取消传播。
+> 当前公开语义同时包含两层行为：
+>
+> - 每个任务或嵌套异步操作都有自己的取消状态与取消回调；
+> - 当外层任务等待内部异步操作时，外层取消会一并终止那些仍未完成的内部操作。
 
 ---
 
@@ -24,18 +27,16 @@ ASCO 的“任务取消”主要面向由 runtime 调度的任务（`join_handle
 
 - `asco::core::cancel_source`：取消信号的来源
   - `request_cancel()`：发出取消请求，仅设置 stop 请求本身
-  - `invoke_callbacks()`：执行当前任务已注册的取消回调；回调按 LIFO 顺序执行
+    - `invoke_callbacks()`：执行当前上下文已注册的取消回调；回调按后注册先执行的顺序调用
 - `asco::core::cancel_token`：取消信号的观察者
-  - `cancel_requested()`：查询是否已请求取消
-  - `close_cancellation()` / `cancellation_closed()`：关闭或查询“取消关闭”状态
+  - `cancel_requested()`：查询当前上下文是否已请求取消
 - `asco::core::cancel_callback`
-  - 基于 token 注册一个回调；其设计用途是“当前任务中的局部 RAII guard”
+  - 为当前上下文注册一个回调，用于在取消发生时执行清理或通知
   - 在这种用法下，对象析构时自动注销
 
 任务内入口（当前正在运行的任务）：
 
-- `asco::this_task::get_cancel_token()`：获取当前任务的 `cancel_token`
-- `asco::this_task::close_cancellation()`：关闭当前任务的取消（见第 4 节）
+- `asco::this_task::get_current_cancel_token()`：获取当前上下文的 `cancel_token`
 
 ---
 
@@ -66,8 +67,7 @@ future<void> example_cancel(join_handle<void> &h) {
 
 行为要点：
 
-- `cancel()` 会先把该任务的结果状态标记为已完成，并写入 `asco::core::coroutine_cancelled` 异常；随后向对应任务的 `cancel_source` 发出 stop 请求。
-- worker 在后续调度边界处理该取消请求时，会执行已注册的取消回调（`cancel_callback`），并销毁该任务的执行栈。
+- 取消被任务观察并收束后，会执行已注册的取消回调（`cancel_callback`），并结束该任务后续执行。
 - 被取消的 `join_handle` 在 `co_await` 时会抛出 `asco::core::coroutine_cancelled`。
 
 ---
@@ -86,8 +86,7 @@ future<void> example_cancel(join_handle<void> &h) {
 using namespace asco;
 
 future<void> with_cancel_callback(std::atomic_bool &flag) {
-    auto &token = this_task::get_cancel_token();
-    core::cancel_callback cb{token, [&]() { flag.store(true, std::memory_order::release); }};
+    core::cancel_callback cb{[&]() { flag.store(true, std::memory_order::release); }};
 
     while (!flag.load(std::memory_order::acquire)) {
         co_await this_task::yield();
@@ -101,18 +100,19 @@ future<void> with_cancel_callback(std::atomic_bool &flag) {
 
 - 回调在取消请求被处理时执行。
 - 回调的常见用途是：触发一次“通知/标记/释放资源/恢复状态”的动作。
+- 回调总是绑定到“当前正在执行的这段异步操作”；如果代码运行在 `task::join_all(...)` 等嵌套等待内部操作的场景中，回调只影响它所在的那一项操作。
 
 回调顺序与生命周期：
 
-- `cancel_callback` 的预期用法，是在当前任务内作为局部自动对象按词法作用域注册一个取消回调。
-- 注册与销毁应发生在同一任务的协程栈上；它不是面向跨任务、跨所有权边界传递的通用“注销句柄”。
+- `cancel_callback` 的预期用法，是在当前任务内作为局部对象注册一个取消回调。
+- 注册与销毁应发生在同一任务上下文中；它不适合作为跨任务、跨所有权边界传递的通用对象使用。
 - 在这种局部 RAII 用法下，对象析构时会自动注销对应回调。
-- 取消回调以 **LIFO** 顺序执行；这里的 LIFO 语义，针对的是同一任务栈上按嵌套作用域注册的回调。
+- 取消回调以“后注册先执行”的顺序调用；这里说的是同一任务中按嵌套作用域注册的多个回调。
 - 不要把 `cancel_callback` 当成可以长期保存、放入共享状态、容器或堆对象中并任意延后销毁的通用注册对象使用。
 
 ### 3.2 补充：查询取消请求（`cancel_requested()`）
 
-如果你希望在协程的“安全点”主动结束逻辑，可以轮询当前任务的取消状态：
+如果你希望在协程的安全点主动结束逻辑，可以轮询当前取消状态：
 
 ```cpp
 #include <asco/this_task.h>
@@ -120,8 +120,10 @@ future<void> with_cancel_callback(std::atomic_bool &flag) {
 using namespace asco;
 
 future<void> worker_loop() {
+    auto &token = this_task::get_current_cancel_token();
+
     while (true) {
-        if (this_task::get_cancel_token().cancel_requested()) {
+        if (token.cancel_requested()) {
             co_return;
         }
         co_await this_task::yield();
@@ -131,44 +133,32 @@ future<void> worker_loop() {
 
 语义：
 
-- 当 `cancel_requested()` 为 `true` 时，表示任务已被请求取消。
+- 当 `cancel_requested()` 为 `true` 时，表示当前这段异步操作已被请求取消。
 - 该写法适合：你需要在循环/阶段边界按自己的方式收尾并退出。
 
 ---
 
-## 4. 关闭取消：`this_task::close_cancellation()`
+## 4. 层级化取消
 
-某些关键区段你可能希望“禁止外部取消”，以避免破坏内部一致性。ASCO 提供：
-
-```cpp
-#include <asco/this_task.h>
-
-using namespace asco;
-
-future<void> critical_section() {
-    this_task::close_cancellation();
-
-    // ... 做一些你不希望被外部打断的工作
-
-    co_return;
-}
-```
+某些组合等待场景会在当前任务内部同时推进多个异步操作，例如 `task::join_all(...)`。
 
 行为语义：
 
-- 调用 `this_task::close_cancellation()` 后，该任务会进入“取消已关闭”状态。
-- 若之后仍对该任务发出取消请求，会触发 `panic`。
-- 取消关闭是单向的：关闭后无法再打开。
+- 如果外层任务在等待这些内部操作时被取消，仍未完成的内部操作也会结束。
+- 内部操作中注册的 `cancel_callback` 仍会执行，因此对应的清理逻辑可以放在回调里。
+- 对于需要可靠清理的代码，优先使用 `cancel_callback`，不要只依赖循环里偶尔轮询一次 `cancel_requested()`。
 
-因此建议：
+使用建议：
 
-- 只在你能证明“此后不会再被外部取消”的场景使用它；
-- 更常见的做法是：不关闭取消，而是让任务在安全点自行检查 token 并退出。
+- 当子任务需要释放资源、唤醒等待者或设置完成标志时，优先注册 `cancel_callback`。
+- 当你只需要在本段异步逻辑的阶段边界主动退出时，再轮询 `get_current_cancel_token().cancel_requested()`。
 
 ---
 
 ## 5. 常见坑与建议
 
-- `this_task::get_cancel_token()` / `close_cancellation()` **只能在 runtime 中调用**；不在 runtime 会 `panic`。
+- `this_task::get_current_cancel_token()` **只能在 runtime 中调用**；不在 runtime 会 `panic`。
 - 取消回调适合做“通知/打点/设置标志/清理资源/恢复状态”，不要在回调里做复杂阻塞操作。
-- 如果你需要让自定义 awaiter 支持取消：在 `await_suspend` 时用 `cancel_callback` 监听 token，并在回调里安排唤醒/中断（可参考仓库内 `tests/cancellation.cpp` 的 awaiter 写法）。
+- `cancel_callback` 绑定的是当前这段异步操作；不要把它当成跨任务、跨上下文复用的通用注册句柄。
+- 如果你需要让自定义 awaiter 支持取消，可以在挂起前注册 `cancel_callback`，并在回调里安排唤醒或中断。
+- 任何一个挂起点都有可能执行取消，如果一个异步函数需要支持取消，应确保所有挂起点都能正确响应取消请求，如注册 `cancel_callback` 或查询 `cancel_requested()`。
