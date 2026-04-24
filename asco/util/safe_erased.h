@@ -3,6 +3,10 @@
 
 #pragma once
 
+#include <type_traits>
+#include <utility>
+
+#include <asco/panic.h>
 #include <asco/util/erased.h>
 #include <asco/util/type_id.h>
 

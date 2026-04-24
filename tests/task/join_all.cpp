@@ -6,10 +6,13 @@
 #include <asco/yield.h>
 
 #include <atomic>
+#include <expected>
 #include <exception>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <utility>
 
 using namespace asco;
 

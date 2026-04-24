@@ -6,10 +6,12 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 #include <asco/util/consts.h>

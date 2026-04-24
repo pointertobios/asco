@@ -6,8 +6,6 @@
 #include <functional>
 #include <stop_token>
 
-#include <asco/sync/spinlock.h>
-
 namespace asco::core {
 
 class coroutine_cancelled final {};

@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <array>
 #include <string_view>
+#include <utility>
 
 #include <asco/util/murmur.h>
 

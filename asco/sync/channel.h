@@ -4,10 +4,14 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <expected>
 #include <memory>
 #include <optional>
 #include <tuple>
+#include <type_traits>
+#include <utility>
+#include <variant>
 
 #include <asco/concurrency/ring_queue.h>
 #include <asco/future.h>

@@ -4,10 +4,17 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
+#include <concepts>
+#include <optional>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <asco/core/runtime.h>
-#include <asco/join_handle.h>
+#include <asco/future.h>
+#include <asco/invoke.h>
 #include <asco/sync/channel.h>
 #include <asco/util/types.h>
 

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 namespace asco::util::compile_config {
 
 inline constexpr bool perf_record =

@@ -6,6 +6,7 @@
 #include <chrono>
 #include <concepts>
 #include <cstddef>
+#include <functional>
 #include <type_traits>
 #include <variant>
 

@@ -3,7 +3,8 @@
 
 #include <asco/core/task/dynprio_scheduler.h>
 
-#include <asco/core/task/execution_domain.h>
+#include <tuple>
+
 #include <asco/panic.h>
 #include <asco/util/tsc.h>
 

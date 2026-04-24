@@ -3,6 +3,10 @@
 
 #include <asco/core/cancellation.h>
 
+#include <functional>
+#include <stop_token>
+#include <utility>
+
 #include <asco/core/worker.h>
 #include <asco/this_task.h>
 

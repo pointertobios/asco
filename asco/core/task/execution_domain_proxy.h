@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include <asco/core/cancellation.h>
 #include <asco/core/task/execution_domain.h>
+#include <asco/core/task/executor.h>
 #include <asco/core/task/scheduler.h>
 #include <asco/core/worker.h>
 

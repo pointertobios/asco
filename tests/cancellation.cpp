@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include <atomic>
+#include <coroutine>
+#include <cstddef>
 #include <chrono>
 #include <functional>
 #include <memory>

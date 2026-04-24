@@ -4,11 +4,15 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
+#include <type_traits>
+#include <utility>
 #ifdef ASCO_DEBUG_ENABLED
 #    include <thread>
 #endif
 
 #include <asco/future.h>
+#include <asco/panic.h>
 #include <asco/sync/condition_variable.h>
 
 namespace asco::sync {

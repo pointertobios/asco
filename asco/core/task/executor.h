@@ -3,12 +3,12 @@
 
 #pragma once
 
+#include <coroutine>
 #include <span>
 #include <vector>
 
 #include <asco/core/cancellation.h>
 #include <asco/core/task/execution_domain.h>
-#include <asco/util/erased.h>
 
 namespace asco::core::task {
 

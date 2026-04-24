@@ -4,6 +4,9 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
+#include <type_traits>
+#include <utility>
 #ifdef ASCO_DEBUG_ENABLED
 #    include <thread>
 #endif

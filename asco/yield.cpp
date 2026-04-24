@@ -3,10 +3,6 @@
 
 #include <asco/yield.h>
 
-#include <coroutine>
-
-#include <asco/core/worker.h>
-
 namespace asco::this_task {
 
 std::suspend_always yield() { return {}; }

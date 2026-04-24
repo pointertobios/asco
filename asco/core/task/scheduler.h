@@ -5,7 +5,6 @@
 
 #include <tuple>
 
-#include <asco/concurrency/hash_map.h>
 #include <asco/core/task/execution_domain.h>
 #include <asco/core/task/executor.h>
 #include <asco/panic.h>

@@ -3,6 +3,9 @@
 
 #include <asco/core/os/terminal.h>
 
+#include <cstddef>
+#include <optional>
+
 #ifndef NOMINMAX
 #    define NOMINMAX
 #endif

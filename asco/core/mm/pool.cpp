@@ -3,7 +3,8 @@
 
 #include <asco/core/mm/pool.h>
 
-#include <atomic>
+#include <cstddef>
+#include <new>
 
 namespace asco::core::mm {
 

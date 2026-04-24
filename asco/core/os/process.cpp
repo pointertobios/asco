@@ -1,8 +1,12 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include "process.h"
 #include <asco/core/os/process.h>
+
+#include <cstddef>
+#include <thread>
+#include <utility>
+#include <vector>
 
 namespace asco::core::os {
 

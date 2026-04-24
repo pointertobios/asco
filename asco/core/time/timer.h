@@ -4,12 +4,14 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <compare>
+#include <cstdint>
+#include <functional>
 #include <limits>
 #include <optional>
 
 #include <asco/core/daemon.h>
-#include <asco/core/task/execution_domain.h>
 #include <asco/core/worker.h>
 #include <asco/util/murmur.h>
 #include <asco/util/type_id.h>

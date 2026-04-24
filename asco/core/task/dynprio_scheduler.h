@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <cstdint>
 #include <deque>
 #include <queue>
+#include <tuple>
 
 #include <asco/concurrency/hash_map.h>
 #include <asco/core/task/execution_domain.h>

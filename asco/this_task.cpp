@@ -3,8 +3,8 @@
 
 #include <asco/this_task.h>
 
-#include <asco/core/cancellation.h>
 #include <asco/core/runtime.h>
+#include <asco/core/worker.h>
 #include <asco/panic.h>
 
 namespace asco::this_task {

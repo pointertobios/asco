@@ -3,6 +3,10 @@
 
 #include <asco/core/os/process.h>
 
+#include <string>
+#include <thread>
+#include <utility>
+
 #include <windows.h>
 
 namespace asco::core::os {

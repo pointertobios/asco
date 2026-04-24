@@ -5,8 +5,10 @@
 
 #include <chrono>
 #include <semaphore>
+#include <string>
 #include <stop_token>
 #include <thread>
+#include <utility>
 
 #include <asco/core/os/process.h>
 

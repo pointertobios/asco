@@ -3,8 +3,11 @@
 
 #include <asco/core/time/high_resolution_timer.h>
 
-#include <asco/core/worker.h>
-#include <asco/util/type_id.h>
+#include <chrono>
+#include <cstdint>
+#include <optional>
+#include <stop_token>
+#include <utility>
 
 namespace asco::core::time {
 

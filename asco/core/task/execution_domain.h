@@ -3,7 +3,10 @@
 
 #pragma once
 
+#include <atomic>
+#include <cstddef>
 #include <coroutine>
+#include <functional>
 #include <span>
 #include <unordered_set>
 #include <vector>
@@ -11,7 +14,6 @@
 #include <asco/concurrency/hash_map.h>
 #include <asco/core/cancellation.h>
 #include <asco/util/compile_config.h>
-#include <asco/util/raw_storage.h>
 
 namespace asco::core::task {
 

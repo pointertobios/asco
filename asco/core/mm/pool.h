@@ -4,8 +4,11 @@
 #pragma once
 
 #include <array>
+#include <atomic>
+#include <cstddef>
 #include <memory_resource>
 #include <mutex>
+#include <new>
 
 #include <asco/util/raw_storage.h>
 

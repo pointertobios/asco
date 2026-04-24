@@ -3,9 +3,12 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <bit>
+#include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 #include <asco/util/types.h>
 

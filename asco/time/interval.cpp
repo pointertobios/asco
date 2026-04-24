@@ -3,7 +3,8 @@
 
 #include <asco/time/interval.h>
 
-#include <asco/panic.h>
+#include <chrono>
+
 #include <asco/time/sleep.h>
 
 namespace asco::time {

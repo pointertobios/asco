@@ -4,20 +4,21 @@
 #pragma once
 
 #include <atomic>
+#include <concepts>
 #include <coroutine>
 #include <exception>
 #include <memory>
 #include <semaphore>
+#include <type_traits>
+#include <utility>
 
 #include <asco/core/cancellation.h>
-#include <asco/core/task/execution_domain.h>
 #include <asco/core/worker.h>
-#include <asco/future.h>
+#include <asco/panic.h>
 #include <asco/util/erased.h>
 #include <asco/util/raw_storage.h>
 #include <asco/util/safe_erased.h>
 #include <asco/util/types.h>
-#include <type_traits>
 
 namespace asco {
 

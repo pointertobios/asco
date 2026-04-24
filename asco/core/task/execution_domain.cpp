@@ -3,7 +3,11 @@
 
 #include <asco/core/task/execution_domain.h>
 
+#include <algorithm>
+#include <atomic>
 #include <coroutine>
+#include <span>
+#include <utility>
 
 #include <asco/panic.h>
 

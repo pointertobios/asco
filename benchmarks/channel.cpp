@@ -1,9 +1,11 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
+#include <algorithm>
 #include <cstddef>
 #include <print>
 #include <thread>
+#include <utility>
 
 #include <asco/core/runtime.h>
 #include <asco/future.h>

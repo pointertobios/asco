@@ -5,9 +5,12 @@
 
 #ifdef ASCO_TESTING
 
+#    include <concepts>
 #    include <expected>
 #    include <format>           // IWYU pragma: keep
+#    include <functional>
 #    include <source_location>  // IWYU pragma: keep
+#    include <string>
 #    include <string_view>
 #    include <variant>
 

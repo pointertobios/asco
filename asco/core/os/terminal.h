@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <utility>
 
 #include <asco/util/erased.h>
 

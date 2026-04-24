@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <new>
 
 namespace asco::util {

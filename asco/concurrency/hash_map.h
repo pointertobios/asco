@@ -6,9 +6,11 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <expected>
 #include <functional>
 #include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>

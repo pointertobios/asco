@@ -4,6 +4,8 @@
 #pragma once
 
 #include <functional>
+#include <type_traits>
+#include <utility>
 
 #include <asco/future.h>
 #include <asco/join_handle.h>

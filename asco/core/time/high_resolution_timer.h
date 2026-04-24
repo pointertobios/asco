@@ -3,11 +3,12 @@
 
 #pragma once
 
+#include <cstddef>
 #include <map>
 #include <optional>
+#include <stop_token>
 #include <unordered_set>
 
-#include <asco/core/task/execution_domain.h>
 #include <asco/core/time/timer.h>
 #include <asco/sync/spinlock.h>
 #include <asco/sync/spinrwlock.h>

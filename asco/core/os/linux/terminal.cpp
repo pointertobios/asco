@@ -3,6 +3,10 @@
 
 #include <asco/core/os/terminal.h>
 
+#include <cstddef>
+#include <cstdio>
+#include <optional>
+
 #include <ncurses.h>
 #include <unistd.h>
 
