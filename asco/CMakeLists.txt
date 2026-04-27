@@ -28,6 +28,7 @@ set(PRECOMPILE_HEADERS
     core/mm/pool.h
     core/os/process.h
     core/os/terminal.h
+    core/task/cycle_scheduler.h
     core/task/dynprio_scheduler.h
     core/task/execution_domain_proxy.h
     core/task/execution_domain.h
