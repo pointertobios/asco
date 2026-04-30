@@ -10,11 +10,14 @@
 
 对应头文件：`asco/task/join_all.h`。
 
+若需要使用 `task::fetch_result(...)` 辅助取值，还需要包含 `asco/task/fetch_result.h`。
+
 ---
 
 ## 1. 快速上手
 
 ```cpp
+#include <asco/task/fetch_result.h>
 #include <asco/task/join_all.h>
 
 using namespace asco;
@@ -30,7 +33,7 @@ future<int> calc_b() {
 future<int> run() {
     auto [a, b] = co_await task::join_all{calc_a, calc_b};
 
-    co_return task::fetch(std::move(a)) + task::fetch(std::move(b));
+    co_return task::fetch_result(std::move(a)) + task::fetch_result(std::move(b));
 }
 ```
 
@@ -75,19 +78,20 @@ task::join_all(async_fn_1, async_fn_2, ...)
 - `has_value() == true` 表示该任务成功结束。
 - 若任务抛出异常，异常仍保存在 `error()` 中。
 
-### 2.3 `fetch(expected)`：取值或重抛异常
+### 2.3 `fetch_result(expected)`：取值或重抛异常
 
 ```cpp
 template<typename T>
-T fetch(std::expected<T, std::exception_ptr> &&e);
+T fetch_result(std::expected<T, std::exception_ptr> &&e);
 ```
 
 语义：
 
 - 若 `e.has_value()`，返回其中的值。
 - 若 `e` 保存异常，则重抛该异常。
+- 对 `std::expected<void, std::exception_ptr>`，成功时不返回值，失败时同样重抛异常。
 
-`fetch(...)` 适合在你希望恢复“直接拿值/直接抛错”的调用风格时使用。
+`fetch_result(...)` 适合在你希望恢复“直接拿值/直接抛错”的调用风格时使用。
 
 ---
 

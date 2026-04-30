@@ -35,7 +35,7 @@ public:
 
     void await_suspend(std::coroutine_handle<>) noexcept {}
 
-    auto await_resume() {
+    auto await_resume() noexcept {
         return std::apply(
             [](auto &...args) {
                 return std::make_tuple([](auto &future) -> result_type<decltype(future)> {
@@ -62,14 +62,5 @@ private:
 
 template<typename... Args>
 join_all(Args &&...) -> join_all<std::remove_cvref_t<Args>...>;
-
-template<util::types::move_secure T>
-T fetch(std::expected<T, std::exception_ptr> &&e) {
-    if (e) {
-        return std::move(*e);
-    } else {
-        std::rethrow_exception(e.error());
-    }
-}
 
 };  // namespace asco::task

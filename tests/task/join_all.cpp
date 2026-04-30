@@ -1,10 +1,6 @@
 // Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include <asco/task/join_all.h>
-#include <asco/test/test.h>
-#include <asco/yield.h>
-
 #include <atomic>
 #include <expected>
 #include <exception>
@@ -13,6 +9,12 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+
+#include <asco/future.h>
+#include <asco/task/fetch_result.h>
+#include <asco/task/join_all.h>
+#include <asco/test/test.h>
+#include <asco/yield.h>
 
 using namespace asco;
 
@@ -58,9 +60,9 @@ ASCO_TEST(join_all_preserves_argument_order_in_result_tuple) {
         []() -> future<int> { co_return co_await delayed_value(30, 1); },
     };
 
-    auto first = task::fetch(std::move(std::get<0>(results)));
-    auto second = task::fetch(std::move(std::get<1>(results)));
-    auto third = task::fetch(std::move(std::get<2>(results)));
+    auto first = task::fetch_result(std::move(std::get<0>(results)));
+    auto second = task::fetch_result(std::move(std::get<1>(results)));
+    auto third = task::fetch_result(std::move(std::get<2>(results)));
 
     ASCO_CHECK(first == 10, "first result should match first argument order, got {}", first);
     ASCO_CHECK(second == 20, "second result should match second argument order, got {}", second);
@@ -78,8 +80,8 @@ ASCO_TEST(join_all_collects_exceptions_without_stopping_other_tasks) {
         [&]() -> future<int> { co_return co_await delayed_value(9, 2, &completed); },
     };
 
-    auto first = task::fetch(std::move(std::get<0>(results)));
-    auto third = task::fetch(std::move(std::get<2>(results)));
+    auto first = task::fetch_result(std::move(std::get<0>(results)));
+    auto third = task::fetch_result(std::move(std::get<2>(results)));
     auto finished = completed.load(std::memory_order::acquire);
 
     ASCO_CHECK(first == 7, "successful task result should still be available, got {}", first);
@@ -88,12 +90,12 @@ ASCO_TEST(join_all_collects_exceptions_without_stopping_other_tasks) {
 
     bool threw_runtime_error = false;
     try {
-        (void)task::fetch(std::move(std::get<1>(results)));
+        (void)task::fetch_result(std::move(std::get<1>(results)));
     } catch (const std::runtime_error &e) {
         threw_runtime_error = std::string_view{e.what()} == "join_all boom";
     } catch (...) {}
 
-    ASCO_CHECK(threw_runtime_error, "fetch() should rethrow the stored task exception");
+    ASCO_CHECK(threw_runtime_error, "fetch_result() should rethrow the stored task exception");
 
     ASCO_SUCCESS();
 }
@@ -109,8 +111,8 @@ ASCO_TEST(join_all_wraps_void_results_as_expected_monostate) {
     ASCO_CHECK(std::get<0>(results).has_value(), "first void task should produce a successful expected");
     ASCO_CHECK(std::get<1>(results).has_value(), "second void task should produce a successful expected");
 
-    (void)task::fetch(std::move(std::get<0>(results)));
-    (void)task::fetch(std::move(std::get<1>(results)));
+    (void)task::fetch_result(std::move(std::get<0>(results)));
+    (void)task::fetch_result(std::move(std::get<1>(results)));
 
     auto finished = completed.load(std::memory_order::acquire);
     ASCO_CHECK(finished == 2, "both void tasks should run to completion, completion count: {}", finished);
@@ -119,18 +121,33 @@ ASCO_TEST(join_all_wraps_void_results_as_expected_monostate) {
 }
 
 ASCO_TEST(join_all_fetch_returns_value_or_rethrows_exception_ptr) {
-    auto value = task::fetch(std::expected<int, std::exception_ptr>{42});
-    ASCO_CHECK(value == 42, "fetch() should return stored value, got {}", value);
+    auto value = task::fetch_result(std::expected<int, std::exception_ptr>{42});
+    ASCO_CHECK(value == 42, "fetch_result() should return stored value, got {}", value);
+
+    task::fetch_result(std::expected<void, std::exception_ptr>{});
 
     bool threw_runtime_error = false;
     try {
-        (void)task::fetch(
-            std::expected<int, std::exception_ptr>{std::unexpected{make_runtime_error("fetch boom")}});
+        (void)task::fetch_result(
+            std::expected<int, std::exception_ptr>{std::unexpected{make_runtime_error("fetch_result boom")}});
     } catch (const std::runtime_error &e) {
-        threw_runtime_error = std::string_view{e.what()} == "fetch boom";
+        threw_runtime_error = std::string_view{e.what()} == "fetch_result boom";
     } catch (...) {}
 
-    ASCO_CHECK(threw_runtime_error, "fetch() should rethrow the exception stored in expected.error()");
+    ASCO_CHECK(threw_runtime_error, "fetch_result() should rethrow the exception stored in expected.error()");
+
+    bool threw_void_runtime_error = false;
+    try {
+        task::fetch_result(
+            std::expected<void, std::exception_ptr>{
+                std::unexpected{make_runtime_error("fetch_result void boom")}});
+    } catch (const std::runtime_error &e) {
+        threw_void_runtime_error = std::string_view{e.what()} == "fetch_result void boom";
+    } catch (...) {}
+
+    ASCO_CHECK(
+        threw_void_runtime_error,
+        "fetch_result() should rethrow the exception stored in expected<void>.error()");
 
     ASCO_SUCCESS();
 }

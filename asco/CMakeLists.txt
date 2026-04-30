@@ -52,7 +52,10 @@ set(PRECOMPILE_HEADERS
     test/bench.h
     test/test.h
     this_task.h
+    task/fetch_result.h
+    task/join_all.h
     task/join_set.h
+    task/select.h
     time/interval.h
     time/sleep.h
     util/compile_config.h

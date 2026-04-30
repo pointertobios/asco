@@ -10,6 +10,7 @@ add_executable(tests
     sync/rwlock.cpp
     sync/semaphore.cpp
     task/join_all.cpp
+    task/select.cpp
     task_local.cpp
     time.cpp
 )

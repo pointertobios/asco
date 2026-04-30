@@ -4,6 +4,7 @@
 - [任务](./task/README.md)
   - [`join_all`：等待多个任务并汇总结果](./task/join_all.md)
   - [`join_set<T>`：批量任务收集](./task/join_set.md)
+  - [`select`：等待首个完成的异步操作](./task/select.md)
 - [同步原语](./sync/README.md)
   - [通道](./sync/channel.md)
   - [条件变量](./sync/condition_variable.md)
