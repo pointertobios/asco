@@ -9,6 +9,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 #include <asco/core/task/cycle_scheduler.h>
 #include <asco/core/task/execution_domain_proxy.h>
@@ -56,7 +57,7 @@ public:
 private:
     std::tuple<std::invoke_result_t<Args>...> m_futures;
 
-    core::task::cycle_scheduler m_scheduler{};
+    core::task::cycle_scheduler<sizeof...(Args)> m_scheduler{};
     core::task::execution_domain_proxy m_domain{m_scheduler};
 };
 

@@ -19,6 +19,7 @@
 #include <asco/core/task/execution_domain_proxy.h>
 #include <asco/future.h>
 #include <asco/invoke.h>
+#include <asco/panic.h>
 #include <asco/this_task.h>
 
 namespace asco::task {
@@ -64,11 +65,13 @@ public:
                     if constexpr (std::is_void_v<output_type>) {
                         std::get<I>(m_futures).await_resume();
                         return result_type{
-                            std::in_place_type<result_branch<I, std::expected<output_type, std::exception_ptr>>>,
+                            std::in_place_type<
+                                result_branch<I, std::expected<output_type, std::exception_ptr>>>,
                             std::expected<output_type, std::exception_ptr>{}};
                     } else {
                         return result_type{
-                            std::in_place_type<result_branch<I, std::expected<output_type, std::exception_ptr>>>,
+                            std::in_place_type<
+                                result_branch<I, std::expected<output_type, std::exception_ptr>>>,
                             std::expected<output_type, std::exception_ptr>{
                                 std::get<I>(m_futures).await_resume()}};
                     }
@@ -93,7 +96,7 @@ private:
     std::tuple<std::invoke_result_t<Args>...> m_futures;
     std::atomic_size_t m_complete_branch{std::numeric_limits<std::size_t>::max()};
 
-    core::task::cycle_scheduler m_scheduler{};
+    core::task::cycle_scheduler<sizeof...(Args)> m_scheduler{};
     core::task::execution_domain_proxy m_domain{m_scheduler};
 
     template<std::size_t... I>

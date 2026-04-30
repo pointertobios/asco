@@ -3,113 +3,143 @@
 
 #pragma once
 
-#include <deque>
+#include <array>
+#include <cstddef>
 #include <tuple>
+#include <utility>
 
-#include <asco/concurrency/hash_map.h>
 #include <asco/core/task/execution_domain.h>
 #include <asco/core/task/scheduler.h>
 #include <asco/panic.h>
-#include <asco/sync/spinlock.h>
 
 namespace asco::core::task {
 
-class cycle_scheduler : public core::task::scheduler {
-    class join_all_context final : public context {
+template<std::size_t N>
+class cycle_scheduler : public scheduler {
+    class cycle_context final : public context {
     public:
-        join_all_context(cycle_scheduler *scheduler, core::task::execution_id id)
+        cycle_context(cycle_scheduler *scheduler, std::size_t index)
                 : m_scheduler{scheduler}
-                , m_id{id} {}
+                , m_execution_index{index} {}
 
-        join_all_context(const join_all_context &) = delete;
-        join_all_context &operator=(const join_all_context &) = delete;
+        cycle_context(const cycle_context &) = delete;
+        cycle_context &operator=(const cycle_context &) = delete;
 
-        join_all_context(join_all_context &&) = default;
-        join_all_context &operator=(join_all_context &&) = default;
+        cycle_context(cycle_context &&) = default;
+        cycle_context &operator=(cycle_context &&) = default;
 
         void end(bool completed) noexcept override {
-            if ((m_scheduler->m_current_suspend && !m_scheduler->m_preawake_executions.remove(m_id))
-                || completed) {
-                m_scheduler->m_suspended_executions.insert(m_id);
-                m_scheduler->m_domain->suspend_execution(m_id);
+            auto &state = m_scheduler->m_executions[m_execution_index];
+            if ((state.suspend_now && !state.preawaken) || completed) {
+                state.active = false;
+                m_scheduler->m_active_count--;
+                m_scheduler->m_domain->suspend_execution(state.id);
             } else {
-                m_scheduler->m_executions.lock()->push_back(m_id);
-                m_scheduler->m_domain->activate_execution(m_id);
+                m_scheduler->m_domain->activate_execution(state.id);
             }
-            m_scheduler->m_current_suspend = false;
+            state.suspend_now = false;
         }
 
     private:
         cycle_scheduler *m_scheduler;
-        core::task::execution_id m_id;
+        std::size_t m_execution_index;
+    };
+
+    struct execution_sched {
+        execution_id id{};
+        bool active{true};
+        cycle_context ctx{nullptr, {}};
+
+        bool suspend_now{false};
+        bool preawaken{false};
+
+        bool detached{false};
     };
 
 public:
-    void attach_execution(core::task::execution_id id) override {
-        asco_assert(m_exec_ctx_map.insert(id, join_all_context{this, id}));
-        m_executions.lock()->push_back(id);
+    void attach_execution(execution_id id) override {
+        asco_assert(m_fill_index < N);
+
+        m_executions[m_fill_index] =
+            execution_sched{id, true, cycle_context{this, m_fill_index}, false, false};
+        m_execution_index_map[m_fill_index] = {id, m_fill_index};
+        ++m_active_count;
+        ++m_fill_index;
     }
 
-    void detach_suspended_execution(core::task::execution_id id) override {
-        if (m_suspended_executions.remove(id)) {
-            m_exec_ctx_map.remove(id);
+    void detach_suspended_execution(execution_id id) override {
+        for (auto &p : m_execution_index_map) {
+            if (p.first == id) {
+                auto &state = m_executions[p.second];
+                asco_assert(!state.active);
+                state.detached = true;
+                state.id = execution_id{};
+                m_detached_count++;
+                break;
+            }
         }
     }
 
-    void awake_execution(core::task::execution_id id) noexcept override {
-        if (!m_exec_ctx_map.contains(id)) {
-            return;
-        }
-
-        if (m_suspended_executions.remove(id)) {
-            m_executions.lock()->push_back(id);
-            m_domain->activate_execution(id);
-        } else {
-            m_preawake_executions.insert(id);
+    void awake_execution(execution_id id) noexcept override {
+        for (auto &p : m_execution_index_map) {
+            if (p.first == id) {
+                auto &state = m_executions[p.second];
+                if (!state.active) {
+                    state.suspend_now = false;
+                    state.active = true;
+                    m_active_count++;
+                    m_domain->activate_execution(id);
+                } else {
+                    state.preawaken = true;
+                }
+                break;
+            }
         }
 
         auto parent_domain = m_domain->get_parent_domain();
         auto parent_exec = m_domain->get_parent_execution();
-        if (parent_domain
-            && parent_domain->get_execution_state(parent_exec) == core::task::execution_state::suspended) {
+        if (parent_domain && parent_domain->get_execution_state(parent_exec) == execution_state::suspended) {
             parent_domain->get_scheduler().awake_execution(parent_exec);
         }
     }
 
-    void suspend_current(core::task::execution_id id) noexcept override {
-        asco_assert(m_current_execution == id);
-        if (!m_exec_ctx_map.contains(id)) {
-            return;
+    void suspend_current(execution_id id) noexcept override {
+        for (auto &p : m_execution_index_map) {
+            if (p.first == id) {
+                auto &state = m_executions[p.second];
+                if (state.preawaken) {
+                    state.preawaken = false;
+                    break;
+                }
+                state.suspend_now = true;
+                m_domain->suspend_execution(id);
+                break;
+            }
         }
-
-        if (m_preawake_executions.remove(id)) {
-            return;
-        }
-
-        m_domain->suspend_execution(id);
-        m_current_suspend = true;
     }
 
-    std::tuple<core::task::execution_id, context &> schedule() override {
-        auto g = m_executions.lock();
-        asco_assert(!g->empty());
-        m_current_execution = g->front();
-        g->pop_front();
-        return {m_current_execution, m_exec_ctx_map.get(m_current_execution).value()};
+    std::tuple<execution_id, context &> schedule() override {
+        while (m_executions[m_current_execution_index % N].detached
+               || !m_executions[m_current_execution_index % N].active) {
+            m_current_execution_index++;
+        }
+        auto index = m_current_execution_index++ % N;
+        return {m_executions[index].id, m_executions[index].ctx};
     }
 
-    bool has_active_execution() override { return !m_executions.lock()->empty(); }
-    bool has_suspended_execution() override { return m_suspended_executions.size() || m_current_suspend; }
+    bool has_active_execution() override { return m_active_count > 0; }
+    bool has_suspended_execution() override { return N - m_active_count - m_detached_count > 0; }
 
 private:
-    core::task::execution_id m_current_execution{};
-    bool m_current_suspend{false};
+    std::size_t m_current_execution_index{0};
 
-    sync::spinlock<std::deque<core::task::execution_id>> m_executions;
+    std::array<execution_sched, N> m_executions;
+    std::size_t m_fill_index{0};
 
-    concurrency::hash_set<core::task::execution_id> m_suspended_executions;
-    concurrency::hash_set<core::task::execution_id> m_preawake_executions;
-    concurrency::hash_map<core::task::execution_id, join_all_context> m_exec_ctx_map;
+    std::size_t m_active_count{0};
+    std::size_t m_detached_count{0};
+
+    std::array<std::pair<execution_id, std::size_t>, N> m_execution_index_map;
 };
 
 };  // namespace asco::core::task

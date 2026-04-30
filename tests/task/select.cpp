@@ -38,6 +38,20 @@ future<void> delayed_void(std::atomic_bool *completed, int yield_count) {
     co_return;
 }
 
+future<void> delayed_void_throw(std::string message, int yield_count) {
+    for (int i = 0; i < yield_count; ++i) {
+        co_await this_task::yield();
+    }
+    throw std::runtime_error{std::move(message)};
+}
+
+future<std::string> delayed_string(std::string value, int yield_count) {
+    for (int i = 0; i < yield_count; ++i) {
+        co_await this_task::yield();
+    }
+    co_return value;
+}
+
 future<int> delayed_throw(std::string message, int yield_count) {
     for (int i = 0; i < yield_count; ++i) {
         co_await this_task::yield();
@@ -82,6 +96,60 @@ ASCO_TEST(select_returns_first_completed_branch) {
     ASCO_SUCCESS();
 }
 
+ASCO_TEST(select_supports_single_branch) {
+    auto result = co_await task::select{
+        []() -> future<int> { co_return co_await delayed_value(64, 0); },
+    };
+
+    bool visited = false;
+    std::size_t selected_index = static_cast<std::size_t>(-1);
+    int selected_value = 0;
+    std::visit(
+        [&](auto &branch) {
+            visited = true;
+            selected_index = branch.index;
+            selected_value = task::fetch_result(std::move(branch.value));
+        },
+        result);
+
+    ASCO_CHECK(visited, "single-branch select should still produce one result branch");
+    ASCO_CHECK(
+        selected_index == 0, "single-branch select should return branch index 0, got {}", selected_index);
+    ASCO_CHECK(selected_value == 64, "single-branch select should return its value, got {}", selected_value);
+
+    ASCO_SUCCESS();
+}
+
+ASCO_TEST(select_keeps_result_type_for_selected_branch) {
+    auto result = co_await task::select{
+        []() -> future<int> { co_return co_await delayed_value(11, 2); },
+        []() -> future<std::string> { co_return co_await delayed_string("selected string", 0); },
+        []() -> future<void> { co_await delayed_void(nullptr, 1); },
+    };
+
+    bool visited = false;
+    std::size_t selected_index = static_cast<std::size_t>(-1);
+    std::string selected_value;
+    std::visit(
+        [&](auto &branch) {
+            visited = true;
+            selected_index = branch.index;
+            using branch_type = std::remove_cvref_t<decltype(branch)>;
+            if constexpr (branch_type::index == 1) {
+                selected_value = task::fetch_result(std::move(branch.value));
+            }
+        },
+        result);
+
+    ASCO_CHECK(visited, "select result should contain one completed branch");
+    ASCO_CHECK(selected_index == 1, "select should return the string branch index, got {}", selected_index);
+    ASCO_CHECK(
+        selected_value == "selected string",
+        "select should preserve the selected branch value type and content");
+
+    ASCO_SUCCESS();
+}
+
 ASCO_TEST(select_returns_exception_from_first_completed_branch) {
     auto result = co_await task::select{
         []() -> future<int> { co_return co_await delayed_value(10, 2); },
@@ -103,6 +171,89 @@ ASCO_TEST(select_returns_exception_from_first_completed_branch) {
 
     ASCO_CHECK(selected_index == 1, "select should return the throwing branch index, got {}", selected_index);
     ASCO_CHECK(threw_runtime_error, "select should store and rethrow the first completed branch exception");
+
+    ASCO_SUCCESS();
+}
+
+ASCO_TEST(select_returns_void_exception_from_first_completed_branch) {
+    auto result = co_await task::select{
+        []() -> future<void> { co_await delayed_void_throw("select void boom", 0); },
+        []() -> future<int> { co_return co_await delayed_value(10, 1); },
+    };
+
+    bool threw_runtime_error = false;
+    std::size_t selected_index = static_cast<std::size_t>(-1);
+    std::visit(
+        [&](auto &branch) {
+            selected_index = branch.index;
+            using branch_type = std::remove_cvref_t<decltype(branch)>;
+            if constexpr (branch_type::index == 0) {
+                try {
+                    task::fetch_result(std::move(branch.value));
+                } catch (const std::runtime_error &e) {
+                    threw_runtime_error = std::string_view{e.what()} == "select void boom";
+                } catch (...) {}
+            }
+        },
+        result);
+
+    ASCO_CHECK(
+        selected_index == 0, "select should return the throwing void branch index, got {}", selected_index);
+    ASCO_CHECK(threw_runtime_error, "select should store and rethrow a void branch exception");
+
+    ASCO_SUCCESS();
+}
+
+ASCO_TEST(select_cancels_unfinished_branches_after_first_exception) {
+    std::atomic_bool cancelled{false};
+
+    auto result = co_await task::select{
+        []() -> future<int> { co_return co_await delayed_throw("select cancellation boom", 1); },
+        [&]() -> future<int> { co_return co_await never_ready_until_cancelled(cancelled); },
+    };
+
+    bool threw_runtime_error = false;
+    std::size_t selected_index = static_cast<std::size_t>(-1);
+    std::visit(
+        [&](auto &branch) {
+            selected_index = branch.index;
+            try {
+                (void)task::fetch_result(std::move(branch.value));
+            } catch (const std::runtime_error &e) {
+                threw_runtime_error = std::string_view{e.what()} == "select cancellation boom";
+            } catch (...) {}
+        },
+        result);
+
+    ASCO_CHECK(
+        selected_index == 0, "select should return the first throwing branch index, got {}", selected_index);
+    ASCO_CHECK(threw_runtime_error, "select should expose the first throwing branch exception");
+    ASCO_CHECK(
+        cancelled.load(std::memory_order::acquire),
+        "select should request cancellation for unfinished branches after one branch throws");
+
+    ASCO_SUCCESS();
+}
+
+ASCO_TEST(select_ignores_later_exception_after_value_branch_completes) {
+    auto result = co_await task::select{
+        []() -> future<int> { co_return co_await delayed_value(123, 0); },
+        []() -> future<int> { co_return co_await delayed_throw("late select boom", 1); },
+    };
+
+    std::size_t selected_index = static_cast<std::size_t>(-1);
+    int selected_value = 0;
+    std::visit(
+        [&](auto &branch) {
+            selected_index = branch.index;
+            selected_value = task::fetch_result(std::move(branch.value));
+        },
+        result);
+
+    ASCO_CHECK(
+        selected_index == 0, "select should keep the first value branch index, got {}", selected_index);
+    ASCO_CHECK(
+        selected_value == 123, "select should return the first value branch result, got {}", selected_value);
 
     ASCO_SUCCESS();
 }
