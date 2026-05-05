@@ -79,8 +79,8 @@ FetchContent_MakeAvailable(asco)
       - [x] 高分辨率计时器
       - [ ] 时间轮
     - [ ] IO 兼容层
-      - [ ] io_uring (Linux)
-      - [ ] Epoll (Linux)
+      - [x] io_uring (Linux)
+      - [ ] 同步 IO daemon (Linux)
       - [ ] IOCP (Windows)
 - [x] 测试框架
 - [ ] 并发
@@ -125,7 +125,7 @@ FetchContent_MakeAvailable(asco)
 
 - Clang: 完整支持
 - GCC: 不完全支持
-- MSVC: 仅支持 VS 2026 及以上版本的 clang 模式
+- MSVC: 仅支持 VS 2026 及以上版本的 clang 模式，并且避免使用 msbuild 构建
 
 ## 开发与贡献
 

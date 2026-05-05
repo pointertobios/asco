@@ -1,10 +1,9 @@
-// Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
+// Copyright (C) 2026 pointer-to-bios <pointer-to-bios@outlook.com>
 // SPDX-License-Identifier: MIT
 
-#include <asco/core/mm/pool.h>
+#include <asco/core/mm/coroutine_pool.h>
 
-#include <cstddef>
-#include <new>
+#include <asco/core/mm/pool.h>
 
 namespace asco::core::mm {
 

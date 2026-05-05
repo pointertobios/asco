@@ -70,7 +70,7 @@ int main() {
     using namespace asco;
 
     core::runtime rt = core::runtime_builder::multi_threaded()  //
-                           .with_timer()
+                           .enable_all()
                            .build();
     task::join_set<test::test_result_wrap> set{rt};
 

@@ -9,6 +9,7 @@
 #include <stop_token>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace asco::core {
 
@@ -44,6 +45,10 @@ protected:
     virtual bool run_once(std::stop_token &st);
     virtual void shutdown();
 
+    void register_awake_hook(std::function<void()> hook);
+
+    void join();
+
     std::jthread m_dthread;
     std::string m_name{"asco::daemon"};
 
@@ -53,6 +58,10 @@ private:
     std::counting_semaphore<> m_sem{0};
 
     std::barrier<> m_b{2};
+
+    std::vector<std::function<void()>> m_awake_hooks;
+
+    bool joined{false};
 };
 
 };  // namespace asco::core

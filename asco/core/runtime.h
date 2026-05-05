@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <asco/concurrency/hash_map.h>
+#include <asco/core/os/io.h>
 #include <asco/core/time/high_resolution_timer.h>
 #include <asco/core/time/timer.h>
 #include <asco/core/worker.h>
@@ -47,6 +48,13 @@ public:
         return std::move(*this);
     }
 
+    runtime_builder &&with_io(std::unique_ptr<os::io_adapter> io_manager = os::io_adapter::create()) && {
+        m_io_adapter = std::move(io_manager);
+        return std::move(*this);
+    }
+
+    runtime_builder &&enable_all() && { return std::move(*this).with_timer().with_io(); }
+
     runtime build() &&;
 
 private:
@@ -55,6 +63,7 @@ private:
 
     std::size_t m_nthreads{0};
     std::unique_ptr<time::timer> m_timer{nullptr};
+    std::unique_ptr<os::io_adapter> m_io_adapter{nullptr};
 };
 
 class runtime final {
@@ -73,6 +82,7 @@ public:
     static runtime &current();
 
     time::timer &get_timer();
+    os::io_adapter &get_io_adapter();
 
     template<typename TaskLocalStorage>
     auto block_on(async_function<> auto &&fn, TaskLocalStorage &&task_local_storage) {
@@ -207,6 +217,7 @@ private:
     std::shared_ptr<std::counting_semaphore<detail::coroutine_queue_capacity + 1>> m_backsem_sync;
 
     std::unique_ptr<time::timer> m_timer;
+    std::unique_ptr<os::io_adapter> m_io_adapter;
 
     std::vector<std::unique_ptr<worker>> m_workers;
     std::vector<runtime **> m_workers_local_runtime_ptr;

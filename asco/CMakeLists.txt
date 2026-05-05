@@ -4,7 +4,8 @@
 set(ASCO_SOURCES
     core/cancellation.cpp
     core/daemon.cpp
-    core/mm/pool.cpp
+    core/mm/coroutine_pool.cpp
+    core/mm/cstring.cpp
     core/os/process.cpp
     core/task/dynprio_scheduler.cpp
     core/task/execution_domain.cpp
@@ -12,6 +13,7 @@ set(ASCO_SOURCES
     core/time/high_resolution_timer.cpp
     core/runtime.cpp
     core/worker.cpp
+    io/file.cpp
     this_task.cpp
     time/interval.cpp
     time/sleep.cpp
@@ -25,6 +27,8 @@ set(PRECOMPILE_HEADERS
     concurrency/ring_queue.h
     core/cancellation.h
     core/daemon.h
+    core/mm/coroutine_pool.h
+    core/mm/cstring.h
     core/mm/pool.h
     core/os/process.h
     core/os/terminal.h
@@ -40,6 +44,8 @@ set(PRECOMPILE_HEADERS
     core/worker.h
     future.h
     invoke.h
+    io/buffer.h
+    io/file.h
     join_handle.h
     panic.h
     sync/channel.h
@@ -88,7 +94,10 @@ if (LINUX)
 
     if (ASCO_IO_URING)
         set(ASCO_SOURCES ${ASCO_SOURCES}
+            core/os/linux/io_uring.cpp
         )
+
+        set(DEPLIBS ${DEPLIBS} uring)
     else()
         set(ASCO_SOURCES ${ASCO_SOURCES}
         )

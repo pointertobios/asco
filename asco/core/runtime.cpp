@@ -20,7 +20,8 @@ namespace core {
 runtime runtime_builder::build() && { return runtime(std::move(*this)); }
 
 runtime::runtime(runtime_builder &&builder)
-        : m_timer{std::move(builder.m_timer)} {
+        : m_timer{std::move(builder.m_timer)}
+        , m_io_adapter{std::move(builder.m_io_adapter)} {
     auto nthreads = builder.m_nthreads;
     if (nthreads == 0) {
         nthreads = std::thread::hardware_concurrency();
@@ -62,6 +63,13 @@ time::timer &runtime::get_timer() {
         panic("runtime::get_timer: 当前 runtime 不含有 timer");
     }
     return *m_timer;
+}
+
+os::io_adapter &runtime::get_io_adapter() {
+    if (!m_io_adapter) [[unlikely]] {
+        panic("runtime::get_io_adapter: 当前 runtime 不含有 io_adapter");
+    }
+    return *m_io_adapter;
 }
 
 void runtime::awake_next() noexcept {

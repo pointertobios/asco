@@ -13,6 +13,7 @@
 
 #include <asco/core/worker.h>
 #include <asco/future.h>
+#include <asco/join_handle.h>
 #include <asco/sync/spinlock.h>
 #include <asco/yield.h>
 

@@ -17,7 +17,12 @@ namespace asco::core {
 daemon::daemon(std::string name)
         : m_name(std::move(name)) {}
 
-void daemon::awake() { m_sem.release(); }
+void daemon::awake() {
+    m_sem.release();
+    for (auto &hook : m_awake_hooks) {
+        hook();
+    }
+}
 
 daemon::init_waiter daemon::start() {
     m_dthread = std::jthread{[this](std::stop_token st) {
@@ -48,11 +53,7 @@ daemon::~daemon()
     noexcept(false)
 #endif
 {
-    if (m_dthread.joinable()) {
-        m_dthread.request_stop();
-        awake();
-        m_dthread.join();
-    }
+    join();
 }
 
 void daemon::sleep_until_awake() { m_sem.acquire(); }
@@ -85,5 +86,20 @@ bool daemon::run_once(std::stop_token &) {
 }
 
 void daemon::shutdown() {}
+
+void daemon::register_awake_hook(std::function<void()> hook) { m_awake_hooks.push_back(std::move(hook)); }
+
+void daemon::join() {
+    if (joined) {
+        return;
+    }
+
+    if (m_dthread.joinable()) {
+        m_dthread.request_stop();
+        awake();
+        m_dthread.join();
+        joined = true;
+    }
+}
 
 };  // namespace asco::core
