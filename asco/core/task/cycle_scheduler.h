@@ -97,7 +97,7 @@ public:
                 } else {
                     state.preawaken = true;
                 }
-                break;
+                return;
             }
         }
 
