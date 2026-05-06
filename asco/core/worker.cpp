@@ -109,8 +109,8 @@ bool worker::run_once(std::stop_token &st) {
         if (!m_executor.execute(m_sexec_stack.back(), m_context_stack)) {
             auto &domain = *m_domain_stack.back();
             auto exec = m_sexec_stack.back().m_id;
-            domain.get_scheduler().detach_suspended_execution(exec);
             domain.detach_execution(exec);
+            domain.get_scheduler().detach_suspended_execution(exec);
         }
 
         exit_stack(true);
