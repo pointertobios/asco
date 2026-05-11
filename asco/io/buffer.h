@@ -96,7 +96,7 @@ public:
             , m_cursor{string.size()}
             , m_allocator_storage{std::move(allocator)}
             , m_allocator{&*m_allocator_storage} {
-        std::ranges::copy_n(reinterpret_cast<const std::byte *>(string.begin()), string.size(), m_data);
+        std::ranges::copy_n(reinterpret_cast<const std::byte *>(string.data()), string.size(), m_data);
     }
 
     explicit buffer(std::string_view string, Alloc &allocator = core::mm::pmr::get<buffer>())
@@ -105,7 +105,7 @@ public:
             , m_cursor{string.size()}
             , m_allocator_storage{std::nullopt}
             , m_allocator{&allocator} {
-        std::ranges::copy_n(reinterpret_cast<const std::byte *>(string.begin()), string.size(), m_data);
+        std::ranges::copy_n(reinterpret_cast<const std::byte *>(string.data()), string.size(), m_data);
     }
 
     std::size_t size() const noexcept { return m_size; }

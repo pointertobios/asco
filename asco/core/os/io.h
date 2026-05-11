@@ -124,7 +124,7 @@ struct open {
     std::chrono::steady_clock::time_point timestamp{std::chrono::steady_clock::now()};
 
     io_request_id gen_request_id() const {
-        return reinterpret_cast<io_request_id>(path.begin()) ^ path.size() ^ flags.underlying()
+        return reinterpret_cast<io_request_id>(path.data()) ^ path.size() ^ flags.underlying()
                ^ modes.underlying() ^ timestamp.time_since_epoch().count();
     }
 

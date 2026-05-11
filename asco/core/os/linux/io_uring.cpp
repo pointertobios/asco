@@ -4,10 +4,11 @@
 #include <asco/core/os/io.h>
 
 #include <chrono>
-#include <fcntl.h>
-#include <liburing.h>
 #include <ranges>
 #include <tuple>
+
+#include <fcntl.h>
+#include <liburing.h>
 
 #include <asco/concurrency/hash_map.h>
 #include <asco/core/daemon.h>
@@ -66,6 +67,7 @@ public:
     io_request_id
     submit(io_request auto &request, awake_token &&token, std::invocable<::io_uring_sqe *> auto &&prep_fn) {
         auto reqid = request.gen_request_id();
+        token.suspend();
         m_requests.insert(reqid, {std::move(token), {}});
         ::io_uring_sqe *sqe = get_sqe();
         prep_fn(sqe);
@@ -243,8 +245,6 @@ private:
 
     concurrency::hash_map<io_request_id, std::tuple<awake_token, int>> m_requests;
 
-    bool init() override { return true; }
-
     bool run_once(std::stop_token &st) override {
         ::io_uring_cqe *cqe{nullptr};
         auto ret = ::io_uring_wait_cqe(&m_ring, &cqe);
@@ -265,8 +265,6 @@ private:
         ::io_uring_cqe_seen(&m_ring, cqe);
         return true;
     }
-
-    void shutdown() override {}
 };
 
 std::unique_ptr<io_adapter> io_adapter::create() { return std::make_unique<io_uring_impl>(); }

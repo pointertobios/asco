@@ -13,7 +13,6 @@ future<std::expected<file, open_failed>> file_open::open(this file_open self) {
     auto request = core::os::io_req::open{self.m_path, self.m_flags, self.m_modes};
     auto &io = core::runtime::current().get_io_adapter();
     core::awake_token token{};
-    token.suspend();
     auto reqid = io.submit_open(request, core::awake_token{token});
     co_await this_task::yield();
     auto res = io.complete_open(reqid);
@@ -58,7 +57,6 @@ file::open(std::string path, util::flags<open_flags> flags, util::flags<create_m
     auto request = core::os::io_req::open{path, flags, mode};
     auto &io = core::runtime::current().get_io_adapter();
     core::awake_token token{};
-    token.suspend();
     auto reqid = io.submit_open(request, core::awake_token{token});
     co_await this_task::yield();
     auto res = io.complete_open(reqid);
@@ -88,7 +86,6 @@ void file::close() {
             auto request = core::os::io_req::close{handle};
             auto &io = core::runtime::current().get_io_adapter();
             core::awake_token token{};
-            token.suspend();
             auto reqid = io.submit_close(request, core::awake_token{token});
             co_await this_task::yield();
             io.complete_close(reqid);
@@ -141,7 +138,6 @@ future<std::expected<io::buffer<>, read_failed>> file::read(std::size_t size) {
     auto request = core::os::io_req::read{m_handle, static_cast<std::size_t>(m_fptr), buf, read_size};
     auto &io = core::runtime::current().get_io_adapter();
     core::awake_token token{};
-    token.suspend();
     auto reqid = io.submit_read(request, core::awake_token{token});
     co_await this_task::yield();
     auto res = io.complete_read(reqid);
@@ -160,7 +156,6 @@ future<std::expected<std::size_t, write_failed>> file::write(const buffer<> &buf
     auto request = core::os::io_req::write{m_handle, static_cast<std::size_t>(m_fptr), buf};
     auto &io = core::runtime::current().get_io_adapter();
     core::awake_token token{};
-    token.suspend();
     auto reqid = io.submit_write(request, core::awake_token{token});
     co_await this_task::yield();
     auto res = io.complete_write(reqid);

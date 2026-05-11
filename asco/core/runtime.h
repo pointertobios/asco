@@ -48,8 +48,8 @@ public:
         return std::move(*this);
     }
 
-    runtime_builder &&with_io(std::unique_ptr<os::io_adapter> io_manager = os::io_adapter::create()) && {
-        m_io_adapter = std::move(io_manager);
+    runtime_builder &&with_io() && {
+        m_io_adapter = os::io_adapter::create();
         return std::move(*this);
     }
 

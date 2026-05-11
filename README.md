@@ -80,8 +80,8 @@ FetchContent_MakeAvailable(asco)
       - [ ] 时间轮
     - [ ] IO 兼容层
       - [x] io_uring (Linux)
-      - [ ] 同步 IO daemon (Linux)
-      - [ ] IOCP (Windows)
+      - [x] IOCP (Windows)
+      - [ ] 同步 IO daemon
 - [x] 测试框架
 - [ ] 并发
   - [ ] 任务组合原语

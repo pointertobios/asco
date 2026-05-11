@@ -98,9 +98,6 @@ if (LINUX)
         )
 
         set(DEPLIBS ${DEPLIBS} uring)
-    else()
-        set(ASCO_SOURCES ${ASCO_SOURCES}
-        )
     endif()
 
     set(DEPLIBS ${DEPLIBS} ncurses)
@@ -112,11 +109,14 @@ elseif (WIN32)
 
     if (ASCO_IOCP)
         set(ASCO_SOURCES ${ASCO_SOURCES}
+            core/os/windows/iocp.cpp
         )
-    else()
-        set(ASCO_SOURCES ${ASCO_SOURCES}
-        )
+
+        set(DEPLIBS ${DEPLIBS} Advapi32)
     endif()
+endif()
+
+if (NOT ASCO_IO_URING AND NOT ASCO_IOCP)
 endif()
 
 if (ASCO_IO_URING)
