@@ -43,9 +43,9 @@ void dynprio_scheduler::attach_execution(execution_id id) {
 }
 
 void dynprio_scheduler::detach_suspended_execution(execution_id id) {
-    if (m_suspended_executions.remove(id)) {
-        m_exec_ctx_map.remove(id);
-    }
+    m_suspended_executions.remove(id);
+    m_exec_ctx_map.remove(id);
+    m_preawake_executions.remove(id);
 }
 
 void dynprio_scheduler::awake_execution(execution_id id) noexcept {
