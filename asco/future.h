@@ -141,11 +141,16 @@ public:
     future(future &&rhs) noexcept
             : m_promise_storage_ptr{rhs.m_promise_storage_ptr}
             , m_this_handle{rhs.m_this_handle}
-            , m_e_ptr{rhs.m_e_ptr}
+            , m_e_ptr{std::move(rhs.m_e_ptr)}
             , m_result_completed{rhs.m_result_completed.load(std::memory_order::relaxed)}
             , m_caller_handle{rhs.m_caller_handle}
             , m_bound_lambda{std::move(rhs.m_bound_lambda)} {
         *m_promise_storage_ptr = this;
+        if constexpr (!output_void) {
+            if (m_result_completed.load(std::memory_order::acquire) && !m_e_ptr) {
+                new (m_value.get()) output_type{std::move(*rhs.m_value.get())};
+            }
+        }
     }
 
     future &operator=(future &&rhs) noexcept {

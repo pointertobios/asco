@@ -67,7 +67,7 @@ FetchContent_MakeAvailable(asco)
 
 - [x] 异步运行时
   - [x] Linux 完整支持
-  - [ ] Windows 完整支持
+  - [x] Windows 完整支持
   - [ ] MacOS 完整支持
   - [x] 核心运行时
     - [x] 线程池 runtime
@@ -123,9 +123,9 @@ FetchContent_MakeAvailable(asco)
 
 ## 编译器支持
 
-- Clang: 完整支持
+- Clang: 完整支持(Linux, Windows)
 - GCC: 不完全支持
-- MSVC: 仅支持 VS 2026 及以上版本的 clang 模式，并且避免使用 msbuild 构建
+- MSVC: 不支持
 
 ## 开发与贡献
 
@@ -139,6 +139,6 @@ FetchContent_MakeAvailable(asco)
 
 本项目使用 **MIT License** 发布.
 
-Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
+Copyright (C) 2025-Present pointer-to-bios <pointer-to-bios@outlook.com>
 
 完整的法律条款参见 [LICENSE](./LICENSE.md)。

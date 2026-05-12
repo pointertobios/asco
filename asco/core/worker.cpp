@@ -109,6 +109,7 @@ bool worker::run_once(std::stop_token &st) {
         if (!m_executor.execute(m_sexec_stack.back(), m_context_stack)) {
             auto &domain = *m_domain_stack.back();
             auto exec = m_sexec_stack.back().m_id;
+            m_coroutine_metas.remove(exec);
             domain.get_scheduler().detach_suspended_execution(exec);
             domain.detach_execution(exec);
         }
@@ -130,8 +131,8 @@ bool worker::fetch_task() {
         new (meta->pcancel_awake_token_storage->get()) awake_token{this, &m_execution_domain, meta->handle};
         meta->pcancel_awake_token_location->store(
             meta->pcancel_awake_token_storage->get(), std::memory_order::release);
-        m_execution_domain.attach_execution(handle, {}, meta->cancel_source);
         m_coroutine_metas.insert(handle, std::move(*meta));
+        m_execution_domain.attach_execution(handle, {}, meta->cancel_source);
         m_scheduler.attach_execution(handle);
         return true;
     }

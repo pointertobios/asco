@@ -1,7 +1,7 @@
 The MIT License (MIT)
 =====================
 
-Copyright © `2025` `pointer-to-bios <pointer-to-bios@outlook.com>`
+Copyright © `2025`-`Present` `pointer-to-bios <pointer-to-bios@outlook.com>`
 
 Permission is hereby granted, free of charge, to any person
 obtaining a copy of this software and associated documentation

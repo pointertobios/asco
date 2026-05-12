@@ -137,6 +137,9 @@ endif()
 set(COMPILE_OPTIONS
 )
 
+set(LINK_OPTIONS
+)
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
         -Wno-interference-size
@@ -165,6 +168,7 @@ target_include_directories(asco_core PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(asco_core PUBLIC ${DEPLIBS})
+target_link_options(asco_core PUBLIC ${LINK_OPTIONS})
 target_compile_definitions(asco_core PUBLIC ${MDEFS})
 target_compile_options(asco_core PUBLIC ${COMPILE_OPTIONS})
 target_precompile_headers(asco_core PUBLIC ${PRECOMPILE_HEADERS})
