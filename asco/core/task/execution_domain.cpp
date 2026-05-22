@@ -39,6 +39,14 @@ execution &execution::operator=(execution &&rhs) noexcept {
     return *this;
 }
 
+void scheduled_execution::remove_subdomain() noexcept {
+    m_domain.m_executions.get(m_id).value().remove_subdomain();
+}
+
+execution_domain *scheduled_execution::get_subdomain() const {
+    return m_domain.m_executions.get(m_id).value().subdomain;
+}
+
 void execution_domain::attach_execution(
     execution_id id, const std::span<cancel_source *> &parent_srcstack, cancel_source *cancel_src) {
     asco_assert(parent_srcstack.size() < util::compile_config::core::task::execution_domain_nest_max_depth);
@@ -63,7 +71,7 @@ scheduled_execution execution_domain::schedule_execution(execution_id id) {
     auto g = m_executions.get(id);
     asco_assert(g);
     g.value().state.store(execution_state::running, std::memory_order::release);
-    return {*this, id, &g.value()};
+    return {*this, id};
 }
 
 void execution_domain::suspend_execution(execution_id id) {

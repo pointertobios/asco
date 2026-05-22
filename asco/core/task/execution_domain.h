@@ -61,9 +61,9 @@ struct execution {
 struct scheduled_execution {
     execution_domain &m_domain;
     const execution_id m_id;
-    execution *m_exec;
 
-    execution_domain *get_subdomain() const { return m_exec->subdomain; }
+    void remove_subdomain() noexcept;
+    execution_domain *get_subdomain() const;
 };
 
 class execution_domain final {
@@ -71,6 +71,7 @@ class execution_domain final {
     friend class execution_domain_proxy;
     friend class asco::core::cancel_source;
     friend class asco::core::cancel_callback;
+    friend struct scheduled_execution;
 
 public:
     explicit execution_domain(scheduler &sched)

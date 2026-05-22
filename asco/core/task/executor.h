@@ -34,19 +34,18 @@ public:
     void push_handle(std::coroutine_handle<> handle);
     std::coroutine_handle<> pop_handle();
 
-    std::coroutine_handle<> current_coroutine() const;
+    std::coroutine_handle<> current_coroutine();
     execution_id current_execution() const;
-    bool is_base_coroutine(std::coroutine_handle<> handle) const;
+    bool is_base_coroutine(std::coroutine_handle<> handle);
 
-    std::span<cancel_source *> current_cancel_source_stack() const {
-        return m_execution ? m_execution->get_cancel_source_stack() : std::span<cancel_source *>{};
-    }
+    std::span<cancel_source *> current_cancel_source_stack();
     std::vector<cancel_token> &get_cancel_token_stack() { return m_current_cancel_token_stack; }
 
 private:
+    auto execution_guard() { return m_domain->m_executions.get(m_current_id); }
+
     execution_domain *m_domain{nullptr};
     execution_id m_current_id{};
-    execution *m_execution{nullptr};
     std::vector<cancel_token> m_current_cancel_token_stack;
 
     bool cancel_cleanup() noexcept;

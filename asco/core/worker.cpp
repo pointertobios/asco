@@ -87,7 +87,7 @@ bool worker::run_once(std::stop_token &st) {
             if (current_domain) {
                 if (current_domain->is_empty()) {  // 空子执行域协议：如果子执行域没有附加任何 execution
                                                    // 视为子执行域已经完成， 自动从父 execution 移除
-                    m_sexec_stack.back().m_exec->remove_subdomain();
+                    m_sexec_stack.back().remove_subdomain();
                     exit_stack();
                     return true;
                 } else {
