@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 cmake_minimum_required(VERSION 3.20)
-project(asco VERSION 0.1.0 LANGUAGES CXX)
+project(asco VERSION 0.3.1 LANGUAGES CXX)
 
 # Compiler and linker config
 
