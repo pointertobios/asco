@@ -72,7 +72,7 @@ jobs:
 
       - name: Test
         shell: bash
-        run: ctest --test-dir build --output-on-failure
+        run: ./build/tests/tests
 
       - name: Upload build artifacts
         if: always()

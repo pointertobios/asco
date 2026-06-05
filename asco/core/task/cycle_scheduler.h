@@ -35,6 +35,7 @@ class cycle_scheduler : public scheduler {
                 m_scheduler->m_active_count--;
                 m_scheduler->m_domain->suspend_execution(state.id);
             } else {
+                state.preawaken = false;
                 m_scheduler->m_domain->activate_execution(state.id);
             }
             state.suspend_now = false;
@@ -74,6 +75,7 @@ public:
                 asco_assert(!state.active);
                 state.detached = true;
                 state.id = execution_id{};
+                m_execution_index_map[p.second] = {execution_id{}, -1};
                 m_detached_count++;
                 break;
             }
@@ -84,6 +86,9 @@ public:
         for (auto &p : m_execution_index_map) {
             if (p.first == id) {
                 auto &state = m_executions[p.second];
+                if (state.detached) {
+                    break;
+                }
                 if (!state.active) {
                     state.suspend_now = false;
                     state.active = true;
@@ -92,7 +97,7 @@ public:
                 } else {
                     state.preawaken = true;
                 }
-                break;
+                return;
             }
         }
 
@@ -107,6 +112,9 @@ public:
         for (auto &p : m_execution_index_map) {
             if (p.first == id) {
                 auto &state = m_executions[p.second];
+                if (state.detached) {
+                    break;
+                }
                 if (state.preawaken) {
                     state.preawaken = false;
                     break;
