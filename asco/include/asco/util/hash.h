@@ -4,6 +4,8 @@
 #pragma once
 
 #include <array>
+#include <bit>
+#include <cmath>
 
 #include "asco/types/int.h"
 

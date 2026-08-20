@@ -56,12 +56,12 @@ private:
 
 #endif
 
-void [[ASCO_NORETURN]] panic(std::string_view msg, std::source_location sl = std::source_location::current());
+[[ASCO_NORETURN]] void panic(std::string_view msg, std::source_location sl = std::source_location::current());
 
-void [[ASCO_NORETURN]] panic(std::source_location sl = std::source_location::current()) { panic("", sl); }
+[[ASCO_NORETURN]] void panic(std::source_location sl = std::source_location::current()) { panic("", sl); }
 
 template<typename... Args>
-void [[ASCO_NORETURN]] panic(fmt::format_string<Args...> fmt, Args &&...args) {
+[[ASCO_NORETURN]] void panic(fmt::format_string<Args...> fmt, Args &&...args) {
     panic(std::vformat(fmt.get(), std::make_format_args(args...)), fmt.source_location());
 }
 

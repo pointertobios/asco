@@ -10,6 +10,7 @@
 #include "asco/co_invoke.h"
 #include "asco/concurrency/mpsc.h"
 #include "asco/core/blocking_worker.h"
+#include "asco/core/predecl.h"
 #include "asco/core/worker.h"
 #include "asco/util/rng.h"
 

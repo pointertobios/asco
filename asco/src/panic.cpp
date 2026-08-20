@@ -7,7 +7,7 @@
 
 namespace asco {
 
-void [[ASCO_NORETURN]] panic(std::string_view msg, std::source_location sl) {
+[[ASCO_NORETURN]] void panic(std::string_view msg, std::source_location sl) {
 #ifdef ASCO_DEBUG_ENABLED
     throw panicked{msg, sl};
 #endif
