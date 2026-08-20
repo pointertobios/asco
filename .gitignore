@@ -1,0 +1,13 @@
+/.cache
+/.idea
+/.vs
+/.vscode
+/out
+/build
+/build-*
+callgrind.out.*
+core.*
+book
+perf.data*
+out.*
+fg.svg
