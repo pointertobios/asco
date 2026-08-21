@@ -127,9 +127,9 @@ public:
     join_handle &operator=(const join_handle &) = delete;
 
     join_handle(join_handle &&rhs) noexcept
-            : m_this_coroutine{rhs.m_this_coroutine}
+            : m_this_coroutine{std::move(rhs.m_this_coroutine)}
             , m_task_block{std::move(rhs.m_task_block)} {
-        ASCO_ASSERT(!rhs.is_empty());
+        ASCO_ASSERT(!is_empty());
 
         rhs.m_this_coroutine = coroutine_handle{};
     }

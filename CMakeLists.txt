@@ -52,21 +52,15 @@ if(NOT WIN32)
 
 if (LIBCXX_COMPILES)
     set(USING_LIBCXX ON)
-    message(STATUS "C++ stdlib: LLVM libc++")
     set(CMAKE_REQUIRED_FLAGS "-stdlib=libc++")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-else()
-    message(STATUS "C++ stdlib: GNU libstdc++")
-    message(STATUS "LLVM libc++ is recommended")
 endif()
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-endif()
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 
 endif()
 
-if (UNIX AND NOT APPLE AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU"))
+if (USING_LIBCXX AND UNIX AND NOT APPLE AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU"))
     find_program(LD_LLD  NAMES ld.lld)
     find_program(LD_MOLD NAMES ld.mold)
 
@@ -130,7 +124,6 @@ export(
     TARGETS
         asco_core
         asco_main
-        asco_base
     NAMESPACE asco::
     FILE "${CMAKE_CURRENT_BINARY_DIR}/ascoTargets.cmake"
 )

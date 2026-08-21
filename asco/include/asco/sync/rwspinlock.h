@@ -11,13 +11,19 @@
 
 namespace asco::sync {
 
+namespace detail {
+
+struct state {
+    usize m_reader : (sizeof(usize) * 8 - 2);
+    bool m_write_willing : 1;
+    bool m_writing : 1;
+};
+
+};  // namespace detail
+
 template<typename = void, bool = false>
 class rwspinlock {
-    struct state {
-        usize m_reader : (sizeof(usize) - 2);
-        bool m_write_willing : 1;
-        bool m_writing : 1;
-    };
+    using state = detail::state;
 
 public:
     class write_guard final {

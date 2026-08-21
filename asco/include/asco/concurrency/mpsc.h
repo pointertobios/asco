@@ -3,9 +3,9 @@
 
 #pragma once
 
+#include <bit>
 #include <memory>
 #include <optional>
-#include <type_traits>
 #include <vector>
 
 #include "asco/assert.h"

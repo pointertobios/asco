@@ -25,7 +25,9 @@ public:
 
     join_set(core::runtime &rt) noexcept
             : m_runtime{rt} {
-        std::tie(m_rx, m_rx) = sync::mpsc<output_type>::channel();
+        auto [tx, rx] = sync::mpsc<output_type>::channel();
+        m_tx = std::move(tx);
+        m_rx = std::move(rx);
     }
 
     join_set(const join_set &) = delete;
@@ -87,7 +89,7 @@ public:
         while (m_task_count.fetch_sub(1, morder::acq_rel)) {
             co_await m_rx.recv();
         }
-        return res;
+        co_return res;
     }
 
 private:

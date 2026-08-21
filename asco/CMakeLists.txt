@@ -34,6 +34,7 @@ endif()
 
 if (LINUX)
     set(ASCO_SOURCES ${ASCO_SOURCES}
+        src/os/linux/terminal.cpp
         src/os/linux/thread.cpp
     )
 
@@ -47,6 +48,7 @@ if (LINUX)
     set(DEPLIBS ${DEPLIBS} ncurses)
 elseif (WIN32)
     set(ASCO_SOURCES ${ASCO_SOURCES}
+        src/os/windows/terminal.cpp
         src/os/windows/thread.cpp
     )
 
@@ -122,11 +124,6 @@ add_library(asco_main src/asco_main.cpp)
 target_link_libraries(asco_main PUBLIC asco_core)
 add_library(asco::main ALIAS asco_main)
 
-add_library(asco_base src/asco_main.cpp)
-target_link_libraries(asco_base PUBLIC asco_core)
-target_compile_definitions(asco_base PRIVATE __ASCORT__)
-add_library(asco::base ALIAS asco_base)
-
 option(ASCO_ENABLE_INSTALL "Enable install() rules for packaging" OFF)
 if(ASCO_ENABLE_INSTALL)
     include(GNUInstallDirs)
@@ -154,6 +151,6 @@ endif()
 # Test library
 
 add_library(asco_test src/test/test_main.cpp)
-target_link_libraries(asco_test PRIVATE asco::core asco::base)
+target_link_libraries(asco_test PRIVATE asco::core)
 target_compile_definitions(asco_test PUBLIC ASCO_TESTING)
 add_library(asco::test ALIAS asco_test)

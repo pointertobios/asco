@@ -6,8 +6,6 @@
 #include <format>
 #include <source_location>
 
-#include "asco/macros.h"
-
 namespace asco {
 
 namespace fmt {
@@ -46,7 +44,7 @@ public:
     std::string_view message() const { return m_msg; }
     std::source_location source_location() const { return m_sl; }
 
-    const char *what() const { return m_what.c_str(); }
+    [[nodiscard]] const char *what() const noexcept override { return m_what.c_str(); }
 
 private:
     std::string m_msg;

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <type_traits>
 #include <utility>
 
 #include "asco/future.h"
@@ -22,10 +23,10 @@ concept async_function = requires(Fn fn, Args... args) {
 
 template<typename... Args, async_function<Args...> Fn>
     requires(!std::is_function_v<Fn>)
-constexpr auto co_invoke(Fn &&fn, Args &&...args) {
+constexpr auto co_invoke(Fn &&fn, Args &&...args) noexcept(std::is_nothrow_invocable_v<Fn, Args...>) {
     if constexpr (std::is_rvalue_reference_v<decltype(fn)>) {
         using FnType = std::remove_cvref_t<Fn>;
-        auto fnp = types::erased::create<FnType>(std::forward<FnType>(fn));
+        types::erased fnp = types::erased::create<FnType>(std::forward<FnType>(fn));
         auto future_value = std::invoke(fnp.get<FnType>(), std::forward<Args>(args)...);
         future_value.bind_invocable(std::move(fnp));
         return future_value;
@@ -36,7 +37,7 @@ constexpr auto co_invoke(Fn &&fn, Args &&...args) {
 
 template<typename... Args, async_function<Args...> Fn>
     requires(std::is_function_v<Fn>)
-constexpr auto co_invoke(Fn &&fn, Args &&...args) {
+constexpr auto co_invoke(Fn &&fn, Args &&...args) noexcept(std::is_nothrow_invocable_v<Fn, Args...>) {
     return std::invoke(fn, std::forward<Args>(args)...);
 }
 

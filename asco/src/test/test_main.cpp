@@ -6,6 +6,7 @@
 #include <print>
 
 #include "asco/core/runtime.h"
+#include "asco/os/terminal.h"
 #include "asco/task/join_set.h"
 
 namespace asco::test {
