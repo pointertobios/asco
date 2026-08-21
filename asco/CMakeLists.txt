@@ -17,6 +17,7 @@ set(ASCO_SOURCES
     src/core/scheduler.cpp
     src/core/worker.cpp
     src/os/thread.cpp
+    src/sync/condition_variable.cpp
     src/panic.cpp
 )
 

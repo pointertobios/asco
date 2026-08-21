@@ -7,6 +7,8 @@
 
 namespace asco::this_task {
 
+core::runtime &host_runtime() { return core::worker::current().host_runtime(); }
+
 template<typename... Args>
 auto spawn(async_function<Args...> auto &&fn, Args &&...args) {
     return core::worker::current().host_runtime().spawn(

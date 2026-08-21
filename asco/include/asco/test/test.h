@@ -5,6 +5,56 @@
 
 #ifdef ASCO_TESTING
 
-namespace asco::test {};
+#    include <expected>
+#    include <string>
+#    include <variant>
+
+#    include "asco/future.h"
+
+namespace asco::test {
+
+using test_result = std::expected<void, std::string>;
+using test_function = std::function<future<test_result>()>;
+
+template<std::same_as<bool>... Args>
+consteval bool ignore_state(Args &&...args) {
+    return (args || ...);
+}
+
+bool add_test(std::string_view filename, std::string name, test_function fn, bool ignore);
+
+#    define ASCO_IGNORE_TEST true
+
+#    define ASCO_TEST(name, ...)                                                                       \
+        asco::future<asco::test::test_result> test_##name();                                           \
+        [[maybe_unused]]                                                                               \
+        bool test_##name##_registered =                                                                \
+            asco::test::add_test(__FILE__, #name, test_##name, asco::test::ignore_state(__VA_ARGS__)); \
+        asco::future<asco::test::test_result> test_##name()
+
+#    define ASCO_CHECK(expr, fmt, ...)                                                                 \
+        do {                                                                                           \
+            if (!(expr)) {                                                                             \
+                auto sl = std::source_location::current();                                             \
+                auto hint = std::format(fmt, ##__VA_ARGS__);                                           \
+                co_return std::unexpected{                                                             \
+                    std::format("{}\n  位于 {}:{}:{}", hint, sl.file_name(), sl.line(), sl.column())}; \
+            }                                                                                          \
+        } while (false)
+
+#    define ASCO_CHECK_WITH_FAILCALLBACK(callback, expr, fmt, ...)                                     \
+        do {                                                                                           \
+            if (!(expr)) {                                                                             \
+                callback();                                                                            \
+                auto sl = std::source_location::current();                                             \
+                auto hint = std::format(fmt, ##__VA_ARGS__);                                           \
+                co_return std::unexpected{                                                             \
+                    std::format("{}\n  位于 {}:{}:{}", hint, sl.file_name(), sl.line(), sl.column())}; \
+            }                                                                                          \
+        } while (false)
+
+#    define ASCO_SUCCESS() co_return std::expected<void, std::string>{};
+
+};  // namespace asco::test
 
 #endif
