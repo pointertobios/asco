@@ -28,7 +28,7 @@ private:
     task_receiver m_task_rx;
     concurrency::mpsc<usize>::sender m_acceptible_tx;
 
-    task_id m_this_task;
+    task_id m_this_task{};
 };
 
 };  // namespace asco::core

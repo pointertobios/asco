@@ -4,14 +4,15 @@
 #pragma once
 
 #include <cstddef>
+#include <type_traits>
 
 namespace asco::types {
 
 template<typename T>
 class raw_storage final {
 public:
-    raw_storage() = default;
-    ~raw_storage() = default;
+    raw_storage() noexcept = default;
+    ~raw_storage() noexcept = default;
 
     raw_storage(const raw_storage &) = delete;
     raw_storage &operator=(const raw_storage &) = delete;
@@ -24,7 +25,9 @@ public:
         return *new (std::launder(storage)) T{std::forward<Args>(args)...};
     }
 
-    void destroy() { std::launder(reinterpret_cast<T *>(storage))->~T(); }
+    void destroy() noexcept(std::is_nothrow_destructible_v<T>) {
+        std::launder(reinterpret_cast<T *>(storage))->~T();
+    }
 
     T *get() noexcept { return reinterpret_cast<T *>(storage); }
     const T *get() const noexcept { return reinterpret_cast<const T *>(storage); }

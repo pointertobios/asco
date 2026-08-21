@@ -25,7 +25,7 @@ template<typename... Args, async_function<Args...> Fn>
 constexpr auto co_invoke(Fn &&fn, Args &&...args) {
     if constexpr (std::is_rvalue_reference_v<decltype(fn)>) {
         using FnType = std::remove_cvref_t<Fn>;
-        auto fnp = types::erased::create(std::forward<FnType>(fn));
+        auto fnp = types::erased::create<FnType>(std::forward<FnType>(fn));
         auto future_value = std::invoke(fnp.get<FnType>(), std::forward<Args>(args)...);
         future_value.bind_invocable(std::move(fnp));
         return future_value;

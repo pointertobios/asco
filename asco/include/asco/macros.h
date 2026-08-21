@@ -6,10 +6,8 @@
 namespace asco {
 
 #ifdef _MSC_VER
-#    define ASCO_NORETURN msvc::noreturn
 #    define ASCO_NO_UNIQUE_ADDRESS msvc::no_unique_address
 #else
-#    define ASCO_NORETURN noreturn
 #    define ASCO_NO_UNIQUE_ADDRESS no_unique_address
 #endif
 

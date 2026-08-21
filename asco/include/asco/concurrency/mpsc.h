@@ -20,7 +20,7 @@ namespace asco::concurrency {
 template<concepts::non_void T>
 class mpsc {
     struct slot {
-        types::raw_storage<T> m_data;
+        types::raw_storage<T> m_data{};
         std::atomic_bool m_commited{false};
     };
 
@@ -107,8 +107,8 @@ public:
     }
 
     mpsc(usize size)
-            : m_capacity_mask{static_cast<usize>((1 << std::bit_width(size)) - 1)}
-            , m_queue(1 << std::bit_width(size)) {}
+            : m_capacity_mask{static_cast<usize>((1ull << std::bit_width(size)) - 1)}
+            , m_queue(1ull << std::bit_width(size)) {}
 
 private:
     usize mask(usize x) const noexcept { return x & m_capacity_mask; }

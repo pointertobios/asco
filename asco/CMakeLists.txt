@@ -16,6 +16,7 @@ set(ASCO_SOURCES
     src/core/runtime.cpp
     src/core/scheduler.cpp
     src/core/worker.cpp
+    src/os/thread.cpp
     src/panic.cpp
 )
 
@@ -76,11 +77,7 @@ set(COMPILE_OPTIONS
 set(LINK_OPTIONS
 )
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
-        -Wno-interference-size
-    )
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
         -Wall
         -Wextra
@@ -88,12 +85,21 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "
         -Werror
         -Wno-zero-length-array
     )
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
-        -ferror-limit=9999999
-    )
+    
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
+            -Wno-interference-size
+        )
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
+            -ferror-limit=9999999
+        )
+    endif()
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     set(COMPILE_OPTIONS ${COMPILE_OPTIONS}
+        /W4
+        /WX
         /utf-8
         /Zc:preprocessor
     )

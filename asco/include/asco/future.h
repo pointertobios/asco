@@ -31,8 +31,8 @@ private:
     struct promise_base {
         friend class future;
 
-        future *m_future;
-        coroutine_handle m_this_coroutine;
+        future *m_future{};
+        coroutine_handle m_this_coroutine{};
 
         ~promise_base() noexcept { m_this_coroutine.destroy(); }
 

@@ -22,7 +22,7 @@ public:
     static erased create(Args &&...args) noexcept(std::is_nothrow_constructible_v<T, Args...>) {
         auto obj = ::operator new(sizeof(T), std::align_val_t{alignof(T)});
         new (obj) T(std::forward<Args>(args)...);
-        return {alignof(T), obj, default_deleter<T>};
+        return {std::align_val_t{alignof(T)}, obj, default_deleter<T>};
     }
 
     static erased refer(auto &value) noexcept { return {ref{value}}; }

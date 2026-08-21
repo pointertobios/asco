@@ -7,16 +7,17 @@
 
 namespace asco {
 
-[[ASCO_NORETURN]] void panic(std::string_view msg, std::source_location sl) {
+[[noreturn]] void panic(std::string_view msg, std::source_location sl) {
 #ifdef ASCO_DEBUG_ENABLED
     throw panicked{msg, sl};
-#endif
+#else
     std::string msg_final;
     if (msg.size()) {
         msg_final = std::format(": {}", msg);
     }
     std::println(stderr, "Panicked at {}:{}:{}{}", sl.file_name(), sl.line(), sl.column(), msg_final);
     std::abort();
+#endif
 }
 
 };  // namespace asco
