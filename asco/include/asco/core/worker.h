@@ -80,17 +80,9 @@ public:
 
     bool operator==(const awake_token &rhs) const { return m_worker == rhs.m_worker && m_task == rhs.m_task; }
 
-    void suspend(std::coroutine_handle<> resume_coroutine) {
-        ASCO_ASSERT(*m_worker == worker::current());
+    void suspend(std::coroutine_handle<> resume_coroutine);
 
-        m_worker->set_suspend_now();
-        m_worker->set_next_resume(resume_coroutine);
-    }
-
-    void awake() {
-        m_worker->get_scheduler().awake(m_task);
-        m_worker->awake();
-    }
+    void awake();
 
 private:
     awake_token(worker *w, task_id t)

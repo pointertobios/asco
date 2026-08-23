@@ -108,10 +108,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
 endif()
 
 add_library(asco_core ${ASCO_SOURCES})
-target_include_directories(asco_core PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
+target_include_directories(asco_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(asco_core PUBLIC ${DEPLIBS})
 target_link_options(asco_core PUBLIC ${LINK_OPTIONS})
 target_compile_definitions(asco_core PUBLIC ${MDEFS})
@@ -123,33 +120,9 @@ add_library(asco_main src/asco_main.cpp)
 target_link_libraries(asco_main PUBLIC asco_core)
 add_library(asco::main ALIAS asco_main)
 
-option(ASCO_ENABLE_INSTALL "Enable install() rules for packaging" OFF)
-if(ASCO_ENABLE_INSTALL)
-    include(GNUInstallDirs)
-    # Install headers (public API) under include/
-    install(
-        DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/asco
-        FILES_MATCHING
-        PATTERN "*.h"
-    )
-
-    # Install targets and export them for find_package
-    install(TARGETS
-        asco_core
-        asco_main
-        asco_base
-        EXPORT ascoTargets
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
-endif()
-
 # Test library
 
 add_library(asco_test src/test/test_main.cpp)
-target_link_libraries(asco_test PRIVATE asco::core)
+target_link_libraries(asco_test PUBLIC asco::core)
 target_compile_definitions(asco_test PUBLIC ASCO_TESTING)
 add_library(asco::test ALIAS asco_test)

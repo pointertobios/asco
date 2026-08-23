@@ -20,30 +20,26 @@ condition_variable::~condition_variable() noexcept {
 }
 
 bool condition_variable::notify_one() noexcept {
-    std::vector<core::awake_token> av;
+    std::optional<core::awake_token> at;
     {
         auto g = m_suspend_lock.lock();
         if (auto tk = m_fast_awake_token.exchange(awake_token::none(), morder::acq_rel)) {
-            av.push_back(tk);
+            at = std::move(tk);
         } else {
             auto guard = condition_variable::s_parking_lot.read();
             if (auto v = guard->get(this)) {
                 if (!v->empty()) {
                     auto tk_ = v->back();
                     v->pop_back();
-                    av.push_back(tk_);
-                    return true;
+                    at = std::move(tk_);
                 }
             }
         }
     }
-    if (av.empty()) {
-        return false;
+    if (at.has_value()) {
+        at->awake();
     }
-    for (auto &tk : av) {
-        tk.awake();
-    }
-    return true;
+    return at.has_value();
 }
 
 usize condition_variable::notify_all() noexcept {

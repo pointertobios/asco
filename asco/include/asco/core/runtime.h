@@ -12,6 +12,7 @@
 #include "asco/core/blocking_worker.h"
 #include "asco/core/predecl.h"
 #include "asco/core/worker.h"
+#include "asco/sync/rwspinlock.h"
 #include "asco/util/rng.h"
 
 namespace asco::core {
@@ -58,8 +59,14 @@ public:
             x = w(util::rng());
         }
 
-        (void)m_senders[x].send(jh.get_task_item());
-        m_workers[x]->awake();
+        auto ta = jh.get_task_item();
+        auto &target_worker = *m_workers[x];
+
+        if (m_senders[x].send(try_move(ta))) {
+            target_worker.fetch_task();
+            (void)m_senders[x].send(try_move(ta));
+        }
+        target_worker.awake();
         return jh;
     }
 

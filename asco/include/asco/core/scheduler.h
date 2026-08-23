@@ -11,7 +11,7 @@
 
 #include "asco/concurrency/mpsc.h"
 #include "asco/container/hash_map.h"
-#include "asco/sync/rwspinlock.h"
+#include "asco/sync/spinlock.h"
 #include "asco/types/raw_storage.h"
 
 namespace asco::core {
@@ -50,7 +50,7 @@ private:
     task_id m_current_task;
 
     std::array<reschedule_slot, reschedule_slots_size> m_reschedule_slots;
-    sync::rwspinlock<std::deque<task>, true> m_queue;
+    sync::spinlock<std::deque<task>> m_queue;
     container::hash_map<task_id, task> m_suspended_tasks;
     container::hash_set<task_id> m_preawake;
 

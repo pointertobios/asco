@@ -9,7 +9,7 @@
 
 namespace asco::core {
 
-void scheduler::attach_task(const task &t) { m_queue.read()->push_back(t); }
+void scheduler::attach_task(const task &t) { m_queue.lock()->push_back(t); }
 
 std::optional<task> scheduler::next_task() {
     auto &[_, rx] = m_pending_awake;
@@ -25,13 +25,14 @@ std::optional<task> scheduler::next_task() {
             slot.available = false;
             auto res = *slot.m_task.get();
             slot.m_task.destroy();
+            m_current_task = res.m_id;
             return res;
         }
     }
 
     task res;
     {
-        auto g = m_queue.read();
+        auto g = m_queue.lock();
         if (g->empty()) {
             return std::nullopt;
         }
@@ -50,7 +51,7 @@ void scheduler::resched(task t) {
             return;
         }
     }
-    m_queue.read()->push_front(try_move(*m_reschedule_slots[0].m_task.get()));
+    m_queue.lock()->push_front(try_move(*m_reschedule_slots[0].m_task.get()));
     for (usize i{0}; i < reschedule_slots_size - 1; i++) {
         m_reschedule_slots[i].m_task.destroy();
         m_reschedule_slots[i].m_task.emplace(try_move(*m_reschedule_slots[i + 1].m_task.get()));
@@ -76,7 +77,7 @@ void scheduler::awake(task_id id) {
 bool scheduler::has_suspended() const { return !m_suspended_tasks.is_empty(); }
 
 task scheduler::steal() {
-    auto g = m_queue.write();
+    auto g = m_queue.lock();
     if (g->empty()) {
         return {};
     } else {
