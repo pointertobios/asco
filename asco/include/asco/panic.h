@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <format>
+#include <print>
 #include <source_location>
 
 namespace asco {
@@ -31,7 +31,7 @@ using format_string = format_string_type<std::type_identity_t<Args>...>;
 
 };  // namespace fmt
 
-#ifdef ASCO_DEBUG_ENABLED
+#ifdef ASCO_TESTING
 
 class panicked : public std::exception {
 public:
@@ -54,7 +54,19 @@ private:
 
 #endif
 
-[[noreturn]] void panic(std::string_view msg, std::source_location sl = std::source_location::current());
+[[noreturn]] inline void
+panic(std::string_view msg, std::source_location sl = std::source_location::current()) {
+#ifdef ASCO_TESTING
+    throw panicked{msg, sl};
+#else
+    std::string msg_final;
+    if (msg.size()) {
+        msg_final = std::format(": {}", msg);
+    }
+    std::println(stderr, "Panicked at {}:{}:{}{}", sl.file_name(), sl.line(), sl.column(), msg_final);
+    std::abort();
+#endif
+}
 
 [[noreturn]] inline void panic(std::source_location sl = std::source_location::current()) { panic("", sl); }
 

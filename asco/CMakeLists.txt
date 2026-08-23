@@ -18,7 +18,6 @@ set(ASCO_SOURCES
     src/core/worker.cpp
     src/os/thread.cpp
     src/sync/condition_variable.cpp
-    src/panic.cpp
 )
 
 set(MDEFS ASCO __ASCO__
