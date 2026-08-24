@@ -47,7 +47,7 @@ public:
 private:
     void awake_impl(task_id id);
 
-    task_id m_current_task;
+    task_id m_current_task{};
 
     std::array<reschedule_slot, reschedule_slots_size> m_reschedule_slots;
     sync::spinlock<std::deque<task>> m_queue;

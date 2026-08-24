@@ -62,7 +62,7 @@ public:
         auto ta = jh.get_task_item();
         auto &target_worker = *m_workers[x];
 
-        if (m_senders[x].send(try_move(ta))) {
+        if (!m_senders[x].send(try_move(ta))) {
             target_worker.fetch_task();
             (void)m_senders[x].send(try_move(ta));
         }

@@ -104,6 +104,7 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         /WX
         /utf-8
         /Zc:preprocessor
+        /Zc:lambda
     )
 endif()
 

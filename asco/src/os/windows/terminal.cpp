@@ -24,7 +24,7 @@ std::optional<terminal> terminal::get() {
     if (!h || h == INVALID_HANDLE_VALUE || !ok) {
         return std::nullopt;
     } else {
-        return terminal{}.with_extra({HANDLE{h}});
+        return terminal{}.with_extra(types::erased::create<HANDLE>(h));
     }
 }
 

@@ -60,12 +60,11 @@ int main() {
     core::runtime rt = core::runtime_config{}.multi_threaded().build();
     task::join_set<test::test_result_wrap> set{rt};
 
-    auto total = test::get_tests().size();
+    usize total = test::get_tests().size();
 
     for (auto &[namespace_name, name, fn, ignore] : test::get_tests()) {
-        set.spawn([namespace_name, name, fn = std::move(fn), ignore] -> future<test::test_result_wrap> {
+        set.spawn([&namespace_name, &name, &fn, ignore] -> future<test::test_result_wrap> {
             if (ignore) {
-                (void)co_await fn();
                 co_return {namespace_name, name, std::unexpected{"###ASCO_IGNORED###"}};
             }
             try {
@@ -81,8 +80,8 @@ int main() {
 
         std::unordered_map<std::string, std::vector<test_record>> stats_by_namespace;
 
-        std::size_t passed{0};
-        std::size_t ignored{0};
+        usize passed{0};
+        usize ignored{0};
         std::optional<decltype(set)::output_type> res;
         while ((res = co_await set)) {
             auto &[namespace_name, name, success] = *res;
@@ -107,8 +106,8 @@ int main() {
                 stats_by_namespace[namespace_name].push_back(test_record{state, message});
                 for (auto &[ns, records] : stats_by_namespace) {
                     std::print("{} ", ns);
-                    for (auto &[state, _] : records) {
-                        switch (state) {
+                    for (auto &[s, _] : records) {
+                        switch (s) {
                         case test_state::passed: {
                             std::print("\033[1;32m■\033[0m");
                         } break;
@@ -140,6 +139,6 @@ int main() {
 
         co_await set.join_all();
 
-        co_return passed + ignored - total;
+        co_return static_cast<int>(passed + ignored - total);
     });
 }
