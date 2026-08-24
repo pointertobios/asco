@@ -44,7 +44,7 @@ if (LINUX)
         set(DEPLIBS ${DEPLIBS} uring)
     endif()
 
-    set(DEPLIBS ${DEPLIBS} ncurses)
+    set(DEPLIBS ${DEPLIBS} atomic ncurses)
 elseif (WIN32)
     set(ASCO_SOURCES ${ASCO_SOURCES}
         src/os/windows/terminal.cpp
