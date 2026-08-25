@@ -4,6 +4,7 @@
 #pragma once
 
 #include <coroutine>
+#include <exception>
 #include <utility>
 
 #include "asco/assert.h"
@@ -38,7 +39,7 @@ private:
 
         std::suspend_always initial_suspend() noexcept { return {}; }
 
-        void unhandled_exception() noexcept { std::unreachable(); }
+        void unhandled_exception() noexcept { m_future->m_exception = std::current_exception(); }
 
         auto final_suspend() noexcept {
             struct final_awaitable {
@@ -130,6 +131,10 @@ public:
     T await_resume() {
         ASCO_ASSERT(!is_empty());
 
+        if (m_exception) {
+            std::rethrow_exception(m_exception);
+        }
+
         if constexpr (concepts::is_void<T>) {
             m_state = future_state::empty;
             return;
@@ -152,8 +157,10 @@ private:
     }
 
     promise_type *m_promise{nullptr};
-    [[ASCO_NO_UNIQUE_ADDRESS]] types::raw_storage<T> m_storage{};
+
     future_state m_state{future_state::empty};
+    [[ASCO_NO_UNIQUE_ADDRESS]] types::raw_storage<T> m_storage{};
+    std::exception_ptr m_exception{};
 
     coroutine_handle m_this_coroutine{};
     std::coroutine_handle<> m_waiter_coroutine{};

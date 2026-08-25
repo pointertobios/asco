@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <tuple>
-
 #include "asco/co_invoke.h"
 #include "asco/concepts.h"
 #include "asco/sync/mpsc.h"

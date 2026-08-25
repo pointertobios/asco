@@ -4,6 +4,7 @@
 #pragma once
 
 #include <coroutine>
+#include <exception>
 #include <memory>
 #include <utility>
 
@@ -31,6 +32,7 @@ public:
 private:
     struct task_block : public task_block_base {
         [[ASCO_NO_UNIQUE_ADDRESS]] types::raw_storage<T> m_storage{};
+        std::exception_ptr m_exception{};
 
         task_block(future_state state) noexcept
                 : task_block_base{state} {}
@@ -43,7 +45,7 @@ private:
 
         std::suspend_always initial_suspend() noexcept { return {}; }
 
-        void unhandled_exception() noexcept { std::unreachable(); }
+        void unhandled_exception() noexcept { m_task_block->m_exception = std::current_exception(); }
 
         auto final_suspend() noexcept {
             struct final_awaitable {
@@ -166,6 +168,10 @@ public:
 
     T await_resume() {
         ASCO_ASSERT(!is_empty());
+
+        if (auto e = m_task_block->m_exception) {
+            std::rethrow_exception(e);
+        }
 
         if constexpr (concepts::is_void<T>) {
             return;

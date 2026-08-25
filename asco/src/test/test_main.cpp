@@ -83,7 +83,9 @@ int main() {
         usize passed{0};
         usize ignored{0};
         std::optional<decltype(set)::output_type> res;
-        while ((res = co_await set)) {
+        auto i = total;
+        while (i--) {
+            auto res = co_await set;
             auto &[namespace_name, name, success] = *res;
             bool is_ignored = !success.has_value() && success.error() == "###ASCO_IGNORED###";
             std::string extra;

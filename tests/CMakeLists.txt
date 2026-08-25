@@ -6,3 +6,4 @@ add_executable(asco_unit_tests
 )
 
 target_link_libraries(asco_unit_tests PRIVATE asco::test)
+add_test(unit_tests asco_unit_tests)

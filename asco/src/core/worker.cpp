@@ -49,7 +49,7 @@ bool worker::initialize() {
 }
 
 bool worker::run_once(std::stop_token &st) {
-    while (!m_acceptible_tx.send(m_wid)) {}
+    while (!m_acceptible_tx.send(m_wid) && !st.stop_requested()) {}
 
     bool fetched_new_task = fetch_task();
     if (!fetched_new_task) {
