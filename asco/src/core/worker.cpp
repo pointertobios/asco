@@ -11,16 +11,10 @@
 namespace asco::core {
 
 bool worker::fetch_task() {
-    std::optional<task_item> new_task;
-    usize c = 0;
-
-    while ((new_task = m_task_rx.recv()).has_value()) {
+    auto new_task = m_task_rx.recv();
+    if (new_task.has_value()) {
         auto &[root_coroutine, task_block] = new_task.value();
         m_scheduler.attach_task(task{task_block->to_task_id(), root_coroutine});
-        c++;
-    }
-
-    if (c != 0) {
         return true;
     }
 
@@ -35,10 +29,8 @@ bool worker::fetch_task() {
     task t = steal_worker.get_scheduler().steal();
     if (t) {
         m_scheduler.attach_task(t);
-        c++;
     }
-
-    return c != 0;
+    return t || new_task.error() == concurrency::receive_failed::pending;
 }
 
 void worker::set_next_resume(std::coroutine_handle<> coroutine) { m_next_resume = coroutine; }

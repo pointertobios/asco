@@ -4,8 +4,8 @@
 #pragma once
 
 #include <bit>
+#include <expected>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include "asco/assert.h"
@@ -17,11 +17,23 @@
 
 namespace asco::concurrency {
 
+enum class receive_failed {
+    pending,
+    empty,
+};
+
+enum class slot_state {
+    empty,
+    occupying,
+    available,
+    tombstone,
+};
+
 template<concepts::non_void T>
 class mpsc {
     struct slot {
         types::raw_storage<T> m_data{};
-        std::atomic_bool m_commited{false};
+        std::atomic<slot_state> m_state{slot_state::empty};
     };
 
 public:
@@ -45,14 +57,26 @@ public:
         [[nodiscard]] bool send(try_move_t<T> value) noexcept(types::is_nothrow_try_movable_v<T>) {
             ASCO_ASSERT(is_valid());
 
-            if (mask(m_payload->m_tail.load(morder::acquire) + 1)
-                == mask(m_payload->m_head.load(morder::acquire))) {
-                return false;
+            usize location;
+            while (true) {
+                auto e = m_payload->m_tail.load(morder::acquire);
+                if (mask(e + 1) == mask(m_payload->m_head.load(morder::acquire))) {
+                    return false;
+                }
+                if (m_payload->m_tail.compare_exchange_weak(e, e + 1, morder::acq_rel, morder::relaxed)) {
+                    location = e;
+                    break;
+                }
             }
-            auto location = mask(m_payload->m_tail.fetch_add(1, morder::acq_rel));
-            auto &s = m_payload->m_queue[location];
+
+            auto &s = m_payload->m_queue[mask(location)];
+
+            for (auto e = slot_state::empty;
+                 !s.m_state.compare_exchange_weak(e, slot_state::occupying, morder::acq_rel, morder::relaxed);
+                 e = slot_state::empty) {}
+
             s.m_data.emplace(try_move(value));
-            s.m_commited.store(true, morder::release);
+            s.m_state.store(slot_state::available, morder::release);
             return true;
         }
 
@@ -80,18 +104,41 @@ public:
 
         bool is_valid() const noexcept { return m_payload != nullptr; }
 
-        [[nodiscard]] std::optional<T> recv() noexcept(types::is_nothrow_try_movable_v<T>) {
+        [[nodiscard]] std::expected<T, receive_failed> recv() noexcept(types::is_nothrow_try_movable_v<T>) {
             ASCO_ASSERT(is_valid());
 
-            auto location = mask(m_payload->m_head.load(morder::acquire));
-            auto &s = m_payload->m_queue[location];
-            if (!s.m_commited.load(morder::acquire)) {
-                return std::nullopt;
+            usize location;
+
+            while (true) {
+                location = m_payload->m_head.load(morder::acquire);
+
+                if (mask(location) == mask(m_payload->m_tail.load(morder::acquire))) {
+                    return std::unexpected{receive_failed::empty};
+                }
+
+                auto &s = m_payload->m_queue[mask(location)];
+                auto ss = s.m_state.load(morder::acquire);
+
+                if (ss != slot_state::tombstone) {
+                    if (ss != slot_state::available) {
+                        return std::unexpected{receive_failed::pending};
+                    }
+
+                    if (!s.m_state.compare_exchange_weak(ss, slot_state::tombstone)) {
+                        continue;
+                    }
+                }
+
+                if (m_payload->m_head.compare_exchange_weak(
+                        location, location + 1, morder::acq_rel, morder::relaxed)) {
+                    break;
+                }
             }
-            std::optional<T> res(try_move(*s.m_data.get()));
+
+            auto &s = m_payload->m_queue[mask(location)];
+            T res{try_move(*s.m_data.get())};
             s.m_data.destroy();
-            s.m_commited.store(false, morder::release);
-            m_payload->m_head.fetch_add(1, morder::release);
+            s.m_state.store(slot_state::empty, morder::release);
             return res;
         }
 
@@ -115,8 +162,8 @@ private:
 
     const usize m_capacity_mask;
     std::vector<slot> m_queue;
-    std::atomic<usize> m_tail;
-    std::atomic<usize> m_head;
+    std::atomic<usize> m_tail{0};
+    std::atomic<usize> m_head{0};
 };
 
 };  // namespace asco::concurrency

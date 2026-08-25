@@ -14,9 +14,13 @@ void scheduler::attach_task(const task &t) { m_queue.lock()->push_back(t); }
 std::optional<task> scheduler::next_task() {
     auto &[_, rx] = m_pending_awake;
     {
-        std::optional<task_id> t;
-        while ((t = rx.recv()).has_value()) {
-            awake_impl(t.value());
+        while (true) {
+            auto t = rx.recv();
+            if (t.has_value()) {
+                awake_impl(t.value());
+            } else if (t.error() != concurrency::receive_failed::pending) {
+                break;
+            }
         }
     }
 

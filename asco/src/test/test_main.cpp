@@ -19,8 +19,8 @@ struct test_info {
 };
 
 struct test_result_wrap {
-    std::string namespace_name;
-    std::string name;
+    std::string_view namespace_name;
+    std::string_view name;
     test_result result;
 };
 
@@ -78,7 +78,7 @@ int main() {
     return rt.block_on([&set, total] -> future<int> {
         auto terminal = os::terminal::get();
 
-        std::unordered_map<std::string, std::vector<test_record>> stats_by_namespace;
+        std::unordered_map<std::string_view, std::vector<test_record>> stats_by_namespace;
 
         usize passed{0};
         usize ignored{0};
