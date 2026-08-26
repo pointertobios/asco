@@ -100,9 +100,14 @@ enable_testing()
 
 # ASCO config
 
+option(ASCO_DEBUG_ENABLED "debug support" OFF)
 option(ASCO_IO_URING "io_uring support for linux" ON)
 option(ASCO_IOCP "IOCP support for windows" OFF)
 option(ASCO_PERF_ENABLED "ASCO Performance Recording" OFF)
+
+if (CMAKE_BUILD_TYPE MATCHES Debug OR CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
+    set(ASCO_DEBUG_ENABLED ON)
+endif()
 
 if (WIN32 AND ASCO_IO_URING)
     error("ASCO_IO_URING must be off on windows target.")

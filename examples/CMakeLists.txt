@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: MIT
 
 add_executable(base base.cpp)
-target_link_libraries(base PRIVATE asco::main)
+target_link_libraries(base PRIVATE asco::core asco::main)

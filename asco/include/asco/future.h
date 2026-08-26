@@ -18,6 +18,15 @@
 
 namespace asco {
 
+#ifdef ASCO_DEBUG_ENABLED
+namespace detail {
+
+void future_trace_start(std::source_location sl);
+void future_trace_end();
+
+};  // namespace detail
+#endif
+
 template<typename T = void>
 class [[nodiscard("A future<T> must always be co_await'ed once")]] future final {
 public:
@@ -34,6 +43,10 @@ private:
 
         future *m_future{};
         coroutine_handle m_this_coroutine{};
+
+#ifdef ASCO_DEBUG_ENABLED
+        std::source_location m_location;
+#endif
 
         ~promise_base() noexcept { m_this_coroutine.destroy(); }
 
@@ -80,7 +93,10 @@ private:
 
 public:
     struct promise_type : public promise_base_type {
-        future get_return_object() noexcept {
+        future get_return_object(std::source_location sl = std::source_location::current()) noexcept {
+#ifdef ASCO_DEBUG_ENABLED
+            promise_base::m_location = sl;
+#endif
             promise_base::m_this_coroutine = coroutine_handle::from_promise(*this);
             return future{this, promise_base::m_this_coroutine};
         }
@@ -124,12 +140,20 @@ public:
     auto await_suspend(std::coroutine_handle<> waiter) noexcept {
         ASCO_ASSERT(!is_empty());
 
+#ifdef ASCO_DEBUG_ENABLED
+        detail::future_trace_start(m_promise->m_location);
+#endif
+
         m_waiter_coroutine = waiter;
         return m_this_coroutine;
     }
 
     T await_resume() {
         ASCO_ASSERT(!is_empty());
+
+#ifdef ASCO_DEBUG_ENABLED
+        detail::future_trace_end();
+#endif
 
         if (m_exception) {
             std::rethrow_exception(m_exception);

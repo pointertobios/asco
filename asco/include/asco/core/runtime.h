@@ -15,6 +15,10 @@
 #include "asco/sync/rwspinlock.h"
 #include "asco/util/rng.h"
 
+#ifdef ASCO_DEBUG_ENABLED
+#    include "asco/debug/debug_host.h"
+#endif
+
 namespace asco::core {
 
 class runtime;
@@ -46,6 +50,10 @@ public:
 
     usize worker_count() const { return m_workers.size(); }
     worker &get_worker(usize wid) { return *m_workers[wid]; }
+
+#ifdef ASCO_DEBUG_ENABLED
+    debug::debug_host &get_debug_host() const { return *m_debug_host; }
+#endif
 
     template<typename... Args>
     auto spawn(async_function<Args...> auto &&fn, Args &&...args) {
@@ -158,6 +166,10 @@ private:
     sync::rwspinlock<std::vector<task_sender>, true> m_blocking_senders{};
     concurrency::mpsc<usize>::receiver m_acceptible_blocking_worker_rx;
     concurrency::mpsc<usize>::sender m_acceptible_blocking_worker_tx;
+
+#ifdef ASCO_DEBUG_ENABLED
+    std::unique_ptr<debug::debug_host> m_debug_host{debug::debug_host::create()};
+#endif
 };
 
 };  // namespace asco::core

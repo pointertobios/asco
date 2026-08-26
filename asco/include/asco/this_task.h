@@ -7,7 +7,11 @@
 
 namespace asco::this_task {
 
-inline core::runtime &host_runtime() { return core::worker::current().host_runtime(); }
+inline auto &worker() { return core::worker::current(); }
+
+inline auto &host_runtime() { return core::worker::current().host_runtime(); }
+
+inline auto id() { return core::worker::current().this_task_id(); }
 
 template<typename... Args>
 auto spawn(async_function<Args...> auto &&fn, Args &&...args) {

@@ -32,6 +32,8 @@ public:
 
     usize id() const { return m_wid; }
 
+    task_id this_task_id() const { return m_this_task; }
+
     runtime &host_runtime() const { return *m_host_runtime; }
 
     scheduler &get_scheduler() { return m_scheduler; }

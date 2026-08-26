@@ -32,6 +32,10 @@ runtime::runtime(runtime_config config)
         : m_multi_threaded{config.m_multi_thread}
         , m_blocking_pool_start{config.m_concurrency}
         , m_worker_id_gen{config.m_concurrency} {
+#ifdef ASCO_DEBUG_ENABLED
+    m_debug_host->start();
+#endif
+
     auto [acceptible_tx, acceptible_rx] = concurrency::mpsc<usize>::queue();
     m_acceptible_worker_rx = std::move(acceptible_rx);
     for (usize i : std::views::iota((usize)0, config.m_concurrency)) {
@@ -57,6 +61,10 @@ runtime::~runtime() {
     for (auto &w : *m_blocking_workers.read()) {
         w->join();
     }
+
+#ifdef ASCO_DEBUG_ENABLED
+    m_debug_host->join();
+#endif
 }
 
 void runtime::main_loop() {

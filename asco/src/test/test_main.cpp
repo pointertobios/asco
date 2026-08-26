@@ -51,6 +51,7 @@ enum class test_state {
 
 struct test_record {
     test_state state;
+    std::string_view name;
     std::string message;
 };
 
@@ -82,7 +83,6 @@ int main() {
 
         usize passed{0};
         usize ignored{0};
-        std::optional<decltype(set)::output_type> res;
         auto i = total;
         while (i--) {
             auto res = co_await set;
@@ -96,19 +96,19 @@ int main() {
             } else {
                 passed++;
             }
-            auto state = success.has_value() ? test_state::passed
-                                             : (is_ignored ? test_state::ignored : test_state::failed);
-            auto result = success.has_value() ? "通过" : (is_ignored ? "忽略" : "失败");
             auto message = std::format("{}::{}{}", namespace_name, name, extra);
             if (!terminal) {
+                auto result = success.has_value() ? "通过" : (is_ignored ? "忽略" : "失败");
                 std::println("[{}] {}", result, message);
             } else {
+                auto state = success.has_value() ? test_state::passed
+                                                 : (is_ignored ? test_state::ignored : test_state::failed);
                 auto cover_lines = stats_by_namespace.size();
                 std::print("\033[{}A", cover_lines);
-                stats_by_namespace[namespace_name].push_back(test_record{state, message});
+                stats_by_namespace[namespace_name].push_back(test_record{state, name, message});
                 for (auto &[ns, records] : stats_by_namespace) {
                     std::print("{} ", ns);
-                    for (auto &[s, _] : records) {
+                    for (auto &[s, _, __] : records) {
                         switch (s) {
                         case test_state::passed: {
                             std::print("\033[1;32m■\033[0m");
@@ -121,23 +121,24 @@ int main() {
                         } break;
                         }
                     }
-                    std::print("\033[0K");
-                    std::println();
+                    std::println("\033[0K");
+                }
+            }
+        }
+
+        if (terminal) {
+            for (auto &[ns, records] : stats_by_namespace) {
+                for (auto &[state, name, message] : records) {
+                    if (state == test_state::failed) {
+                        std::println("[\033[1;31m失败\033[0m] {}", message);
+                    } else if (state == test_state::ignored) {
+                        std::println("[\033[1;33m忽略\033[0m] {}::{}", ns, name);
+                    }
                 }
             }
         }
 
         std::println("测试结果：{} 通过，{} 失败，{} 忽略", passed, total - passed - ignored, ignored);
-
-        if (terminal) {
-            for (auto &[ns, records] : stats_by_namespace) {
-                for (auto &[state, message] : records) {
-                    if (state == test_state::failed) {
-                        std::println("[\033[1;31m失败\033[0m] {}", message);
-                    }
-                }
-            }
-        }
 
         co_await set.join_all();
 

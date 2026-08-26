@@ -14,28 +14,53 @@ function(asco_generate_pch out_var)
         message(FATAL_ERROR "asco_generate_pch: OUTPUT is required")
     endif()
 
+    get_filename_component(_include_dir_abs "${ARG_INCLUDE_DIR}" ABSOLUTE)
+    file(TO_CMAKE_PATH "${_include_dir_abs}" _include_dir_abs)
+
     set(_excludes)
     foreach(_exclude IN LISTS ARG_EXCLUDE)
-        if(NOT IS_ABSOLUTE "${_exclude}")
-            set(_exclude "${ARG_INCLUDE_DIR}/${_exclude}")
-        endif()
-        string(REPLACE "\\" "/" _exclude "${_exclude}")
-        list(APPEND _excludes "${_exclude}")
+        get_filename_component(_exclude_abs "${_exclude}" ABSOLUTE
+            BASE_DIR "${_include_dir_abs}")
+        file(TO_CMAKE_PATH "${_exclude_abs}" _exclude_abs)
+        list(APPEND _excludes "${_exclude_abs}")
     endforeach()
 
     file(GLOB_RECURSE _headers CONFIGURE_DEPENDS
-        "${ARG_INCLUDE_DIR}/*.h"
-        "${ARG_INCLUDE_DIR}/*.hpp"
+        "${_include_dir_abs}/*.h"
+        "${_include_dir_abs}/*.hpp"
     )
 
     set(_lines)
     foreach(_header IN LISTS _headers)
-        string(REPLACE "\\" "/" _header_abs "${_header}")
-        if("${_header_abs}" IN_LIST _excludes)
+        file(TO_CMAKE_PATH "${_header}" _header_abs)
+        set(_excluded OFF)
+        foreach(_exclude IN LISTS _excludes)
+            if(_header_abs STREQUAL _exclude)
+                set(_excluded ON)
+                break()
+            endif()
+
+            string(LENGTH "${_exclude}" _exclude_length)
+            string(LENGTH "${_header_abs}" _header_length)
+            if(_exclude_length GREATER _header_length)
+                continue()
+            endif()
+            string(SUBSTRING "${_header_abs}" 0 ${_exclude_length}
+                _header_prefix)
+            if(_header_prefix STREQUAL _exclude)
+                string(SUBSTRING "${_header_abs}" ${_exclude_length} -1
+                    _header_suffix)
+                if(_header_suffix MATCHES "^/")
+                    set(_excluded ON)
+                    break()
+                endif()
+            endif()
+        endforeach()
+        if(_excluded)
             continue()
         endif()
-        file(RELATIVE_PATH _relative "${ARG_INCLUDE_DIR}" "${_header}")
-        string(REPLACE "\\" "/" _relative "${_relative}")
+        file(RELATIVE_PATH _relative "${_include_dir_abs}" "${_header_abs}")
+        file(TO_CMAKE_PATH "${_relative}" _relative)
         list(APPEND _lines "#include <${_relative}>")
     endforeach()
 

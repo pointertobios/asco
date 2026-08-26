@@ -3,12 +3,28 @@
 
 include(${PROJECT_SOURCE_DIR}/cmake/GeneratePch.cmake)
 
-asco_generate_pch(PRECOMPILE_HEADERS
+asco_generate_pch(PRECOMPILE_HEADERS_COMMON
     INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include
     EXCLUDE
-        test/test.h
+        asco/test
+        asco/debug
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pch.h
 )
+
+asco_generate_pch(PRECOMPILE_HEADERS_TEST
+    INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/test
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pch_test.h
+)
+
+asco_generate_pch(PRECOMPILE_HEADERS_DEBUG
+    INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/debug
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/pch_debug.h
+)
+
+set(PRECOMPILE_HEADERS ${PRECOMPILE_HEADERS_COMMON})
+if (ASCO_DEBUG_ENABLED)
+    set(PRECOMPILE_HEADERS ${PRECOMPILE_HEADERS} ${PRECOMPILE_HEADERS_DEBUG})
+endif()
 
 set(ASCO_SOURCES
     src/core/blocking_worker.cpp
@@ -19,11 +35,17 @@ set(ASCO_SOURCES
     src/os/thread.cpp
     src/sync/condition_variable.cpp
 )
+if (ASCO_DEBUG_ENABLED)
+    set(ASCO_SOURCES ${ASCO_SOURCES}
+        src/debug/debug_host.cpp
+        src/future.cpp
+    )
+endif()
 
-set(MDEFS ASCO __ASCO__
-    $<$<CONFIG:Debug>:ASCO_DEBUG_ENABLED>
-    $<$<CONFIG:RelWithDebInfo>:ASCO_DEBUG_ENABLED>
-)
+set(MDEFS ASCO __ASCO__)
+if (ASCO_DEBUG_ENABLED)
+    set(MDEFS ${MDEFS} ASCO_DEBUG_ENABLED)
+endif()
 
 set(DEPLIBS)
 
@@ -126,4 +148,5 @@ add_library(asco::main ALIAS asco_main)
 add_library(asco_test src/test/test_main.cpp)
 target_link_libraries(asco_test PUBLIC asco::core)
 target_compile_definitions(asco_test PUBLIC ASCO_TESTING)
+target_precompile_headers(asco_test PUBLIC ${PRECOMPILE_HEADERS_TEST})
 add_library(asco::test ALIAS asco_test)
