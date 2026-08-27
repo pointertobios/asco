@@ -35,7 +35,7 @@ bool add_test(std::string_view filename, std::string name, test_function fn, boo
         do {                                                                                           \
             if (!(expr)) {                                                                             \
                 auto sl = std::source_location::current();                                             \
-                auto hint = std::format(fmt, ##__VA_ARGS__);                                           \
+                auto hint = std::format(fmt __VA_OPT__(, ) __VA_ARGS__);                               \
                 co_return std::unexpected{                                                             \
                     std::format("{}\n  位于 {}:{}:{}", hint, sl.file_name(), sl.line(), sl.column())}; \
             }                                                                                          \
@@ -46,7 +46,7 @@ bool add_test(std::string_view filename, std::string name, test_function fn, boo
             if (!(expr)) {                                                                             \
                 callback();                                                                            \
                 auto sl = std::source_location::current();                                             \
-                auto hint = std::format(fmt, ##__VA_ARGS__);                                           \
+                auto hint = std::format(fmt __VA_OPT__(, ) __VA_ARGS__);                               \
                 co_return std::unexpected{                                                             \
                     std::format("{}\n  位于 {}:{}:{}", hint, sl.file_name(), sl.line(), sl.column())}; \
             }                                                                                          \
