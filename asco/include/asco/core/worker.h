@@ -19,7 +19,7 @@ class worker final : public daemon {
 
 public:
     worker(runtime *rt, usize wid, task_receiver &&task_rx, concurrency::mpsc<usize>::sender &&acceptible_tx)
-            : daemon{std::format("jg::w{}", wid)}
+            : daemon{std::format("asco::w{}", wid)}
             , m_host_runtime{rt}
             , m_wid{wid}
             , m_task_rx{std::move(task_rx)}

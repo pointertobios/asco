@@ -9,12 +9,14 @@
 namespace asco::debug {
 
 debug_host::debug_host()
-        : m_is_client{false} {
+        : daemon{"asco::dbhost"}
+        , m_is_client{false} {
     std::tie(m_cmd_tx, m_cmd_rx) = concurrency::mpsc<command>::queue();
 }
 
 debug_host::debug_host(client_mode_tag)
-        : m_is_client{true} {}
+        : daemon{"asco::dbhost"}
+        , m_is_client{true} {}
 
 std::unique_ptr<debug_host> debug_host::create() { return std::make_unique<debug_host>(); }
 
