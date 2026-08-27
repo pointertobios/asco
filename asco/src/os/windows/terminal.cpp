@@ -37,7 +37,7 @@ usize terminal::width() const {
     CONSOLE_SCREEN_BUFFER_INFO info{};
     BOOL ok = GetConsoleScreenBufferInfo(h, &info);
     if (!ok) {
-        panic("jungle::os::terminal: 获取终端宽度失败");
+        panic("获取终端宽度失败");
     }
     return info.srWindow.Right - info.srWindow.Left + 1;
 }
@@ -47,7 +47,7 @@ usize terminal::height() const {
     CONSOLE_SCREEN_BUFFER_INFO info{};
     BOOL ok = GetConsoleScreenBufferInfo(h, &info);
     if (!ok) {
-        panic("jungle::os::terminal: 获取终端高度失败");
+        panic("获取终端高度失败");
     }
     return info.srWindow.Bottom - info.srWindow.Top + 1;
 }

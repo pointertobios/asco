@@ -8,7 +8,7 @@
 namespace asco::core {
 
 daemon::daemon()
-        : m_name{"jg::daemon"} {
+        : m_name{"asco::daemon"} {
     m_construct_sem.release();
 }
 
