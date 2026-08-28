@@ -4,6 +4,7 @@
 #pragma once
 
 #include <memory>
+#include <ranges>
 #include <thread>
 
 #include "asco/assert.h"
@@ -63,18 +64,24 @@ public:
         if (auto wid = m_acceptible_worker_rx.recv(); wid.has_value()) {
             x = wid.value();
         } else {
-            thread_local std::uniform_int_distribution<usize> w{0, m_workers.size() - 1};
+            thread_local std::uniform_int_distribution<usize> w{0, m_blocking_pool_start - 1};
             x = w(util::rng());
         }
 
         auto ta = jh.get_task_item();
-        auto &target_worker = *m_workers[x];
 
-        if (!m_senders[x].send(try_move(ta))) {
-            target_worker.fetch_task();
-            (void)m_senders[x].send(try_move(ta));
+        if (m_multi_threaded) {
+            while (!m_senders[x].send(try_move(ta))) {
+                x = (x + 1) % m_blocking_pool_start;
+            }
+        } else {
+            if (!m_senders[x].send(try_move(ta))) {
+                m_workers[x]->fetch_task();
+                (void)m_senders[x].send(try_move(ta));
+            }
         }
-        target_worker.awake();
+        m_workers[x]->awake();
+
         return jh;
     }
 
@@ -100,25 +107,32 @@ public:
         auto jh = blocking_task_coroutine(std::forward<decltype(fn)>(fn), std::forward<Args>(args)...);
 
         usize x;
-        if (auto wid = m_acceptible_blocking_worker_rx.recv(); wid.has_value()) {
-            x = wid.value();
-        } else {
-            auto [tx, rx] = concurrency::mpsc<task_item>::queue();
-            m_blocking_senders.write()->emplace_back(std::move(tx));
-            auto atx = m_acceptible_blocking_worker_tx;
 
-            auto g = m_blocking_workers.write();
-            x = m_worker_id_gen++;
-            auto &w =
-                g->emplace_back(std::make_unique<blocking_worker>(this, x, std::move(rx), std::move(atx)));
-            { auto _ = std::move(g); }
+        while (true) {
+            auto wid = m_acceptible_blocking_worker_rx.recv();
+            if (wid.has_value()) {
+                x = wid.value();
+                break;
+            } else if (wid.error() == concurrency::receive_failed::empty) {
+                auto [tx, rx] = concurrency::mpsc<task_item>::queue();
+                m_blocking_senders.write()->emplace_back(std::move(tx));
+                auto atx = m_acceptible_blocking_worker_tx;
 
-            w->start();
+                auto g = m_blocking_workers.write();
+                x = m_worker_id_gen++;
+                auto &w = g->emplace_back(
+                    std::make_unique<blocking_worker>(this, x, std::move(rx), std::move(atx)));
+                { auto _ = std::move(g); }
+
+                w->start();
+            }
         }
         x -= m_blocking_pool_start;
 
         (void)m_blocking_senders.read()->at(x).send(jh.get_task_item());
         m_blocking_workers.read()->at(x)->awake();
+
+        return jh;
     }
 
     void main_loop();

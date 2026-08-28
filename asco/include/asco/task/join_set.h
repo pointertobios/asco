@@ -78,18 +78,6 @@ public:
         co_return res;
     }
 
-    future<usize> join_all()
-        requires(concepts::is_void<output_type>)
-    {
-        m_rx.stop();
-
-        usize res = m_task_count.load(morder::acquire);
-        while (m_task_count.fetch_sub(1, morder::acq_rel)) {
-            co_await m_rx.recv();
-        }
-        co_return res;
-    }
-
 private:
     core::runtime &m_runtime;
     sync::mpsc<mpsc_element_type>::sender m_tx{};

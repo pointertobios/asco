@@ -164,6 +164,7 @@ public:
                 e, future_state::awaited, morder::acq_rel, morder::relaxed)) {
             awake_token.suspend(waiter_coroutine);
         }
+        // 原子交换失败时 state 一定是 complete ，无需挂起直接直接继续
     }
 
     T await_resume() {

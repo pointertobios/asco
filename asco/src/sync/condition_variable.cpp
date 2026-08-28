@@ -11,7 +11,7 @@ namespace asco::sync {
 
 condition_variable::condition_variable() noexcept {
     auto guard = condition_variable::s_parking_lot.write();
-    guard->emplace(this, std::vector<awake_token>{});
+    guard->emplace(this);
 }
 
 condition_variable::~condition_variable() noexcept {
@@ -27,12 +27,10 @@ bool condition_variable::notify_one() noexcept {
             at = std::move(tk);
         } else {
             auto guard = condition_variable::s_parking_lot.read();
-            if (auto v = guard->get(this)) {
-                if (!v->empty()) {
-                    auto tk_ = v->back();
-                    v->pop_back();
-                    at = std::move(tk_);
-                }
+            if (auto v = guard->get(this); !v->empty()) {
+                auto tk_ = v->back();
+                v->pop_back();
+                at = std::move(tk_);
             }
         }
     }

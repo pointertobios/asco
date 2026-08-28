@@ -79,20 +79,11 @@ public:
 
         ~read_guard() noexcept {
             if (!m_rwspinlock) {
+                m_rwspinlock = nullptr;
                 return;
             }
 
-            auto &s = m_rwspinlock->m_state;
-            while (true) {
-                state e = s.load(morder::acquire);
-                state i = e;
-                i.m_reader -= 1;
-                if (s.compare_exchange_weak(
-                        e, state{e.m_reader - 1, e.m_write_willing, e.m_writing}, morder::acq_rel,
-                        morder::relaxed)) {
-                    break;
-                }
-            }
+            release();
         }
 
         read_guard(const read_guard &) = delete;
@@ -113,7 +104,7 @@ public:
 
         operator bool() const noexcept { return m_rwspinlock != nullptr; }
 
-        write_guard upgrade() noexcept {
+        write_guard upgrade() && noexcept {
             if (!m_rwspinlock) {
                 return write_guard{};
             }
@@ -130,13 +121,29 @@ public:
                 }
             }
             s.store(state{0, true, true}, morder::acq_rel);
-            m_rwspinlock = nullptr;
+
+            release();
+
             return write_guard{m_rwspinlock};
         }
 
     private:
         read_guard(rwspinlock *p) noexcept
                 : m_rwspinlock{p} {}
+
+        void release() {
+            auto &s = m_rwspinlock->m_state;
+            while (true) {
+                state e = s.load(morder::acquire);
+                state i = e;
+                i.m_reader -= 1;
+                if (s.compare_exchange_weak(
+                        e, state{e.m_reader - 1, e.m_write_willing, e.m_writing}, morder::acq_rel,
+                        morder::relaxed)) {
+                    break;
+                }
+            }
+        }
 
         rwspinlock *m_rwspinlock{nullptr};
     };

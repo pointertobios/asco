@@ -13,6 +13,10 @@ using try_move_t = std::conditional_t<
     std::conditional_t<std::is_copy_constructible_v<T> && !std::is_fundamental_v<T>, const T &, T>>;
 
 template<typename T>
+inline constexpr bool is_try_movable_v =
+    std::is_fundamental_v<T> || std::is_copy_constructible_v<T> || std::is_move_constructible_v<T>;
+
+template<typename T>
 inline try_move_t<std::remove_cvref_t<T>> try_move(T &&t) {
     if constexpr (std::is_move_constructible_v<T> && !std::is_fundamental_v<T>) {
         return std::move(t);

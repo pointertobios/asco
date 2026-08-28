@@ -46,7 +46,7 @@ class condition_variable {
                 auto guard = condition_variable::s_parking_lot.read();
                 guard->get(&m_cv)->push_back(tk);
             }
-            return false;
+            return true;
         }
 
         std::conditional_t<std::is_void_v<Fn>, void, bool> await_resume() const noexcept {

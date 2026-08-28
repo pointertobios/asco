@@ -131,7 +131,8 @@ public:
         friend class hash_map;
 
         using mut_value_type = types::fuck_void_or_else<V, detail::pair_ref<K, types::fuck_void<V>>, K>;
-        using const_value_type = types::fuck_void_or_else<V, detail::pair_ref_const<K, types::fuck_void<V>>, K>;
+        using const_value_type =
+            types::fuck_void_or_else<V, detail::pair_ref_const<K, types::fuck_void<V>>, K>;
 
     public:
         using difference_type = isize;
@@ -151,7 +152,7 @@ public:
             ASCO_ASSERT(validative_check() && end_check());
 
             if (m_cache_valid) {
-                m_cache.destroy();
+                return *m_cache.get();
             }
             auto &sl = m_map->m_slots.at(m_index.value());
             if constexpr (std::is_void_v<V>) {
@@ -168,8 +169,10 @@ public:
 
             m_index.value() += 1;
             m_counter += 1;
-
-            m_cache_valid = false;
+            if (m_cache_valid) {
+                m_cache.destroy();
+                m_cache_valid = false;
+            }
             next_filled();
             return *this;
         }
@@ -178,7 +181,7 @@ public:
             ASCO_ASSERT(validative_check() && end_check());
 
             iterator res = *this;
-            (*this)++;
+            ++(*this);
             return res;
         }
 
@@ -305,7 +308,8 @@ public:
     class iterator_const {
         friend class hash_map;
 
-        using stored_value_type = types::fuck_void_or_else<V, detail::pair_ref_const<K, types::fuck_void<V>>, K>;
+        using stored_value_type =
+            types::fuck_void_or_else<V, detail::pair_ref_const<K, types::fuck_void<V>>, K>;
 
     public:
         using difference_type = isize;
@@ -325,7 +329,7 @@ public:
             ASCO_ASSERT(validative_check() && end_check());
 
             if (m_cache_valid) {
-                m_cache.destroy();
+                return *m_cache.get();
             }
             auto &sl = m_map->m_slots.at(m_index.value());
             if constexpr (std::is_void_v<V>) {
@@ -342,7 +346,10 @@ public:
 
             m_index.value() += 1;
             m_counter += 1;
-            m_cache_valid = false;
+            if (m_cache_valid) {
+                m_cache.destroy();
+                m_cache_valid = false;
+            }
             next_filled();
             return *this;
         }
@@ -351,7 +358,7 @@ public:
             ASCO_ASSERT(validative_check() && end_check());
 
             iterator_const res = *this;
-            (*this)++;
+            ++(*this);
             return res;
         }
 
@@ -573,7 +580,9 @@ public:
 
     std::optional<types::fuck_void<V>> remove(const K &key) noexcept(
         types::is_nothrow_try_movable_v<types::fuck_void<V>>
-        && std::is_nothrow_destructible_v<types::fuck_void<V>>) {
+        && std::is_nothrow_destructible_v<types::fuck_void<V>>)
+        requires(types::is_try_movable_v<types::fuck_void<V>>)
+    {
         usize size = m_slots.size();
         usize index = m_hasher(key);
         usize step = probe_step(index, size);
@@ -592,7 +601,7 @@ public:
                 }
 
                 if constexpr (concepts::non_void<V>) {
-                    std::optional<V> res = try_move(*s.value.get());
+                    std::optional<V> res{try_move(*s.value.get())};
                     s.st = slot::state::tombstone;
                     s.value.destroy();
                     m_load -= 1;
@@ -609,6 +618,42 @@ public:
         }
 
         return std::nullopt;
+    }
+
+    bool remove(const K &key) noexcept(std::is_nothrow_destructible_v<types::fuck_void<V>>)
+        requires(!types::is_try_movable_v<types::fuck_void<V>>)
+    {
+        usize size = m_slots.size();
+        usize index = m_hasher(key);
+        usize step = probe_step(index, size);
+        index %= size;
+
+        for (usize i = 0; i < size; ++i) {
+            slot &s = m_slots[probe_index(index, step, size, i)];
+
+            switch (s.st) {
+            case slot::state::empty: {
+                return false;
+            }
+            case slot::state::filled: {
+                if (s.key != key) {
+                    continue;
+                }
+
+                s.st = slot::state::tombstone;
+                if constexpr (concepts::non_void<V>) {
+                    s.value.destroy();
+                } else {
+                    s.st = slot::state::tombstone;
+                }
+                m_load -= 1;
+                m_generation += 1;
+                return true;
+            } break;
+            }
+        }
+
+        return false;
     }
 
     V *get(const K &key) noexcept {
@@ -686,30 +731,45 @@ private:
         usize step = probe_step(index, size);
         index %= size;
 
+        std::optional<usize> insert_location;
+
         for (usize i = 0; i < size; ++i) {
-            slot &s = m_slots[probe_index(index, step, size, i)];
+            usize location = probe_index(index, step, size, i);
+            slot &s = m_slots[location];
 
             switch (s.st) {
-            case slot::state::tombstone:
-            case slot::state::empty: {
-                if constexpr (concepts::non_void<V>) {
-                    s.value.emplace(std::forward<Args>(args)...);
+            case slot::state::tombstone: {
+                if (!insert_location.has_value()) {
+                    insert_location = location;
                 }
-                s.key = key;
-
-                s.st = slot::state::filled;
-                m_load += 1;
-                return try_insert_result::succeeded;
-            }
+            } break;
+            case slot::state::empty: {
+                insert_location = location;
+            } break;
             case slot::state::filled: {
                 if (s.key == key) {
                     return try_insert_result::duplicated;
                 }
-            } break;
+            }
+            }
+
+            if (insert_location.has_value()) {
+                break;
             }
         }
+        if (!insert_location.has_value()) [[unlikely]] {
+            std::unreachable();
+        }
 
-        std::unreachable();
+        slot &s = m_slots[insert_location.value()];
+        if constexpr (concepts::non_void<V>) {
+            s.value.emplace(std::forward<Args>(args)...);
+        }
+        s.key = key;
+
+        s.st = slot::state::filled;
+        m_load += 1;
+        return try_insert_result::succeeded;
     }
 
     [[ASCO_NO_UNIQUE_ADDRESS]] std::hash<K> m_hasher{};
