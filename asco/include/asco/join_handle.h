@@ -170,6 +170,8 @@ public:
     T await_resume() {
         ASCO_ASSERT(!is_empty());
 
+        ASCO_ASSERT(m_task_block->m_state.load(morder::acquire) == future_state::complete);
+
         if (auto e = m_task_block->m_exception) {
             std::rethrow_exception(e);
         }
