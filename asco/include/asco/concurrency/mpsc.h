@@ -139,7 +139,7 @@ public:
             T res{try_move(*s.m_data.get())};
             s.m_data.destroy();
             s.m_state.store(slot_state::empty, morder::release);
-            return res;
+            return try_move(res);
         }
 
     private:
