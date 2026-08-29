@@ -5,13 +5,12 @@
 
 #include <memory>
 #include <unordered_map>
-#include <unordered_set>
 #include <variant>
 #include <vector>
 
 #include "asco/concurrency/mpsc.h"
 #include "asco/core/daemon.h"
-#include "asco/core/worker.h"
+#include "asco/core/scheduler.h"
 
 namespace asco::debug {
 
@@ -50,7 +49,6 @@ private:
 
     bool m_is_client;
 
-    std::unordered_set<task_id> m_tasks;
     std::unordered_map<usize, std::unordered_map<task_id, std::vector<std::string>>> m_task_map;
     concurrency::mpsc<command>::sender m_cmd_tx;
     concurrency::mpsc<command>::receiver m_cmd_rx;

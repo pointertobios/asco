@@ -45,7 +45,7 @@ bool debug_host::run_once(std::stop_token &st) {
         }
 
         std::visit(
-            [&tasks = this->m_tasks, &task_map = this->m_task_map](auto &cmd) {
+            [&task_map = this->m_task_map](auto &cmd) {
                 using cmd_type = std::remove_cvref_t<decltype(cmd)>;
                 if constexpr (std::same_as<cmd_type, coroutine_start>) {
                     task_map[cmd.w][cmd.t].push_back(
