@@ -92,8 +92,12 @@ public:
                 if (auto res = m_sync_receiver.recv(); res.has_value()) {
                     m_payload->m_send_cv.notify_one();
                     co_return try_move(res.value());
+                } else if (res.error() == concurrency::receive_failed::pending) {
+                    continue;
                 }
-                co_await m_payload->m_recv_cv();
+                co_await m_payload->m_recv_cv([&sync_receiver = this->m_sync_receiver] {
+                    return sync_receiver.test_recv().has_value();
+                });
             }
         }
 
