@@ -94,6 +94,8 @@ public:
         future get_return_object(std::source_location sl = std::source_location::current()) noexcept {
 #ifdef ASCO_DEBUG_ENABLED
             promise_base::m_location = sl;
+#else
+            (void)sl;
 #endif
             promise_base::m_this_coroutine = coroutine_handle::from_promise(*this);
             return future{this, promise_base::m_this_coroutine};
