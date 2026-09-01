@@ -99,7 +99,7 @@ private:
             ASCO_ASSERT(promise_base::return_state_valid());
 
             promise_base::m_task_block->m_storage.emplace(try_move(value));
-            auto s = promise_base::m_task_block->m_state.exchange(future_state::complete, morder::release);
+            auto s = promise_base::m_task_block->m_state.exchange(future_state::complete, morder::acq_rel);
             if (s == future_state::awaited) {
                 promise_base::m_task_block->m_awake_token.awake();
             }
@@ -155,7 +155,7 @@ public:
         return m_task_block->m_state.load(morder::acquire) == future_state::complete;
     }
 
-    void await_suspend(std::coroutine_handle<> waiter_coroutine) noexcept {
+    bool await_suspend(std::coroutine_handle<> waiter_coroutine) noexcept {
         ASCO_ASSERT(!is_empty());
 
         core::awake_token awake_token{};
@@ -163,8 +163,11 @@ public:
         if (future_state e{future_state::non_complete}; m_task_block->m_state.compare_exchange_strong(
                 e, future_state::awaited, morder::acq_rel, morder::relaxed)) {
             awake_token.suspend(waiter_coroutine);
+            return true;
+        } else {
+            ASCO_ASSERT(e != future_state::awaited, "禁止重复 co_await");
+            return false;
         }
-        // 原子交换失败时 state 一定是 complete ，无需挂起直接直接继续
     }
 
     T await_resume() {

@@ -70,21 +70,21 @@ FetchContent_MakeAvailable(asco)
   - [x] Windows 完整支持
   - [ ] MacOS 完整支持
   - [x] 核心运行时
-    - [x] 任务取消机制
-    - [x] 任务本地存储
+    - [ ] 任务取消机制
+    - [ ] 任务本地存储
     - [x] 任务偷窃
     - [ ] 计时器
       - [ ] 高分辨率计时器
       - [ ] 时间轮
     - [ ] IO 兼容层
-      - [x] io_uring (Linux)
-      - [x] IOCP (Windows)
+      - [ ] io_uring (Linux)
+      - [ ] IOCP (Windows)
       - [ ] 同步 IO daemon
 - [x] 测试框架
 - [ ] 并发
   - [ ] 任务组合原语
     - [ ] join_all - 任务内轻量并发
-    - [ ] join_set - 多任务并发
+    - [x] join_set - 多任务并发
     - [ ] select - 任务内轻量选择
     - [ ] when_any - 多任务竞速
   - [ ] 同步原语
@@ -110,10 +110,6 @@ FetchContent_MakeAvailable(asco)
       - [ ] 任务取消支持
     - [ ] 超时
       - [ ] 任务取消支持
-  - [x] 无锁数据结构与算法
-    - [x] 环形队列
-    - [x] 哈希表
-    - [ ] 双端队列
 - [ ] 异步 IO
   - [ ] 文件
   - [ ] 网络

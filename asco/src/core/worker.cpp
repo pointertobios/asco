@@ -49,7 +49,8 @@ bool worker::initialize() {
 }
 
 bool worker::run_once(std::stop_token &st) {
-    while (!m_acceptible_tx.send(m_wid) && !st.stop_requested()) {}
+    (void)m_acceptible_tx.send(m_wid);
+    // 发送失败说明可能一直都没有新的任务，无需重试，并且 acceptible 中一定还有当前 worker id
 
     bool fetched_new_task = fetch_task();
     if (!fetched_new_task) {
