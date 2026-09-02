@@ -180,10 +180,12 @@ public:
         }
 
         if constexpr (concepts::is_void<T>) {
+            m_task_block.reset();
             return;
         } else {
             T res{try_move(*m_task_block->m_storage.get())};
             m_task_block->m_storage.destroy();
+            m_task_block.reset();
             return res;
         }
     }

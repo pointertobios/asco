@@ -72,8 +72,14 @@ public:
         m_rx.stop();
 
         std::vector<types::fuck_void<output_type>> res;
+        std::vector<std::exception_ptr> exs;
         while (m_task_count.fetch_sub(1, morder::acq_rel)) {
-            res.emplace_back(co_await m_rx.recv());
+            try {
+                res.emplace_back(co_await m_rx.recv());
+            } catch (...) { exs.push_back(std::current_exception()); }
+        }
+        if (!exs.empty()) {
+            throw exs;
         }
         co_return res;
     }

@@ -119,6 +119,7 @@ public:
             , m_this_coroutine{rhs.m_this_coroutine}
             , m_waiter_coroutine{rhs.m_waiter_coroutine}
             , m_bound_invocable{std::move(rhs.m_bound_invocable)} {
+        ASCO_ASSERT(is_empty());
         ASCO_ASSERT(!rhs.is_empty());
 
         rhs.m_this_coroutine = coroutine_handle{};
