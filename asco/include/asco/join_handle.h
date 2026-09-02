@@ -137,12 +137,11 @@ public:
     }
 
     join_handle &operator=(join_handle &&rhs) noexcept {
-        ASCO_ASSERT(!rhs.is_empty() && is_empty());
+        ASCO_ASSERT(!rhs.is_empty());
 
         if (this != &rhs) {
-            m_this_coroutine = rhs.m_this_coroutine;
-            rhs.m_this_coroutine = coroutine_handle{};
-            m_task_block = std::move(rhs.m_task_block);
+            this->~join_handle();
+            new (this) join_handle{std::move(rhs)};
         }
         return *this;
     }

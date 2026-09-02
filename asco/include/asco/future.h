@@ -119,7 +119,6 @@ public:
             , m_this_coroutine{rhs.m_this_coroutine}
             , m_waiter_coroutine{rhs.m_waiter_coroutine}
             , m_bound_invocable{std::move(rhs.m_bound_invocable)} {
-        ASCO_ASSERT(is_empty());
         ASCO_ASSERT(!rhs.is_empty());
 
         rhs.m_this_coroutine = coroutine_handle{};
@@ -128,12 +127,11 @@ public:
     }
 
     future &operator=(future &&rhs) noexcept {
-        ASCO_ASSERT(!is_empty() && !rhs.is_empty());
+        ASCO_ASSERT(is_empty() && !rhs.is_empty());
 
         if (this != &rhs) {
-            m_promise = rhs.m_promise;
-            m_state = rhs.m_state;
-            m_promise->m_future = this;
+            this->~future();
+            new (this) future{std::move(rhs)};
         }
         return *this;
     }
