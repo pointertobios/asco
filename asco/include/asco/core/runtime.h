@@ -4,7 +4,6 @@
 #pragma once
 
 #include <memory>
-#include <ranges>
 #include <thread>
 
 #include "asco/assert.h"
@@ -120,7 +119,7 @@ public:
                 auto g = m_blocking_workers.write();
                 x = m_worker_id_gen++;
                 auto &info = g->emplace_back(
-                    std::move(tx), std::make_unique<blocking_worker>(this, x, std::move(rx), std::move(atx)));
+                    std::make_unique<blocking_worker>(this, x, std::move(rx), std::move(atx)), std::move(tx));
                 auto w = info.m_worker.get();
                 { auto _ = std::move(g); }
 
