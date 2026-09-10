@@ -60,7 +60,7 @@ public:
         auto jh = task_coroutine(co_invoke(std::forward<decltype(fn)>(fn), std::forward<Args>(args)...));
 
         usize x;
-        if (auto wid = m_acceptible_worker_rx.recv(); wid.has_value()) {
+        if (auto wid = m_acceptible_worker_rx.lock()->recv(); wid.has_value()) {
             x = wid.value();
         } else {
             thread_local std::uniform_int_distribution<usize> w{0, m_blocking_pool_start - 1};
@@ -108,7 +108,7 @@ public:
         usize x;
 
         while (true) {
-            auto wid = m_acceptible_blocking_worker_rx.recv();
+            auto wid = m_acceptible_blocking_worker_rx.lock()->recv();
             if (wid.has_value()) {
                 x = wid.value();
                 break;
@@ -177,7 +177,7 @@ private:
 
     std::vector<std::unique_ptr<worker>> m_workers{};
     std::vector<task_sender> m_senders{};
-    concurrency::mpsc<usize>::receiver m_acceptible_worker_rx;
+    sync::spinlock<concurrency::mpsc<usize>::receiver> m_acceptible_worker_rx;
 
     struct blocking_worker_info {
         std::unique_ptr<blocking_worker> m_worker;
@@ -185,7 +185,7 @@ private:
     };
 
     sync::rwspinlock<std::vector<blocking_worker_info>, true> m_blocking_workers{};
-    concurrency::mpsc<usize>::receiver m_acceptible_blocking_worker_rx;
+    sync::spinlock<concurrency::mpsc<usize>::receiver> m_acceptible_blocking_worker_rx;
     concurrency::mpsc<usize>::sender m_acceptible_blocking_worker_tx;
 
 #ifdef ASCO_DEBUG_ENABLED

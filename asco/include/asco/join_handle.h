@@ -49,11 +49,15 @@ private:
 
         auto final_suspend() noexcept {
             struct final_awaitable {
+                core::task_id tid;
                 coroutine_handle this_coroutine;
 
                 bool await_ready() noexcept { return false; }
 
-                void await_suspend(std::coroutine_handle<>) noexcept { this_coroutine.destroy(); }
+                void await_suspend(std::coroutine_handle<>) noexcept {
+                    core::worker::current().get_scheduler().detach_task(tid);
+                    this_coroutine.destroy();
+                }
 
                 void await_resume() noexcept {}
             };
@@ -72,7 +76,7 @@ private:
                 w.set_next_resume(std::coroutine_handle{});
                 w.set_suspend_now();
             }
-            return final_awaitable{m_this_coroutine};
+            return final_awaitable{m_task_block->to_task_id(), m_this_coroutine};
         }
 
     protected:

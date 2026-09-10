@@ -49,7 +49,8 @@ public:
                     m_payload->m_recv_cv.notify_one();
                     co_return true;
                 }
-                co_await m_payload->m_send_cv();
+                co_await m_payload->m_send_cv(
+                    [&sync_sender = this->m_sync_sender] { return sync_sender.test_send(); });
             }
         }
 

@@ -291,7 +291,8 @@ public:
         write_guard &operator=(const write_guard &) = delete;
 
         write_guard(write_guard &&rhs) noexcept
-                : m_rwspinlock{std::move(rhs.m_rwspinlock)} {
+                : m_rwspinlock{std::move(rhs.m_rwspinlock)}
+                , m_inner_guard{std::move(rhs.m_inner_guard)} {
             rhs.m_rwspinlock = nullptr;
         }
         write_guard &operator=(write_guard &&rhs) noexcept {

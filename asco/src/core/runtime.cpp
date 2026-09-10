@@ -37,7 +37,7 @@ runtime::runtime(runtime_config config)
 #endif
 
     auto [acceptible_tx, acceptible_rx] = concurrency::mpsc<usize>::queue();
-    m_acceptible_worker_rx = std::move(acceptible_rx);
+    *m_acceptible_worker_rx.lock() = std::move(acceptible_rx);
     for (usize i : std::views::iota((usize)0, config.m_concurrency)) {
         auto [tx, rx] = concurrency::mpsc<task_item>::queue();
         m_senders.emplace_back(std::move(tx));
@@ -50,7 +50,7 @@ runtime::runtime(runtime_config config)
         }
     }
 
-    std::tie(m_acceptible_blocking_worker_tx, m_acceptible_blocking_worker_rx) =
+    std::tie(m_acceptible_blocking_worker_tx, *m_acceptible_blocking_worker_rx.lock()) =
         concurrency::mpsc<usize>::queue();
 }
 

@@ -35,6 +35,7 @@ class scheduler final {
 
 public:
     void attach_task(const task &t);
+    void detach_task(task_id tid);
     std::optional<task> next_task();
     void resched(task t);
     void suspend(task t);

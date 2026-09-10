@@ -69,8 +69,6 @@ public:
     future<std::vector<types::fuck_void<output_type>>> join_all()
         requires(concepts::non_void<output_type>)
     {
-        m_rx.stop();
-
         std::vector<types::fuck_void<output_type>> res;
         std::vector<std::exception_ptr> exs;
         while (m_task_count.fetch_sub(1, morder::acq_rel)) {
@@ -81,6 +79,8 @@ public:
         if (!exs.empty()) {
             throw exs;
         }
+
+        m_rx.stop();
         co_return res;
     }
 

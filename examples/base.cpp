@@ -11,8 +11,6 @@
 
 using namespace asco;
 
-future<int> foo(int x) { co_return x; }
-
 future<int> async_main() {
     using namespace std::chrono;
 
