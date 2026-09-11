@@ -19,6 +19,18 @@ void future_trace_end() {
     dh.trace_coroutine_end(this_task::worker().id(), this_task::id());
 }
 
+void future_create_placement_executing_guard(types::raw_storage<core::placement_executing_guard> &guard) {
+    if (core::worker::exists()) {
+        guard.emplace(this_task::worker().placement_executing());
+    }
+}
+
+void future_destroy_placement_executing_guard(types::raw_storage<core::placement_executing_guard> &guard) {
+    if (core::worker::exists()) {
+        guard.destroy();
+    }
+}
+
 };  // namespace asco::detail
 
 #endif

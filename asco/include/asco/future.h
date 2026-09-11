@@ -10,6 +10,7 @@
 #include "asco/assert.h"
 #include "asco/concepts.h"
 #include "asco/core/future_state.h"
+#include "asco/core/predecl.h"
 #include "asco/macros.h"
 #include "asco/types/erased.h"
 #include "asco/types/raw_storage.h"
@@ -23,6 +24,9 @@ namespace detail {
 
 void future_trace_start(std::source_location sl);
 void future_trace_end();
+
+void future_create_placement_executing_guard(types::raw_storage<core::placement_executing_guard> &guard);
+void future_destroy_placement_executing_guard(types::raw_storage<core::placement_executing_guard> &guard);
 
 };  // namespace detail
 #endif
@@ -137,6 +141,23 @@ public:
     }
 
     bool is_empty() const noexcept { return m_state == future_state::empty; }
+
+    T placement_execute() {
+        types::raw_storage<core::placement_executing_guard> guard;
+        detail::future_create_placement_executing_guard(guard);
+        m_this_coroutine.resume();
+        detail::future_destroy_placement_executing_guard(guard);
+
+        if constexpr (concepts::is_void<T>) {
+            m_state = future_state::empty;
+            return;
+        } else {
+            T res{try_move(*m_storage.get())};
+            m_storage.destroy();
+            m_state = future_state::empty;
+            return res;
+        }
+    }
 
     bool await_ready() noexcept {
         ASCO_ASSERT(!is_empty());

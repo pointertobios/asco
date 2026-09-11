@@ -44,6 +44,13 @@ public:
     void set_suspend_now();
     void set_yield_now();
 
+    placement_executing_guard placement_executing() {
+        ASCO_ASSERT(!m_placement_executing);
+        return {m_placement_executing};
+    }
+
+    bool is_placement_executing() const { return m_placement_executing; }
+
 private:
     bool initialize() override;
     bool run_once(std::stop_token &st) override;
@@ -61,12 +68,14 @@ private:
     bool m_suspend_now{false};
     bool m_yield_now{false};
 
+    bool m_placement_executing{false};
+
     inline thread_local static worker *tls_this_worker{nullptr};
 };
 
 class awake_token {
 public:
-    awake_token() { ASCO_ASSERT(worker::exists()); }
+    awake_token();
 
     ~awake_token() = default;
 
