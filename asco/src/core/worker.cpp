@@ -81,7 +81,7 @@ bool worker::run_once(std::stop_token &st) {
 
 awake_token::awake_token() {
     ASCO_ASSERT(worker::exists());
-    ASCO_ASSERT(m_worker->is_placement_executing(), "不能在启用 placement executing guard 时异步等待");
+    ASCO_ASSERT(!m_worker->is_placement_executing(), "不能在启用 placement executing guard 时异步等待");
 }
 
 void awake_token::suspend(std::coroutine_handle<> resume_coroutine) {

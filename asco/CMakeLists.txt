@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 include(${PROJECT_SOURCE_DIR}/cmake/GeneratePch.cmake)
+include(${PROJECT_SOURCE_DIR}/cmake/CollectFiles.cmake)
 
 asco_generate_pch(PRECOMPILE_HEADERS_COMMON
     INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -26,21 +27,37 @@ if (ASCO_DEBUG_ENABLED)
     set(PRECOMPILE_HEADERS ${PRECOMPILE_HEADERS} ${PRECOMPILE_HEADERS_DEBUG})
 endif()
 
-set(ASCO_SOURCES
-    src/core/blocking_worker.cpp
-    src/core/daemon.cpp
-    src/core/runtime.cpp
-    src/core/scheduler.cpp
-    src/core/worker.cpp
-    src/future.cpp
-    src/os/thread.cpp
-    src/sync/condition_variable.cpp
+asco_collect_files(ASCO_SOURCES_COMMON
+    INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PATTERNS "*.cpp"
+    EXCLUDE
+        asco_main.cpp
+        debug
+        os/linux
+        os/windows
+        test
 )
 
-if (ASCO_DEBUG_ENABLED)
-    set(ASCO_SOURCES ${ASCO_SOURCES}
-        src/debug/debug_host.cpp
+asco_collect_files(ASCO_SOURCES_DEBUG
+    INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/debug
+    PATTERNS "*.cpp"
+)
+
+if (LINUX)
+    asco_collect_files(ASCO_SOURCES_PLATFORM
+        INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/os/linux
+        PATTERNS "*.cpp"
     )
+elseif (WIN32)
+    asco_collect_files(ASCO_SOURCES_PLATFORM
+        INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/os/windows
+        PATTERNS "*.cpp"
+    )
+endif()
+
+set(ASCO_SOURCES ${ASCO_SOURCES_COMMON} ${ASCO_SOURCES_PLATFORM})
+if (ASCO_DEBUG_ENABLED)
+    set(ASCO_SOURCES ${ASCO_SOURCES} ${ASCO_SOURCES_DEBUG})
 endif()
 
 set(MDEFS ASCO __ASCO__)
@@ -55,29 +72,13 @@ if (USING_LIBCXX)
 endif()
 
 if (LINUX)
-    set(ASCO_SOURCES ${ASCO_SOURCES}
-        src/os/linux/terminal.cpp
-        src/os/linux/thread.cpp
-    )
-
     if (ASCO_IO_URING)
-        set(ASCO_SOURCES ${ASCO_SOURCES}
-        )
-
         set(DEPLIBS ${DEPLIBS} uring)
     endif()
 
     set(DEPLIBS ${DEPLIBS} atomic ncurses)
 elseif (WIN32)
-    set(ASCO_SOURCES ${ASCO_SOURCES}
-        src/os/windows/terminal.cpp
-        src/os/windows/thread.cpp
-    )
-
     if (ASCO_IOCP)
-        set(ASCO_SOURCES ${ASCO_SOURCES}
-        )
-
         set(DEPLIBS ${DEPLIBS} Advapi32)
     endif()
 endif()

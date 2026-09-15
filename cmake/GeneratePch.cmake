@@ -1,6 +1,8 @@
 # Copyright (C) 2025 pointer-to-bios <pointer-to-bios@outlook.com>
 # SPDX-License-Identifier: MIT
 
+include(${CMAKE_CURRENT_LIST_DIR}/CollectFiles.cmake)
+
 function(asco_generate_pch out_var)
     set(options)
     set(oneValueArgs INCLUDE_DIR OUTPUT)
@@ -17,49 +19,15 @@ function(asco_generate_pch out_var)
     get_filename_component(_include_dir_abs "${ARG_INCLUDE_DIR}" ABSOLUTE)
     file(TO_CMAKE_PATH "${_include_dir_abs}" _include_dir_abs)
 
-    set(_excludes)
-    foreach(_exclude IN LISTS ARG_EXCLUDE)
-        get_filename_component(_exclude_abs "${_exclude}" ABSOLUTE
-            BASE_DIR "${_include_dir_abs}")
-        file(TO_CMAKE_PATH "${_exclude_abs}" _exclude_abs)
-        list(APPEND _excludes "${_exclude_abs}")
-    endforeach()
-
-    file(GLOB_RECURSE _headers CONFIGURE_DEPENDS
-        "${_include_dir_abs}/*.h"
-        "${_include_dir_abs}/*.hpp"
+    asco_collect_files(_headers
+        INCLUDE_DIR "${_include_dir_abs}"
+        PATTERNS "*.h" "*.hpp"
+        EXCLUDE ${ARG_EXCLUDE}
     )
 
     set(_lines)
     foreach(_header IN LISTS _headers)
-        file(TO_CMAKE_PATH "${_header}" _header_abs)
-        set(_excluded OFF)
-        foreach(_exclude IN LISTS _excludes)
-            if(_header_abs STREQUAL _exclude)
-                set(_excluded ON)
-                break()
-            endif()
-
-            string(LENGTH "${_exclude}" _exclude_length)
-            string(LENGTH "${_header_abs}" _header_length)
-            if(_exclude_length GREATER _header_length)
-                continue()
-            endif()
-            string(SUBSTRING "${_header_abs}" 0 ${_exclude_length}
-                _header_prefix)
-            if(_header_prefix STREQUAL _exclude)
-                string(SUBSTRING "${_header_abs}" ${_exclude_length} -1
-                    _header_suffix)
-                if(_header_suffix MATCHES "^/")
-                    set(_excluded ON)
-                    break()
-                endif()
-            endif()
-        endforeach()
-        if(_excluded)
-            continue()
-        endif()
-        file(RELATIVE_PATH _relative "${_include_dir_abs}" "${_header_abs}")
+        file(RELATIVE_PATH _relative "${_include_dir_abs}" "${_header}")
         file(TO_CMAKE_PATH "${_relative}" _relative)
         list(APPEND _lines "#include <${_relative}>")
     endforeach()

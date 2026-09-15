@@ -117,7 +117,7 @@ ASCO_TEST(predicate_wake_after_notify) {
 }
 
 // 并发正确性：多轮 notify_all 与谓词重查，无丢失唤醒
-ASCO_TEST(concurrent_round_trip, ASCO_IGNORE_TEST) {
+ASCO_TEST(concurrent_round_trip) {
     constexpr asco::usize kWaiters = 16;
     constexpr asco::usize kRounds = 64;
     asco::sync::condition_variable cv{};
