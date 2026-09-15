@@ -61,6 +61,7 @@ runtime::~runtime() {
     for (auto &w : *m_blocking_workers.read()) {
         w.m_worker->join();
     }
+    m_debug_host->join();
 
 #ifdef ASCO_DEBUG_ENABLED
     m_debug_host->join();
