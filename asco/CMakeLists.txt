@@ -32,13 +32,14 @@ set(ASCO_SOURCES
     src/core/runtime.cpp
     src/core/scheduler.cpp
     src/core/worker.cpp
+    src/future.cpp
     src/os/thread.cpp
     src/sync/condition_variable.cpp
 )
+
 if (ASCO_DEBUG_ENABLED)
     set(ASCO_SOURCES ${ASCO_SOURCES}
         src/debug/debug_host.cpp
-        src/future.cpp
     )
 endif()
 
