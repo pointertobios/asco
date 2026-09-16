@@ -27,6 +27,14 @@ public:
     counting_semaphore(counting_semaphore &&) = delete;
     counting_semaphore &operator=(counting_semaphore &&) = delete;
 
+    bool try_acquire() noexcept {
+        auto c = m_counter.load(morder::acquire);
+        if (c == 0) {
+            return false;
+        }
+        return m_counter.compare_exchange_strong(c, c - 1, morder::acq_rel, morder::relaxed);
+    }
+
     future<> acquire() {
         while (true) {
             auto c = m_counter.load(morder::acquire);
