@@ -3,11 +3,11 @@
 
 #include "asco/future.h"
 
-#ifdef ASCO_DEBUG_ENABLED
-
-#    include "asco/this_task.h"
+#include "asco/this_task.h"
 
 namespace asco::detail {
+
+#ifdef ASCO_DEBUG_ENABLED
 
 void future_trace_start(std::source_location sl) {
     auto &dh = this_task::host_runtime().get_debug_host();
@@ -18,6 +18,8 @@ void future_trace_end() {
     auto &dh = this_task::host_runtime().get_debug_host();
     dh.trace_coroutine_end(this_task::worker().id(), this_task::id());
 }
+
+#endif
 
 void future_create_placement_executing_guard(types::raw_storage<core::placement_executing_guard> &guard) {
     if (core::worker::exists()) {
@@ -32,5 +34,3 @@ void future_destroy_placement_executing_guard(types::raw_storage<core::placement
 }
 
 };  // namespace asco::detail
-
-#endif

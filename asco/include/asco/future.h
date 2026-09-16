@@ -19,17 +19,17 @@
 
 namespace asco {
 
-#ifdef ASCO_DEBUG_ENABLED
 namespace detail {
 
+#ifdef ASCO_DEBUG_ENABLED
 void future_trace_start(std::source_location sl);
 void future_trace_end();
+#endif
 
 void future_create_placement_executing_guard(types::raw_storage<core::placement_executing_guard> &guard);
 void future_destroy_placement_executing_guard(types::raw_storage<core::placement_executing_guard> &guard);
 
 };  // namespace detail
-#endif
 
 template<typename T = void>
 class [[nodiscard("A future<T> must always be co_await'ed once")]] future final {
