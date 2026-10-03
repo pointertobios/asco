@@ -119,4 +119,23 @@ struct task_block_base {
     static task_block_base *from_task_id(task_id id) { return reinterpret_cast<task_block_base *>(id); }
 };
 
+class worker_handle {
+    friend class runtime;
+
+public:
+    worker_handle()
+            : m_handle{s_handle_allocator.fetch_add(1, morder::relaxed)} {}
+
+    worker_handle(const worker_handle &) = default;
+    worker_handle &operator=(const worker_handle &) = default;
+
+    worker_handle(worker_handle &&) = default;
+    worker_handle &operator=(worker_handle &&) = default;
+
+private:
+    usize m_handle;
+
+    inline static std::atomic<usize> s_handle_allocator{0};
+};
+
 };  // namespace asco::core

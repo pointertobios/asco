@@ -55,31 +55,40 @@ public:
     debug::debug_host &get_debug_host() const { return *m_debug_host; }
 #endif
 
+private:
+    bool spawn_impl(usize target_worker_id, task_item ta);
+
+    usize get_most_available_worker_id();
+    usize get_or_create_id_map_of_worker_handle(worker_handle &handle);
+
+public:
+    worker_handle &get_worker_handle_of_current_worker();
+
     template<typename... Args>
     auto spawn(async_function<Args...> auto &&fn, Args &&...args) {
         auto jh = task_coroutine(co_invoke(std::forward<decltype(fn)>(fn), std::forward<Args>(args)...));
 
-        usize x;
-        if (auto wid = m_acceptible_worker_rx.lock()->recv(); wid.has_value()) {
-            x = wid.value();
-        } else {
-            thread_local std::uniform_int_distribution<usize> w{0, m_blocking_pool_start - 1};
-            x = w(util::rng());
+        auto ta = jh.get_task_item();
+
+        auto x = get_most_available_worker_id();
+        while (!spawn_impl(x, ta)) {
+            x = (x + 1) % m_blocking_pool_start;
         }
+
+        return jh;
+    }
+
+    template<typename... Args>
+    auto spawn(worker_handle target_handle, async_function<Args...> auto &&fn, Args &&...args) {
+        auto worker_id = get_or_create_id_map_of_worker_handle(target_handle);
+
+        auto jh = task_coroutine(co_invoke(std::forward<decltype(fn)>(fn), std::forward<Args>(args)...));
 
         auto ta = jh.get_task_item();
 
-        if (m_multi_threaded) {
-            while (!m_senders[x].send(try_move(ta))) {
-                x = (x + 1) % m_blocking_pool_start;
-            }
-        } else {
-            if (!m_senders[x].send(try_move(ta))) {
-                m_workers[x]->fetch_task();
-                (void)m_senders[x].send(try_move(ta));
-            }
+        while (!spawn_impl(worker_id, ta)) {
+            std::this_thread::yield();
         }
-        m_workers[x]->awake();
 
         return jh;
     }
@@ -138,9 +147,9 @@ public:
         return jh;
     }
 
-    void main_loop();
+    void main_loop() const;
 
-    void stop();
+    void stop() const;
 
 private:
     auto task_coroutine(future_type auto future_value)
@@ -187,6 +196,8 @@ private:
     sync::rwspinlock<std::vector<blocking_worker_info>, true> m_blocking_workers{};
     sync::spinlock<concurrency::mpsc<usize>::receiver> m_acceptible_blocking_worker_rx;
     concurrency::mpsc<usize>::sender m_acceptible_blocking_worker_tx;
+
+    sync::rwspinlock<container::hash_map<usize, usize>> m_worker_handle_id_map{};
 
 #ifdef ASCO_DEBUG_ENABLED
     std::unique_ptr<debug::debug_host> m_debug_host{debug::debug_host::create()};

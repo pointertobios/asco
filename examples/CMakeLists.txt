@@ -3,3 +3,6 @@
 
 add_executable(base base.cpp)
 target_link_libraries(base PRIVATE asco::core asco::main)
+
+add_executable(task task.cpp)
+target_link_libraries(task PRIVATE asco::core asco::main)

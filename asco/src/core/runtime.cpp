@@ -67,17 +67,77 @@ runtime::~runtime() {
 #endif
 }
 
-void runtime::main_loop() {
+bool runtime::spawn_impl(usize target_worker_id, task_item ta) {
+    const auto x = target_worker_id;
+
+    if (m_multi_threaded) {
+        if (!m_senders[x].send(try_move(ta))) {
+            return false;
+        }
+    } else {
+        if (!m_senders[x].send(try_move(ta))) {
+            m_workers[x]->fetch_task();
+            (void)m_senders[x].send(try_move(ta));
+        }
+    }
+    m_workers[x]->awake();
+
+    return true;
+}
+
+usize runtime::get_most_available_worker_id() {
+    if (const auto wid = m_acceptible_worker_rx.lock()->recv(); wid.has_value()) {
+        return wid.value();
+    }
+    thread_local std::uniform_int_distribution<usize> tls_rand_worker{0, m_blocking_pool_start - 1};
+    return tls_rand_worker(util::rng());
+}
+
+usize runtime::get_or_create_id_map_of_worker_handle(worker_handle &handle) {
+    while (true) {
+        auto rg = m_worker_handle_id_map.read();
+        if (const auto id = rg->get(handle.m_handle)) {
+            return *id;
+        }
+        auto wg = std::move(rg).upgrade();
+        if (!wg) {
+            continue;
+        }
+
+        const auto x = get_most_available_worker_id();
+        wg->insert(handle.m_handle, x);
+        return x;
+    }
+}
+
+worker_handle &runtime::get_worker_handle_of_current_worker() {
+    thread_local worker_handle handle;
+    auto wid = worker::current().id();
+    while (true) {
+        auto rg = m_worker_handle_id_map.read();
+        if (const auto _ = rg->get(handle.m_handle)) {
+            return handle;
+        }
+        auto wg = std::move(rg).upgrade();
+        if (!wg) {
+            continue;
+        }
+        wg->insert(handle.m_handle, wid);
+        return handle;
+    }
+}
+
+void runtime::main_loop() const {
     ASCO_ASSERT(!m_multi_threaded);
 
     auto st = m_stop.get_token();
     m_workers[0]->run(st);
 }
 
-void runtime::stop() {
+void runtime::stop() const {
     ASCO_ASSERT(!m_multi_threaded);
 
-    m_stop.request_stop();
+    (void)m_stop.request_stop();
 }
 
 };  // namespace asco::core
