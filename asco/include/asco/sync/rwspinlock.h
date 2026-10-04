@@ -119,7 +119,7 @@ public:
                     break;
                 }
             }
-            s.store(state{0, true, true}, morder::acq_rel);
+            s.store(state{0, true, true}, morder::release);
 
             auto *p = m_rwspinlock;
             m_rwspinlock = nullptr;

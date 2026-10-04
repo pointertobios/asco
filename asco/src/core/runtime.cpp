@@ -134,7 +134,7 @@ void runtime::main_loop() const {
     m_workers[0]->run(st);
 }
 
-void runtime::stop() const {
+void runtime::stop() {
     ASCO_ASSERT(!m_multi_threaded);
 
     (void)m_stop.request_stop();
